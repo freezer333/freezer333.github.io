@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+    <head>
+        <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+        <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
+        <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+        <link rel="stylesheet" type="text/css" href="../../style.css">
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <script src="http://code.jquery.com/jquery.js"></script>
+        <script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+        <script>
+          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+          m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+          })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+          ga('create', 'UA-57277333-2', 'auto');
+          ga('send', 'pageview');
+
+        </script>
+        <link rel="shortcut icon" href="../../favicon.ico"/>
+        <title>C++ and Node.js Integration</title>
+    </head>
+    <body>
+        <div class="header page">
+            <div class="page_content">
+                <div class="profile">
+                    <img height="175" width="160" src="book.jpg"/>
+                </div>
+                <h1>C++ and Node.js Integration</h1>
+                
+            </div>
+        </div>
+        <div class="page">
+            <div class="page_content">
+                <p>
+                    The popularity of Node.js just keeps <a href="https://strongloop.com/node-js/nodejs-infographic/">surging</a>, it's great for so many things.  But what if you need serious C/C++ speed?  What if you want to move to Node.js, but can't afford to rewrite your existing C++ code?  
+                </p>
+                <h2>The good news...</h2>
+                <p>
+                    Fear not... you can overcome your speed or legacy code problem by writing native C++ addons for Node.js!  Once you know how, you can call your C++ code right from your Node.js code - easily and cleanly.
+                </p>
+                <h2>The bad news</h2>
+                <p>
+                    <img src="research.jpg" style="float:right"/>
+                    Learning the complex C++ API for addon development is <b><u>hard</u></b>.  Answers are spread across a few blog <a href="http://blog.scottfrees.com/c-processing-from-node-js-part-4-asynchronous-addons"> posts </a> and <a href ="http://v8.paulfryzel.com/docs/master/">terse documentation</a>.  If you are looking for a step-by step and simple explanation, <b>you'll be looking for a long time!</b> Worse yet - since the V8 API changes so frequently, it's hard to blend all these resources together in a comprehensible and consistent way.
+                </p>
+                <h2>The solution</h2>
+                <p> <b>That's what this book is all about</b> - I've put together a comprehensive manual for creating your C++ addon.  Ranging from simple synchronous examples, asynchronous C++ modules and object oriented designs, to defending yourself against changing API's - "C++ and Node.js Integration" will get you to the finish line.  And it will save you weeks of research time!  
+                </p>
+        </div>
+        <div class="page page_odd">
+            <div class="page_content">
+                <h1 class="section_h1">Want the book?</h1>
+                <p>Sign up to get notified as soon as it's ready (Q1 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
+                <form action="http://formspree.io/scott.frees@gmail.com" method="POST">
+                    <p class="form-group"><input class="form-control" type="text" name="name" placeholder="Your name"></p>
+                    <p class="form-group"><input class="form-control" type="email" name="_replyto" placeholder="Your email" ></p>
+                    
+                    <div class="checkbox">
+                    <label for="optin"> 
+                        <input type="checkbox" name="optin" checked /> Sign me up for your newsletter too
+                    </label>
+                    </div>
+
+                    <input type="hidden" name="_subject" value="CPP NODE signup" />
+                    <input type="hidden" name="_next" value="http://scottfrees.com/ebooks/nodecpp/thanks.html" />
+                    <input type="text" name="_gotcha" style="display:none" />
+                    <p class="form-group">
+                    <button class="btn btn-warning" type="submit">Let me know when it's ready!</button>
+                    </p>
+                </form>
+
+            </div>
+        </div>
+        
+        <div class="page ">
+            <div class="page_content">
+                <h1 class="section_h1">Table of Contents</h1>
+                <p>
+                This book is an expansion on a <a href="http://blog.scottfrees.com/c-processing-from-node-js">four-part series</a> on my blog on building C++ addons for Node.js.  I've expanded each of the topics into full chapters, and added four completely new chapters.  The book also contains more code examples, and coverage of the latest V8 API changes. 
+                </p>
+                <div class="chapter">
+                    <h2>Chapter 1:  Introduction to V8 Programming</h2>
+                    <p>Learn about the C++ underpinnings of Node.js and how it all works.  You'll see why Node's interace with C++ is so efficient, and how V8's design effects how you write your addons.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 2:  Basic C++ Integration</h2>
+                    <p> Learn how to prepare your development environment so you can compile C++ addons on Linux, Mac, or even Windows.  See how to create your first C++ addon and pass JavaScript objects to C++ - which are turned into first-class objects matching a C++ class definition.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 3:  Moving objects between C++ and Node.js</h2>
+                    <p>Learn a bit more about sending JavaScript objects to your C++ code, and more importantly, returning C++ class objects back to Node as results.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 4:  Working with Arrays of data</h2>
+                    <p>Passing arrays of primitives or objects between your Node.js application and C++ addon requires different V8 API calls.  This chapter will show you how to do this effectively.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 5:  Directly exposing C++ objects to JavaScript</h2>
+                    <p>If you have existing C++ classes that you want to be able to use as "native" JavaScript objects, then you'll need to learn to wrap your C++ classes with V8 data structures.  This chapter is crucial if you want to leverage existing C++ code without writing "transfer" code!</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 6:  Calling C++ code Asynchronously</h2>
+                    <p>What good is a Node.js module if it blocks your event loop?  In this chapter you'll learn how to do the heavy computational task you've written in C++ asynchronously.  Just give your C++ code a JavaScript callback function, and your JavaScript can just keep on running until the C++ is done.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 7:  Managing V8 Api Versions with NAN</h2>
+                    <p>The V8 API has undergone many "breaking" changes - and since different version of Node.js use different versions of V8, the situation can get pretty complex to manage.  This chapter will show you how to work at a higher level of abstraction using <a href="https://github.com/nodejs/nan">Nan</a> - the Native Abstractions for Node.js library.  Using Nan, you'll defend yourself from the changing V8 API.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 8:  Deploying and Publishing C++ Addons</h2>
+                    <p>Publishing your typical Node module to an <a href="">npm</a> repo is pretty simple - but since your C++ is <i>native executable code</i>, there are some hoops you'll need to jump through so your addon works on all operating systems.  In this chapter, we'll cover solutions to common pitfalls involved in publishing/deploying C++ addons.</p>
+                </div>
+            </div>
+        </div>
+        <div class="page mo">
+            <div class="page_content  mo">
+            <h1>Do I need to be a JavaScript or C++ expert?</h1>
+            <p>Absolutely not - this book doesn't assume JavaScript or C++ mastery, only working knowledge.  In all examples and discussion, advanced topics in JavaScript are only presented when necessary - and always explained.  </p><p>All C++ code examples are approachable to the C++ novice.  Seasoned C++ vets will see where things could be written differently, using more advanced C++, without changing the spirit of the discussion. </p><p class="highlight">My goal is to show you how to integrate - not how clever JavaScript or C++ code can be.</p>
+            </div>
+            <div class="page_content">
+            <h1>Can't I find this information on my own?</h1>
+            <p>Most programmers learn new topics by scouring the web, piecing together <a href="http://stackoverflow.com/">SO</a> posts and <a href="http://v8.paulfryzel.com/docs/master/">API</a> docs to boost their skills.  </p><p>It normally works pretty well, but once you spend some time researching the V8 C++ API docs, you'll realize that C++ addons are a different animal.  Information is scarce, and often refers to out-of-date API's.  You find yourself at dead-ends and hitting one roadblock after another. </p><p class="highlight"> I went through this pain - and that's why I think this book is worth buying - it will save you from it!
+            </p>
+            </div>
+        </div>
+        <div class="page page_odd">
+            <div class="page_content">
+                <h1 class="section_h1">Want the book?</h1>
+                <p>Sign up to get notified as soon as it's ready (Q1 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
+                <form action="http://formspree.io/scott.frees@gmail.com" method="POST">
+                    <p class="form-group"><input class="form-control" type="text" name="name" placeholder="Your name"></p>
+                    <p class="form-group"><input class="form-control" type="email" name="_replyto" placeholder="Your email" ></p>
+                    
+                    <div class="checkbox">
+                    <label for="optin"> 
+                        <input type="checkbox" name="optin" checked /> Sign me up for your newsletter too
+                    </label>
+                    </div>
+
+                    <input type="hidden" name="_subject" value="CPP NODE signup" />
+                    <input type="hidden" name="_next" value="http://scottfrees.com/ebooks/nodecpp/thanks.html" />
+                    <input type="text" name="_gotcha" style="display:none" />
+                    <p class="form-group">
+                    <button class="btn btn-warning" type="submit">Let me know when it's ready!</button>
+                    </p>
+                </form>
+
+            </div>
+        </div>
+        <div class="page">
+            <div class="page_content">
+                <h1 class="target">About Me</h1>
+                <div class="profile">
+                    <img width="200" src="../../sp.jpg"/>
+                </div>
+
+                <p>I am a <a href="http://pages.ramapo.edu/~sfrees" target="_blank">Professor of Computer Science</a> at Ramapo College of New Jersey, specializing in computer graphics, and web development.  I'm also a consultant and freelance developer, with over ten years of professional experience.</p>
+                
+                <p>As a professional and as a scholar, I provide innovative solutions in a diverse set of fields - including <a href="http://www.automation.com/library/resources/harmonization-of-pump-schemas-with-iso-15926" target="_blank">mechanical engineering</a>, <a href="http://quadruplex.ramapo.edu/qgrs/app/start" target="_blank">computational biology</a>, <a href="http://quadruplex.ramapo.edu/ecosim/start">environmental science</a>, and <a href="http://www.appiversity.com/SimOrg/Info" target="_blank">organic chemistry</a>.</p>
+                <p>
+                I teach Web Application Development, Operating Systems Computer Graphics, Database Systems, and a number of other courses at Ramapo College.   </p>
+
+                <p>I also write about software and programming on my <a href="http://blog.scottfrees.com" target="_blank">blog</a>.</p>
+
+            </div>
+
+        </div>
+        <div class="footer big container page_odd" style="margin:0;width:100%;padding:5em">
+            <h1>Looking for more help?</h1>
+            <p><a href="../../index.html">Contact me!</a></p>
+        </div>
+    </body>
+</html>

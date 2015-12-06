@@ -1,0 +1,28 @@
+.page_content h1 {
+	text-align:left;
+}
+
+.section_h1 {
+	
+}
+.mo {
+    padding-top:0;
+    padding-bottom:0;
+}
+
+form {
+    width:50%;
+}
+
+label {
+    font-weight:normal;
+}
+
+.btn {
+    font-size:14pt;
+}
+
+.chapter p {
+    font-size:12pt;
+}
+
