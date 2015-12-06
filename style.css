@@ -1,0 +1,144 @@
+.appprefix {
+    color: #DC9456;
+}
+
+html, body {
+	margin:0px;
+	font-size:12pt;
+	height:100%;
+	font-family: "Century Gothic", CenturyGothic, "AppleGothic", sans-serif;
+}
+.header {
+	padding:2em;
+	color:white;
+	padding-left:3em;
+	background-color:#2c3e50;
+}
+
+p.big, .big p {
+	font-size:larger;
+}
+
+.header a, .footer a {
+	color:white;
+}
+li a {
+	color:#DC9456;
+}
+a:hover {
+	text-decoration: none;
+	color: #DC9456;
+}
+
+.footer {
+	background:#2c3e50;
+	color:white;
+	height:300px;
+	padding-top:3em;
+	padding-bottom:3em;
+	text-align:center;
+}
+
+
+.profile {
+	float:left;
+	margin-right:2em;
+	margin-bottom:1em;
+	clear:both;
+	
+}
+.profile_r {
+	float:right;
+	margin-left:2em;
+	margin-bottom:1em;
+	clear:both;
+	
+}
+
+.page_content {
+	max-width:800px;
+	margin-left:auto;
+	margin-right:auto;
+	padding:0.5em;
+	padding-top:2em;
+	padding-bottom:2em;
+	font-size:16pt;
+	text-align:justify;
+}
+.page_odd {
+	background-color:#2c3e50;
+	color:white;
+}
+.container {
+	margin:1em;
+	margin-top:4em;
+	width:95%;
+	margin-left:1.5em;
+}
+
+.social img {
+	vertical-align: bottom;
+	margin-bottom:1em;
+}
+
+@media all and (max-width: 800px) {
+    .profile, .profile_r, .social {
+        display:none;
+    }
+}
+
+.profile img, .profile_r img{
+	border-radius:5px;
+
+}
+.header p {
+	font-size:16pt;
+}
+.header p.tagline {
+	font-style: italic;
+	margin-top:30px;
+}
+h1 {
+	font-size:24pt;
+	color:#2c3e50;
+}
+h2 {
+	font-size:16pt;
+	color:#2980b9;
+}
+
+.page_odd h1, .tagline {
+	color: #DC9456;
+}
+
+.header h1 {
+	font-weight:normal;
+	font-size:42pt;
+	margin-bottom:0px;
+	margin-top:5px;
+	color:white;
+}
+			
+.header p {
+	margin-top:0px;
+	margin-bottom:0px;
+}
+
+p {
+	margin-bottom:1em;
+}
+
+.contact a {
+	color:black;
+}
+.contact a:hover {
+	color:#DC9456;
+}
+
+.section {
+	margin:0.5em;
+	margin-bottom:1em;
+	padding:1.5em;
+}
+			
+
