@@ -52,7 +52,7 @@
         <div class="page page_odd">
             <div class="page_content">
                 <h1 class="section_h1">Want the book?</h1>
-                <p>Sign up to get notified as soon as it's ready (Q1 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
+                <p>Sign up to get notified as soon as it's ready (Q1/Q2 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
                 <form action="http://formspree.io/scott.frees@gmail.com" method="POST">
                     <p class="form-group"><input class="form-control" type="text" name="name" placeholder="Your name"></p>
                     <p class="form-group"><input class="form-control" type="email" name="_replyto" placeholder="Your email" ></p>
@@ -76,35 +76,39 @@
                 This book is an expansion on a <a href="http://blog.scottfrees.com/c-processing-from-node-js">four-part series</a> on my blog on building C++ addons for Node.js.  I've expanded each of the topics into full chapters, and added four completely new chapters.  The book also contains more code examples, and coverage of the latest V8 API changes.
                 </p>
                 <div class="chapter">
-                    <h2>Chapter 1:  Introduction to V8 Programming</h2>
-                    <p>Learn about the C++ underpinnings of Node.js and how it all works.  You'll see why Node's interace with C++ is so efficient, and how V8's design effects how you write your addons.</p>
+                    <h2>Chapter 1:  Introduction to Node.js Addons</h2>
+                    <p>Learn the basics of createing Node.js Addons and how to use node-gyp to create and test them.  We'll got through a few quick examples, and outline the rest of the book.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 2:  Basic C++ Integration</h2>
+                    <h2>Chapter 2:  Understanding V8 Programming</h2>
+                    <p> Learn about the C++ underpinnings of Node.js and how it all works.  You'll see why Node's interace with C++ is so efficient, and how V8's design effects how you write your addons.  In this chapter we'll cover all the V8 data types, and how the V8 memory system can be accessed from C++.</p>
+                </div>
+                <div class="chapter">
+                    <h2>Chapter 3:  Basic C++ Integration</h2>
                     <p> Learn how to prepare your development environment so you can compile C++ addons on Linux, Mac, or even Windows.  See how to create your first C++ addon and pass JavaScript objects to C++ - which are turned into first-class objects matching a C++ class definition.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 3:  Moving objects between C++ and Node.js</h2>
+                    <h2>Chapter 4:  Moving objects between C++ and Node.js</h2>
                     <p>Learn a bit more about sending JavaScript objects to your C++ code, and more importantly, returning C++ class objects back to Node as results.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 4:  Working with Arrays of data</h2>
+                    <h2>Chapter 5:  Working with Arrays of data</h2>
                     <p>Passing arrays of primitives or objects between your Node.js application and C++ addon requires different V8 API calls.  This chapter will show you how to do this effectively.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 5:  Directly exposing C++ objects to JavaScript</h2>
+                    <h2>Chapter 6:  Directly exposing C++ objects to JavaScript</h2>
                     <p>If you have existing C++ classes that you want to be able to use as "native" JavaScript objects, then you'll need to learn to wrap your C++ classes with V8 data structures.  This chapter is crucial if you want to leverage existing C++ code without writing "transfer" code!</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 6:  Calling C++ code Asynchronously</h2>
+                    <h2>Chapter 7:  Calling C++ code Asynchronously</h2>
                     <p>What good is a Node.js module if it blocks your event loop?  In this chapter you'll learn how to do the heavy computational task you've written in C++ asynchronously.  Just give your C++ code a JavaScript callback function, and your JavaScript can just keep on running until the C++ is done.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 7:  Managing V8 Api Versions with NAN</h2>
+                    <h2>Chapter 8:  Managing V8 Api Versions with NAN</h2>
                     <p>The V8 API has undergone many "breaking" changes - and since different version of Node.js use different versions of V8, the situation can get pretty complex to manage.  This chapter will show you how to work at a higher level of abstraction using <a href="https://github.com/nodejs/nan">Nan</a> - the Native Abstractions for Node.js library.  Using Nan, you'll defend yourself from the changing V8 API.</p>
                 </div>
                 <div class="chapter">
-                    <h2>Chapter 8:  Deploying and Publishing C++ Addons</h2>
+                    <h2>Chapter 9:  Deploying and Publishing C++ Addons</h2>
                     <p>Publishing your typical Node module to an <a href="">npm</a> repo is pretty simple - but since your C++ is <i>native executable code</i>, there are some hoops you'll need to jump through so your addon works on all operating systems.  In this chapter, we'll cover solutions to common pitfalls involved in publishing/deploying C++ addons.</p>
                 </div>
             </div>
@@ -123,7 +127,7 @@
         <div class="page page_odd">
             <div class="page_content">
                 <h1 class="section_h1">Want the book?</h1>
-                <p>Sign up to get notified as soon as it's ready (Q1 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
+                <p>Sign up to get notified as soon as it's ready (Q1/Q2 2016).  <br/>With your signup, you'll get a <span class="highlight">discount code for 20% off!</span></p>
                 <form action="http://formspree.io/scott.frees@gmail.com" method="POST">
                     <p class="form-group"><input class="form-control" type="text" name="name" placeholder="Your name"></p>
                     <p class="form-group"><input class="form-control" type="email" name="_replyto" placeholder="Your email" ></p>
