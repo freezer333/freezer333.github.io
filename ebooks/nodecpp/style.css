@@ -31,3 +31,12 @@ label {
 	font-style:italic;
 	margin-top:10px;
 }
+
+
+a.highlight {
+    text-decoration: none;
+}
+
+a {
+    text-decoration: none;
+}
