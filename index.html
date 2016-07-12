@@ -7,6 +7,8 @@
         <link rel="stylesheet" type="text/css" href="style.css">
         <script src="//code.jquery.com/jquery.js"></script>
         <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.min.js"></script>
+        <script src="js/jquery.rss.min.js"></script>
         <script>
           (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
           (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
@@ -16,6 +18,13 @@
           ga('create', 'UA-57277333-2', 'auto');
           ga('send', 'pageview');
 
+          jQuery(function($) {
+            $("#rss-feeds").rss("http://blog.scottfrees.com/feed", 
+            {
+                layoutTemplate:"<p>I also post training articles <a href='https://blog.scottfrees.com'>on my blog</a>.  Here's a few of my latest articles...<p><div class='blog-entries'>{entries}</div>",
+                entryTemplate: '<a href="{url}"><li class="blog-entry"><h2>{title}</h2><p>{shortBodyPlain}...<small class="blog-date">{date}</small></p></li></a>'
+            })
+          })
         </script>
         <link rel="shortcut icon" href="favicon.ico"/>
         <title>Frees Consulting and Development</title>
@@ -27,21 +36,21 @@
                     <img height="175" width="160" src="photo.jpg"/>
                 </div>
                 <h1>Scott Frees</h1>
-                <p>Software Consulting and Development</p>
+                <p>Frees Consulting and Development LLC</p>
 
                 <p class="tagline">Building powerful solutions to your business challenges.</p>
             </div>
         </div>
         <div class="page">
             <div class="page_content">
-                <p>I'm a freelance software developer and consultant.  I specialize in custom application development, workflow automation, and science/engineering data analysis and visualization. </p><p> You can hire me to bring a project from just an idea, through deployment - or I can work with existing teams to ease specific pain points in a project.</p>
+                <p>I'm a freelance software developer and consultant.  I specialize in custom application development, workflow automation, software integration. </p><p> You can hire me to bring a project from just an idea, through deployment - or I can work with existing teams to ease specific pain points in a project.</p>
                 <p>Most importantly, I can learn and understand <b><i>your business </i></b>and use my skills to help <b>you succeed</b>.
                 </p>
                 <div style="margin-top:50px; vertical-align:middlevertical-align:middlevertical-align:middle" class="contact">
                     <h2>Contact me now to start discussing how I can help you...</h2>
                     <p>
                         <i style="width:50px;font-size:24px;" class="fa fa-envelope-o"></i>
-                        <a href="mailto:scott.frees@gmail.com">scott.frees@gmail.com</a>
+                        <a href="mailto:scott@freesconsulting.comscott@freesconsulting.com">scott@freesconsulting.com</a>
                     </p>
                     <p>
                         <i style="width:50px;font-size:24px;" class="fa fa-phone"></i>
@@ -55,7 +64,63 @@
             </div>
         </div>
         <div class="page page_odd">
+            <div class="page_content services">
+                
+                <div>
+                <h1>Modernizing Legacy Apps</h1>
+                <p>
+                Do old desktop programs drive an important business process? Are these programs so difficult to use that its slowing down your operation?  
+                </p><p  class="cta">I can design custom applications to make your business processes run smoother and be more accessible.
+                </p>
+                </div>
+                <div>
+                <h1>Workflow Automation</h1>
+                <p>
+                Are you swimming in a sea of Excel spreadsheets that contain critical business rules?  Are your people spending valuable time coping data from one program to another?  </p><p  class="cta">I can streamline workflows for you by automating and integrating existing applications and investments.
+                </p>
+                </div>
+                <div>
+                <h1>Integration</h1>
+                <p>
+                Looking to preserve your investment in software written in an older language?  Are you trying to leverage existing code but don’t know how to integrate it with your new code base?  </p><p class="cta">I can help you leverage your existing technology by integrating it with modern software and architectures.
+                </p>
+                </div>
+                <div>
+                <h1>New Projects</h1>
+                <p>Are you a startup, looking for someone to build out your MVP? </p><p  class="cta">I can help you get up and running on a solid footing.
+                </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page">
             <div class="page_content">
+                <h1>Training Resources</h1>
+                <div class="row">
+                    <div class="col col-sm-4">
+                        <img class="ebook-thumbnail" src="ebooks/nodecpp/thumbnail-256.png"/>
+                    </div>
+                    <div class="col col-sm-8"  style="padding-left:1.5em">
+                        <p>There is a ton of legacy C and C++ applications still doing their job within companies all over the world.  Integrating these applications with modern platforms <b>can be a challenge!</b>  
+                        </p>
+                        <p>I've published a complete e-book that covers integrating C and C++ with one of the most popular modern web platforms - Node.js.<p>
+                        <p><a href="/ebooks/nodecpp">Click here to learn more</a>.</p>
+                    </div>
+                </div>
+                
+
+
+            </div>
+                <div id="rss" class="page_content">
+                    
+                    <div id="rss-feeds"></div>
+                </div>
+        </div>
+
+        <div class="page page_odd">
+            <div class="page_content">
+                
+
                 <h1 class="target">Broad Expertise</h1>
 
                 <p>Shrinkwrap software works great... <i>if it fit your needs perfectly</i>.  When it doesn't <u><b>you need someone with a deep skillset that can build the customized solution you need</b></u>.  </p>
@@ -87,9 +152,9 @@
 
                 <p>I am a <a href="http://pages.ramapo.edu/~sfrees" target="_blank">Professor of Computer Science</a> at Ramapo College of New Jersey, specializing in human computer interaction, computer graphics, and web development.  </p>
                 <p>I am an accomplished researcher in several fields, with publications in <a href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Virtual%20Reality&dl=GUIDE&dimval=4294683758" target="_blank">Virtual Reality</a>, <a href="http://www.ncbi.nlm.nih.gov/pubmed/?term=Scott+Frees" target="_blank">Bioinformatics</a>, and <a href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Node.JS&dl=GUIDE&dimval=4294683758" target="_blank">Computer Science Education</a>.
-                <p>As a professional and as a scholar, I have excelled in applying my skillset to provide innovative solutions in a diverse set of fields - including <a href="http://www.automation.com/library/resources/harmonization-of-pump-schemas-with-iso-15926" target="_blank">mechanical engineering</a>, <a href="http://quadruplex.ramapo.edu/qgrs/app/start" target="_blank">computational biology</a>, <a href="http://quadruplex.ramapo.edu/ecosim/start">environmental science</a>, and <a href="http://www.appiversity.com/SimOrg/Info" target="_blank">organic chemistry</a>.</p>
+                
                 <p>
-                I teach Operating Systems, Web Application Development, Computer Graphics, Database Systems, and a number of other courses at the undergraduate level at Ramapo College.   </p>
+                I teach <a href="http://pages.ramapo.edu/~sfrees/courses/cmps311/">Operating Systems</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps369/">Web Application Development</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps342/">Computer Graphics</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps364/">Database Systems</a>, and a number of other courses at the undergraduate level at Ramapo College.   </p>
 
                 <p>I also write about software and programming on my <a href="http://blog.scottfrees.com" target="_blank">blog</a>.</p>
 
@@ -124,7 +189,7 @@
                     </p>
                     <p>
                     <i style="width:50px;font-size:24px;" class="fa fa-envelope-o"></i>
-                    <a href="mailto:scott.frees@gmail.com">scott.frees@gmail.com</a>
+                    <a href="mailto:scott@freesconsulting.com">scott@freesconsulting.com</a>
                     </p>
                     <p>
                     <i style="width:50px;font-size:24px;" class="fa fa-phone"></i>

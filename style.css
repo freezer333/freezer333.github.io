@@ -98,9 +98,14 @@ a:hover {
 	font-style: italic;
 	margin-top:30px;
 }
+.services h1 {
+	margin-bottom:10px;
+	margin-top:1em;
+}
 h1 {
 	font-size:24pt;
 	color:#2c3e50;
+	margin-bottom:1em;
 }
 h2 {
 	font-size:16pt;
@@ -144,5 +149,48 @@ p {
 .highlight {
 	color:#DC9456;
 }
-			
 
+		
+#rss {
+	clear:both;
+	margin-top:0px;
+	padding-top:0px;
+}
+#rss ul {
+	margin:0px;
+	padding:0px;
+}
+.blog-entries a {
+	text-decoration:none;
+	color:#444444;
+}	
+
+.blog-entry {
+	list-style-type: none;
+	margin-left:0px;
+	padding-left:0px;
+}
+
+.blog-date {
+	margin-left:1em;
+	color:silver;
+}
+
+.ebook-thumbnail {
+	float:left;
+	margin-right:1em;
+	box-shadow: 8px 8px 8px 0 #C2C2C2;
+	border-radius: 4px;
+	border-style: solid;
+    border-width: 1px;
+    border-color:#C2C2C2;
+}
+
+.services div p {
+	color:silver;
+}
+
+.services div p.cta {
+	color:white;
+	
+}
