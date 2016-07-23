@@ -22,7 +22,7 @@ p.big, .big p {
 .header a, .footer a {
 	color:white;
 }
-li a {
+li a, .tagline a {
 	color:#DC9456;
 }
 
