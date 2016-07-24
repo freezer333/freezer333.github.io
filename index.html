@@ -91,6 +91,11 @@
                 </p>
                 </div>
             </div>
+            <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:2em">
+                <button type="button" class="btn btn-warning btn-lg" data-toggle="modal" data-target="#contact">
+                Contact me for development help
+                </button>
+            </div>
         </div>
 
         <div class="page">
@@ -107,15 +112,18 @@
                         <p><a href="/ebooks/nodecpp">Click here to learn more</a>.</p>
                     </div>
                 </div>
-                
-
-
             </div>
             <div id="rss" class="page_content">
                 <div id="rss-feeds"></div>
             </div>
+            <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:1em">
+                <button type="button" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#contact">
+                Contact me for training help
+                </button>
+            </div>
+        </p>
+        <div class="page page_third">
             <div id="events" class="page_content">
-                <h1>Events &amp; Talks</h1>
                 <ul class="events">
                     <li class="event">
                         <h2><a href="events/webexpect">What to expect when you need a website</a></h2>
@@ -126,7 +134,7 @@
                             <br/>
                             <i>Somerset Country Business Partnerhip<br/>360 Grove Street Bridgewater, NJ 08807</i>
                         </p>
-                        <a href="events/webexpect">Click here for details</a></p>
+                        <a class="btn btn-info btn-lg" href="events/webexpect">Free registration &amp; details</a></p>
                     </li>
 
                     <li class="event">
@@ -148,7 +156,7 @@
             <div class="page_content">
                 
 
-                <h1 class="target">Broad Expertise</h1>
+                <h1 class="target">Expertise</h1>
 
                 <p>Shrinkwrap software works great... <i>if it fit your needs perfectly</i>.  When it doesn't <u><b>you need someone with a deep skillset that can build the customized solution you need</b></u>.  </p>
                 <p>I have expertise in a wide array of platforms, languages, and frameworks - I can integrate solutions into your existing infrastructure and use the technologies your team already knows.
@@ -233,5 +241,70 @@
 
 
     </div>
+     <div id="contact" class="modal fade" tabindex="-1" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Contact Scott</h4>
+            </div>
+            <div class="modal-body">
+                <p class="highlight">Tell me a little about yourself and what you are looking for.  </span></p>
+                <form style="width:100%" id="ncontact" action="http://formspree.io/scott.frees@gmail.com" method="POST">
+                    <div class="form-group">
+                        <label for="name">Name </label>
+                        <input type="text" value="" name="name" class= "form-control" id="mce-FNAME">
+                    </div>
+                    <div class="form-group">
+                        <label for="mce-EMAIL">Email Address  <span class="asterisk">*</span></label>
+                        <input type="email" value="" name="_replyto" class="form-control required email" id="mce-EMAIL">
+                    </div>
+                    
+                    <div class="checkbox">
+                        <label>
+                        <input name="book" type="checkbox">I'm interested in help with modernizing existing app(s).
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="lng" type="checkbox">I'm interested in getting some help automating workflows.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="lng" type="checkbox">I'm interested in an integration project.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="consulting" type="checkbox">I'm interested in help with a new project.
+                        </label>
+                    </div>
+                     <div class="checkbox">
+                        <label>
+                        <input name="consulting" type="checkbox">I'm interested training for my team.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="other" type="checkbox"> Other.
+                        </label>
+                    </div>
+                    <div>
+                        <label>Details</label>
+                        <textarea name="details" class="form-control" rows="3"></textarea>
+                    </div>
+                    <input type="hidden" name="_subject" value="ConsultContact" />
+                    <input type="hidden" name="_next" value="http://scottfrees.com" />
+                    <input type="text" name="_gotcha" style="display:none" />
+                    
+                <form>
+            </div>
+            <div class="modal-footer" style="text-align:left">
+                    <button onclick="$('#contact').submit()" type="button" class="btn btn-primary" data-dismiss="modal">Send</button>
+            </div>
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+        </div><!-- /.modal -->
 </body>
 </html>

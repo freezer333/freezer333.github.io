@@ -28,18 +28,19 @@ li a, .tagline a {
 
 ul.events {
 	padding-left:0px;
-
+	color:white;
 }
 li.event {
 	list-style-type: none;
 	margin-left:0px;
 	padding:1em;
-	background-color:#DDDDDD;
+	background-color:#2c3e50;
 	border-radius: 3px;
 	margin-bottom:1em;
+
 }
 li.event h2 a {
-	color:#2c3e50;
+	color:#DC9456;
 	font-size:larger;
 	font-weight:bold;
 }
@@ -105,6 +106,13 @@ a:hover {
 	background-color:#2c3e50;
 	color:white;
 }
+
+.page_third {
+	background-color:#DDDDDD;
+	padding-top:3em;
+	
+}
+
 .container {
 	margin:1em;
 	margin-top:4em;
