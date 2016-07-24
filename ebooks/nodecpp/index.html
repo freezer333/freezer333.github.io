@@ -34,7 +34,7 @@
                     The popularity of Node.js just keeps <a href="https://strongloop.com/node-js/nodejs-infographic/">surging</a>, it's great for so many things.  But what if you need serious C/C++ speed?  What if you want to move to Node.js, but can't afford to rewrite your existing C++ code?
                 </p>
                 <p>
-                    <a style="float:left; margin-right:20px" class="gumroad-button" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
+                    <a style="float:left; margin-right:20px" class="btn btn-warning" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
                 </p>
             </div>
         </div>
@@ -56,10 +56,9 @@
         <div class="page page_odd">
             <div class="page_content">
                 <h1 class="section_h1">Want the book?</h1>
-                <p>You can buy right now, through <a class="highlight" href="https://gum.co/dTVf?wanted=true"> gumroad </a> - just click "Buy Now" below!</p>
                 <div style="padding-top:0.5em; padding-bottom:2em; ">
                     <div>
-                    <a style="float:left; margin-right:20px; margin-bottom:50px;" class="gumroad-button" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
+                    <a style="float:left; margin-right:20px; margin-bottom:50px;" class="btn btn-info" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
                     
                     For $24.99 you'll get the ebook (PDF, HTML and epub) containing over 200 pages of text describing dozens of addons, along with all the example code listings.</div>
                 </div>
@@ -149,7 +148,11 @@
         <div class="page page_odd">
             <div class="page_content">
                 <h1>Want to share it with your team?</h1>
-                <p>Save your developers' time by sharing this book with your team.  You can purchase a <a href="https://gum.co/AjXqZ">team license</a> that covers up to 50 developers for $199.99, or <a href="https://gum.co/mZMie"> corporate license</a> if you belong to an even bigger team.</p>
+                <p>Save your developers' time by sharing this book with your team.  You can purchase a <a href="https://gum.co/AjXqZ">team license</a> that covers up to 50 developers for $99.99, or <a href="https://gum.co/mZMie"> corporate license</a> if you belong to an even bigger team.</p>
+                <p>
+                    <a class="btn btn-warning" href="https://gumroad.com/l/AjXqZ">Team (up to 50 users)</a>
+                    <a class="btn btn-info" href="https://gumroad.com/l/mZMie">Corporate (entire organization)</a>
+                </p>
             </div>
         </div>
         <div class="page mo">
@@ -166,10 +169,9 @@
         <div class="page page_odd">
             <div class="page_content">
                 <h1 class="section_h1">Want the book?</h1>
-                <p>You can buy right now, through <a class="highlight" href="https://gum.co/dTVf?wanted=true"> gumroad </a> - just click "Buy Now" below!</p>
                 <div style="padding-top:0.5em; padding-bottom:2em; ">
                     <div>
-                    <a style="float:left; margin-right:20px; margin-bottom:50px;" class="gumroad-button" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
+                    <a style="float:left; margin-right:20px; margin-bottom:50px;" class="btn btn-info" href="https://gum.co/dTVf" target="_blank">Buy Now!</a>
                     
                     For $24.99 you'll get the ebook (PDF, HTML and epub) containing over 200 pages of text describing dozens of addons, along with all the example code listings.</div>
                 </div>
@@ -228,7 +230,76 @@
         </div>
         <div class="footer big container page_odd" style="margin:0;width:100%;padding:5em">
             <h1>Looking for more help?</h1>
-            <p><a href="../../index.html">Contact me!</a></p>
+             <button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#contact">
+        Contact me!
+        </button>
         </div>
+        
+        <!-- Button trigger modal -->
+       
+
+        <div id="contact" class="modal fade" tabindex="-1" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Contact Scott</h4>
+            </div>
+            <div class="modal-body">
+                <p class="highlight">Tell me a little about yourself and what you are looking for.  </span></p>
+                <form style="width:100%" id="ncontact" action="http://formspree.io/scott.frees@gmail.com" method="POST">
+                    <div class="form-group">
+                        <label for="name">Name </label>
+                        <input type="text" value="" name="name" class= "form-control" id="mce-FNAME">
+                    </div>
+                    <div class="form-group">
+                        <label for="mce-EMAIL">Email Address  <span class="asterisk">*</span></label>
+                        <input type="email" value="" name="_replyto" class="form-control required email" id="mce-EMAIL">
+                    </div>
+                    
+                    <div class="checkbox">
+                        <label>
+                        <input name="book" type="checkbox"> I'm looking for more information about the ebook.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="lng" type="checkbox"> I'm looking interested in integrating Node.js with other languages.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="consulting" type="checkbox"> I'm looking for consulting / app development help.
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                        <input name="other" type="checkbox"> Other.
+                        </label>
+                    </div>
+                    <div>
+                        <label>Details</label>
+                        <textarea name="details" class="form-control" rows="3"></textarea>
+                    </div>
+                    <input type="hidden" name="_subject" value="NodeContact" />
+                    <input type="hidden" name="_next" value="http://scottfrees.com" />
+                    <input type="text" name="_gotcha" style="display:none" />
+                    
+                <form>
+            </div>
+            <div class="modal-footer" style="text-align:left">
+                <div class="row">
+                    <div class="col-sm-8">
+                        <p class="text-muted">Visit my <a href="/">homepage</a> for direct contact info. </p>
+                    </div>
+                    <div class="col-sm-4" style="text-align:right">
+                         <button onclick="$('#ncontact').submit()" type="button" class="btn btn-primary" data-dismiss="modal">Send</button>
+                    </div>
+                </div>
+                
+            </div>
+            </div><!-- /.modal-content -->
+        </div><!-- /.modal-dialog -->
+        </div><!-- /.modal -->
     </body>
 </html>
