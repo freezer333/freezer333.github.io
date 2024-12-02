@@ -1,56 +1,259 @@
 <!doctype html>
 <html>
-    <head>
-        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
-        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
-        <link rel="stylesheet" type="text/css" href="style.css">
-        <script src="//code.jquery.com/jquery.js"></script>
-        <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
-        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.min.js"></script>
-        <script src="js/jquery.rss.min.js"></script>
-        <script>
-          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-          m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-          })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
 
-          ga('create', 'UA-57277333-2', 'auto');
-          ga('send', 'pageview');
+<head>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.min.js"></script>
+    <script src="js/jquery.rss.min.js"></script>
+    <script>
+        (function (i, s, o, g, r, a, m) {
+            i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+                (i[r].q = i[r].q || []).push(arguments)
+            }, i[r].l = 1 * new Date(); a = s.createElement(o),
+                m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+        })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
 
-          jQuery(function($) {
-            $("#rss-feeds").rss("https://blog.scottfrees.com/feed", 
-            {
-                layoutTemplate:"<h1>Recent Articles</h1><div class='blog-entries'>{entries}</div><p>Read more <a href='https://blog.scottfrees.com'>on my blog</a>.  <p>",
-                entryTemplate: '<a href="{url}"><li class="blog-entry"><h2>{title}</h2><p>{shortBodyPlain}...<small class="blog-date">{date}</small></p></li></a>'
-            })
-          })
-        </script>
-        <link rel="shortcut icon" href="favicon.ico"/>
-        <title>Frees Consulting and Development</title>
-    </head>
-    <body>
-        <div class="header page">
-            <div class="page_content">
-                <div class="profile">
-                    <img height="175" width="160" src="photo.jpg"/>
+        ga('create', 'UA-57277333-2', 'auto');
+        ga('send', 'pageview');
+
+        jQuery(function ($) {
+            $("#rss-feeds").rss("https://blog.scottfrees.com/feed",
+                {
+                    layoutTemplate: "<h1>Recent Articles</h1><div class='blog-entries'>{entries}</div><p>Read more <a href='https://blog.scottfrees.com'>on my blog</a>.  <p>",
+                    entryTemplate: '<a href="{url}"><li class="blog-entry"><h2>{title}</h2><p>{shortBodyPlain}...<small class="blog-date">{date}</small></p></li></a>'
+                })
+        })
+    </script>
+    <link rel="shortcut icon" href="favicon.ico" />
+    <title>Frees Consulting and Development</title>
+</head>
+
+<body>
+    <div class="header page">
+        <div class="page_content">
+            <div class="profile">
+                <img width="300" src="gib.jpg" />
+            </div>
+            <h1>Frees Consulting &amp; Development</h1>
+            <p>LLC</p>
+
+            <p class="tagline">Scott Frees</p>
+        </div>
+    </div>
+    <div class="page">
+        <div class="page_content">
+            <div class="profile_r">
+                <img width="200" src="sf.jpeg" />
+            </div>
+            <p>I'm a software developer and consultant.
+                <br /><b>I specialize in turning your ideas into product.</b>
+            </p>
+            <p> Whether you're bootstraping
+                startup looking for your MVP, or you're an established business starting a new project,
+                I can get your project moving, get it launched, and help you ramp up your business.
+            </p>
+            <p>I have 20 years experience in custom application and web development,
+                workflow automation, and software integration. I work with existing teams to ease specific technical
+                pain points,
+                and I can help you balance technical and business priorities.
+            </p>
+            <p>I learn and understand <b><i>your business </i></b>and use my skills to help
+                <b>you succeed</b>.
+            </p>
+            <div style="margin-top:50px;" class="contact">
+                <h2>Contact me so I can help you...</h2>
+                <p>
+                    <i style="width:50px;font-size:24px;" class="fa fa-envelope-o"></i>
+                    <a href="mailto:scott@freesconsulting.comscott@freesconsulting.com">scott@freesconsulting.com</a>
+                </p>
+                <p>
+                    <i style="width:50px;font-size:24px;" class="fa fa-phone"></i>
+                    <a href="callto:19088661986">(908) 656-4192</a>
+                </p>
+                <p>
+                    <i style="width:50px;font-size:24px;" class="fa fa-home"></i>
+                    Denville, New Jersey
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="page page_odd">
+        <div class="page_content services">
+
+            <div>
+                <h1>Modernizing Legacy Apps</h1>
+                <p>
+                    Do old desktop programs drive an important business process? Are these programs so difficult to use
+                    that its slowing down your operation?
+                </p>
+                <p class="cta">I can design custom applications to make your business processes run smoother and be more
+                    accessible.
+                </p>
+            </div>
+            <div>
+                <h1>Workflow Automation</h1>
+                <p>
+                    Are you swimming in a sea of Excel spreadsheets that contain critical business rules? Are your
+                    people spending valuable time coping data from one program to another? </p>
+                <p class="cta">I can streamline workflows for you by automating and integrating existing applications
+                    and investments.
+                </p>
+            </div>
+            <div>
+                <h1>Integration</h1>
+                <p>
+                    Looking to preserve your investment in software written in an older language? Are you trying to
+                    leverage existing code but don’t know how to integrate it with your new code base? </p>
+                <p class="cta">I can help you leverage your existing technology by integrating it with modern software
+                    and architectures.
+                </p>
+            </div>
+            <div>
+                <h1>New Projects</h1>
+                <p>Are you a startup, looking for someone to build out your MVP? </p>
+                <p class="cta">I can help you get up and running on a solid footing.
+                </p>
+            </div>
+        </div>
+        <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:2em">
+            <button type="button" class="btn btn-warning btn-lg" data-toggle="modal" data-target="#contactmodal">
+                Contact me for development help
+            </button>
+        </div>
+    </div>
+
+    <div class="page">
+        <div class="page_content">
+            <h1>Training / Books</h1>
+            <div class="row">
+                <div class="col col-sm-4">
+                    <img class="ebook-thumbnail" src="ebooks/nodecpp/thumbnail-256.png" />
                 </div>
-                <h1>Scott Frees</h1>
-                <p>Frees Consulting and Development LLC</p>
+                <div class="col col-sm-8" style="padding-left:1.5em">
+                    <p>There is a ton of legacy C and C++ applications still doing their job within companies all over
+                        the world. Integrating these applications with modern platforms <b>can be a challenge!</b>
+                    </p>
+                    <p>I've published a complete e-book that covers integrating C and C++ with one of the most popular
+                        modern web platforms - Node.js.
+                    <p>
+                    <p><a href="/ebooks/nodecpp">Click here to learn more</a>.</p>
+                </div>
+            </div>
+        </div>
+        <div id="rss" class="page_content">
+            <div id="rss-feeds"></div>
+        </div>
+        <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:1em">
+            <button type="button" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#contactmodal">
+                Contact me for training help
+            </button>
+        </div>
+        </p>
 
-                <p class="tagline">Building powerful solutions to your business challenges.</p>
+        <div class="page page_odd">
+            <div class="page_content">
+
+
+                <h1 class="target">Expertise</h1>
+
+                <p>Shrinkwrap software works great... <i>if it fit your needs perfectly</i>. When it doesn't <u><b>you
+                            need someone with a deep skillset that can build the customized solution you need</b></u>.
+                </p>
+                <p>I have expertise in a wide array of platforms, languages, and frameworks - I can integrate solutions
+                    into your existing infrastructure and use the technologies your team already knows.
+                </p>
+                <div class="profile_r">
+                    <img width="450" src="poly.png" />
+                </div>
+                <ul>
+                    <li>C and C++</li>
+                    <li>C#, Java, Python</li>
+                    <li>JavaScript, HTML/CSS</li>
+                    <li>Node.js, Express</li>
+                    <li>OpenGL, WebGL, and Unity</li>
+                    <li>PostgreSQL, MySQL, MS SQL Server, Oracle, Mongo</li>
+                </ul>
+
+                <p style="clear:both">I worked as a systems developer and consultant in the oil and gas industry for
+                    eight years. I specialized in Java and C# development, working on thermodynamic simulations used by
+                    <b>General Electric</b> and helping the <b>National Institute of Standards and Technology</b> create
+                    B2B electronic data exchange standards for <a
+                        href="http://www.automation.com/pdf_articles/aex_hi_report.pdf" target="_blank">capital
+                        facilities</a> and <a
+                        href="http://www.pumpsystemsmatter.org/uploadedFiles/Pumps/About_Pumps/EDE_Demo/EDE_Subscriber_Portal/50-7_for_%20EPRI.pdf"
+                        target="_blank">hydraulic systems</a>.
+                </p>
+                <p>I hold a Ph.D. in Computer Science from Lehigh University and have been an <a
+                        href="https://scholar.google.com/citations?user=QV5PTV4AAAAJ&hl=en" target="_blank">active
+                        researcher</a> in the fields of computer graphics, virtual reality, computer networks, web
+                    development, and computational biology for over ten years. I have the technical skills to deliver
+                    advanced applications to meet the most demanding situations.
+                </p>
             </div>
         </div>
         <div class="page">
             <div class="page_content">
-                <p>I'm a freelance software developer and consultant.  I specialize in custom application development, workflow automation, software integration. </p><p> You can hire me to bring a project from just an idea, through deployment - or I can work with existing teams to ease specific pain points in a project.</p>
-                <p>Most importantly, I can learn and understand <b><i>your business </i></b>and use my skills to help <b>you succeed</b>.
-                </p>
-                <div style="margin-top:50px; vertical-align:middlevertical-align:middlevertical-align:middle" class="contact">
-                    <h2>Contact me now to start discussing how I can help you...</h2>
+                <h1 class="target">About Me</h1>
+                <div class="profile">
+                    <img width="200" src="sf.jpeg" />
+                </div>
+
+                <p>I am a <a href="http://pages.ramapo.edu/~sfrees" target="_blank">Professor of Computer Science</a> at
+                    Ramapo College of New Jersey, specializing in human computer interaction, computer graphics, and web
+                    development. </p>
+                <p>I am an accomplished researcher in several fields, with publications in <a
+                        href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Virtual%20Reality&dl=GUIDE&dimval=4294683758"
+                        target="_blank">Virtual Reality</a>, <a
+                        href="http://www.ncbi.nlm.nih.gov/pubmed/?term=Scott+Frees" target="_blank">Bioinformatics</a>,
+                    and <a
+                        href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Node.JS&dl=GUIDE&dimval=4294683758"
+                        target="_blank">Computer Science Education</a>.
+
+                <p>
+                    I teach <a href="http://pages.ramapo.edu/~sfrees/courses/cmps311/">Operating Systems</a>, <a
+                        href="http://pages.ramapo.edu/~sfrees/courses/cmps369/">Web Application Development</a>, <a
+                        href="http://pages.ramapo.edu/~sfrees/courses/cmps342/">Computer Graphics</a>, <a
+                        href="http://pages.ramapo.edu/~sfrees/courses/cmps364/">Database Systems</a>, and a number of
+                    other courses at the undergraduate level at Ramapo College. </p>
+
+                <p>I also write about software and programming on my <a href="http://blog.scottfrees.com"
+                        target="_blank">blog</a>.</p>
+
+            </div>
+
+        </div>
+        <div class="footer container" style="margin:0;width:100%">
+            <div class="row">
+                <div class="col-sm-6 social">
+                    <div class="row">
+                        <div class="col-xs-5">
+                            <a href="https://www.linkedin.com/pub/scott-frees/4/1aa/764" target="_blank"><img
+                                    src="In-White-48px-R.png" /></a>
+                        </div>
+                        <div class="col-xs-5">
+                            <a href="https://github.com/freezer333" target="_blank"><img
+                                    src="GitHub-Mark-Light-64px.png" /></a>
+                        </div>
+
+                    </div>
+                    <div class="row">
+
+                        <div class="col-xs-5">
+                            <a href="http://blog.scottfrees.com" target="_blank"><img src="blog.png" width="64" /></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6" style="text-align:left;padding-left:2em">
+                    <h1 style="padding-top:0px;">
+                        Frees Consulting and Development llc
+                    </h1>
                     <p>
                         <i style="width:50px;font-size:24px;" class="fa fa-envelope-o"></i>
-                        <a href="mailto:scott@freesconsulting.comscott@freesconsulting.com">scott@freesconsulting.com</a>
+                        <a href="mailto:scott@freesconsulting.com">scott@freesconsulting.com</a>
                     </p>
                     <p>
                         <i style="width:50px;font-size:24px;" class="fa fa-phone"></i>
@@ -60,184 +263,6 @@
                         <i style="width:50px;font-size:24px;" class="fa fa-home"></i>
                         Denville, New Jersey
                     </p>
-                    <button type="button" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#contactmodal">
-                        Contact now
-                    </button>
-                </div>
-            </div>
-        </div>
-        <div class="page page_odd">
-            <div class="page_content services">
-                
-                <div>
-                <h1>Modernizing Legacy Apps</h1>
-                <p>
-                Do old desktop programs drive an important business process? Are these programs so difficult to use that its slowing down your operation?  
-                </p><p  class="cta">I can design custom applications to make your business processes run smoother and be more accessible.
-                </p>
-                </div>
-                <div>
-                <h1>Workflow Automation</h1>
-                <p>
-                Are you swimming in a sea of Excel spreadsheets that contain critical business rules?  Are your people spending valuable time coping data from one program to another?  </p><p  class="cta">I can streamline workflows for you by automating and integrating existing applications and investments.
-                </p>
-                </div>
-                <div>
-                <h1>Integration</h1>
-                <p>
-                Looking to preserve your investment in software written in an older language?  Are you trying to leverage existing code but don’t know how to integrate it with your new code base?  </p><p class="cta">I can help you leverage your existing technology by integrating it with modern software and architectures.
-                </p>
-                </div>
-                <div>
-                <h1>New Projects</h1>
-                <p>Are you a startup, looking for someone to build out your MVP? </p><p  class="cta">I can help you get up and running on a solid footing.
-                </p>
-                </div>
-            </div>
-            <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:2em">
-                <button type="button" class="btn btn-warning btn-lg" data-toggle="modal" data-target="#contactmodal">
-                Contact me for development help
-                </button>
-            </div>
-        </div>
-
-        <div class="page">
-            <div class="page_content">
-                <h1>Training / Books</h1>
-                <div class="row">
-                    <div class="col col-sm-4">
-                        <img class="ebook-thumbnail" src="ebooks/nodecpp/thumbnail-256.png"/>
-                    </div>
-                    <div class="col col-sm-8"  style="padding-left:1.5em">
-                        <p>There is a ton of legacy C and C++ applications still doing their job within companies all over the world.  Integrating these applications with modern platforms <b>can be a challenge!</b>  
-                        </p>
-                        <p>I've published a complete e-book that covers integrating C and C++ with one of the most popular modern web platforms - Node.js.<p>
-                        <p><a href="/ebooks/nodecpp">Click here to learn more</a>.</p>
-                    </div>
-                </div>
-            </div>
-            <div id="rss" class="page_content">
-                <div id="rss-feeds"></div>
-            </div>
-            <div class="page_content" style="text-align:center;padding-top:0px; padding-bottom:1em">
-                <button type="button" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#contactmodal">
-                Contact me for training help
-                </button>
-            </div>
-        </p>
-        <!--
-        <div class="page page_third">
-            <div id="events" class="page_content">
-                <ul class="events">
-                    <li class="event">
-                        <h2><a href="events/webexpect">What to expect when you need a website</a></h2>
-                        <p>Learn what small businesses need to know about getting their first website up or how to make their site work harder for them ...
-                        </p>
-                        <p style="font-size:smaller">
-                            <b>October 18th, 2016 - 8:30am - 9:30am </b>
-                            <br/>
-                            <i>Somerset Country Business Partnerhip<br/>360 Grove Street Bridgewater, NJ 08807</i>
-                        </p>
-                        <a class="btn btn-info btn-lg" href="events/webexpect">Free registration &amp; details</a></p>
-                    </li>
-
-                    <li class="event">
-                        <h2><a href="http://web.scbp.org/events/Business-Builders-Breakfast-Get-Your-Head-INTO-the-Cloud-16958/details">Get Your Head INTO the Cloud</a></h2>
-                        <p>Come learn how the cloud has transformed the way your company can leverage technology and how to keep your data secure in the process. 
-                        </p>
-                        <p style="font-size:smaller">
-                            <b>March 1, 2016 - 8:30am - 10:00am </b>
-                            <br/>
-                            <i>Somerset Country Business Partnerhip<br/>360 Grove Street Bridgewater, NJ 08807</i>
-                        </p>
-                        
-                    </li>
-                </ul>
-            </div>
-        </div>
-        -->
-        <div class="page page_odd">
-            <div class="page_content">
-                
-
-                <h1 class="target">Expertise</h1>
-
-                <p>Shrinkwrap software works great... <i>if it fit your needs perfectly</i>.  When it doesn't <u><b>you need someone with a deep skillset that can build the customized solution you need</b></u>.  </p>
-                <p>I have expertise in a wide array of platforms, languages, and frameworks - I can integrate solutions into your existing infrastructure and use the technologies your team already knows.
-                </p>
-                <div class="profile_r">
-                    <img width="450" src="poly.png"/>
-                </div>
-                <ul>
-                            <li>C and C++</li>
-                            <li>C#, Java, Python</li>
-                            <li>JavaScript, HTML/CSS</li>
-                            <li>Node.js, Express</li>
-                            <li>OpenGL, WebGL, and Unity</li>
-                            <li>PostgreSQL, MySQL, MS SQL Server, Oracle, Mongo</li>
-                        </ul>
-
-              <p style="clear:both">I worked as a systems developer and consultant in the oil and gas industry for eight years.  I specialized in Java and C# development, working on thermodynamic simulations used by <b>General Electric</b> and helping the <b>National Institute of Standards and Technology</b> create B2B electronic data exchange standards for <a href="http://www.automation.com/pdf_articles/aex_hi_report.pdf" target="_blank">capital facilities</a> and <a href="http://www.pumpsystemsmatter.org/uploadedFiles/Pumps/About_Pumps/EDE_Demo/EDE_Subscriber_Portal/50-7_for_%20EPRI.pdf" target="_blank">hydraulic systems</a>.  </p>
-                <p>I hold a Ph.D. in Computer Science from Lehigh University and have been an <a href="https://scholar.google.com/citations?user=QV5PTV4AAAAJ&hl=en" target="_blank">active researcher</a> in the fields of computer graphics, virtual reality, computer networks, web development, and computational biology for over ten years.  I have the technical skills to deliver advanced applications to meet the most demanding situations.
-                </p>
-            </div>
-        </div>
-        <div class="page">
-            <div class="page_content">
-                <h1 class="target">About Me</h1>
-                <div class="profile">
-                    <img width="200" src="sp.jpg"/>
-                </div>
-
-                <p>I am a <a href="http://pages.ramapo.edu/~sfrees" target="_blank">Professor of Computer Science</a> at Ramapo College of New Jersey, specializing in human computer interaction, computer graphics, and web development.  </p>
-                <p>I am an accomplished researcher in several fields, with publications in <a href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Virtual%20Reality&dl=GUIDE&dimval=4294683758" target="_blank">Virtual Reality</a>, <a href="http://www.ncbi.nlm.nih.gov/pubmed/?term=Scott+Frees" target="_blank">Bioinformatics</a>, and <a href="http://dl.acm.org/results.cfm?h=1&cfid=674971012&cftoken=60756763&query=Scott%20Frees%20Node.JS&dl=GUIDE&dimval=4294683758" target="_blank">Computer Science Education</a>.
-                
-                <p>
-                I teach <a href="http://pages.ramapo.edu/~sfrees/courses/cmps311/">Operating Systems</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps369/">Web Application Development</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps342/">Computer Graphics</a>, <a href="http://pages.ramapo.edu/~sfrees/courses/cmps364/">Database Systems</a>, and a number of other courses at the undergraduate level at Ramapo College.   </p>
-
-                <p>I also write about software and programming on my <a href="http://blog.scottfrees.com" target="_blank">blog</a>.</p>
-
-            </div>
-
-        </div>
-        <div class="footer big container" style="margin:0;width:100%;padding:5em">
-            <div class="row">
-
-                <div class="col-sm-6 social">
-                	<div class="row">
-                		<div class="col-xs-5">
-                			<a href="https://www.linkedin.com/pub/scott-frees/4/1aa/764" target="_blank"><img src="In-White-48px-R.png"/></a>
-                		</div>
-                		<div class="col-xs-5">
-                    		<a href="https://github.com/freezer333" target="_blank"><img src="GitHub-Mark-Light-64px.png"/></a>
-                		</div>
-
-                	</div>
-                	<div class="row">
-                		<div class="col-xs-5">
-                			<a href="https://clarity.fm/scottfrees" target="_blank"><img src="clarity.png"/></a>
-                		</div>
-                		<div class="col-xs-5">
-                    		<a href="http://blog.scottfrees.com" target="_blank"><img src="blog.png" width="64"/></a>
-                		</div>
-                    </div>
-                </div>
-                <div class="col-sm-6" style="text-align:left;padding-left:2em">
-                    <p class="tagline">
-                        Frees Consulting and Development llc
-                    </p>
-                    <p>
-                    <i style="width:50px;font-size:24px;" class="fa fa-envelope-o"></i>
-                    <a href="mailto:scott@freesconsulting.com">scott@freesconsulting.com</a>
-                    </p>
-                    <p>
-                    <i style="width:50px;font-size:24px;" class="fa fa-phone"></i>
-                    <a href="callto:19088661986">(908) 656-4192</a>
-                    </p>
-                    <p>
-                    <i style="width:50px;font-size:24px;" class="fa fa-home"></i>
-                    Denville, New Jersey
-                    </p>
                 </div>
             </div>
 
@@ -245,70 +270,77 @@
 
 
     </div>
-     <div id="contactmodal" class="modal fade" tabindex="-1" role="dialog">
+    <div id="contactmodal" class="modal fade" tabindex="-1" role="dialog">
         <div class="modal-dialog">
             <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title">Contact Scott</h4>
-            </div>
-            <div class="modal-body">
-                <p class="highlight">Tell me a little about yourself and what you are looking for.  </span></p>
-                <form style="width:100%" id="contact" action="https://formspree.io/scott.frees@gmail.com" method="POST">
-                    <div class="form-group">
-                        <label for="name">Name </label>
-                        <input type="text" value="" name="name" class= "form-control" id="mce-FNAME">
-                    </div>
-                    <div class="form-group">
-                        <label for="mce-EMAIL">Email Address  <span class="asterisk">*</span></label>
-                        <input type="email" value="" name="_replyto" class="form-control required email" id="mce-EMAIL">
-                    </div>
-                    
-                    <div class="checkbox">
-                        <label>
-                        <input name="modernize" type="checkbox">I'm interested in help with modernizing existing app(s).
-                        </label>
-                    </div>
-                    <div class="checkbox">
-                        <label>
-                        <input name="workflow" type="checkbox">I'm interested in getting some help automating workflows.
-                        </label>
-                    </div>
-                    <div class="checkbox">
-                        <label>
-                        <input name="integration" type="checkbox">I'm interested in an integration project.
-                        </label>
-                    </div>
-                    <div class="checkbox">
-                        <label>
-                        <input name="green" type="checkbox">I'm interested in help with a new project.
-                        </label>
-                    </div>
-                     <div class="checkbox">
-                        <label>
-                        <input name="training" type="checkbox">I'm interested training for my team.
-                        </label>
-                    </div>
-                    <div class="checkbox">
-                        <label>
-                        <input name="other" type="checkbox"> Other.
-                        </label>
-                    </div>
-                    <div>
-                        <label>Details</label>
-                        <textarea name="details" class="form-control" rows="3"></textarea>
-                    </div>
-                    <input type="hidden" name="_subject" value="ConsultContact" />
-                    <input type="hidden" name="_next" value="http://scottfrees.com" />
-                    <input type="text" name="_gotcha" style="display:none" />
-                    
-                <form>
-            </div>
-            <div class="modal-footer" style="text-align:left">
-                <button onclick="$('#contact').submit()" type="button" class="btn btn-primary" data-dismiss="modal">Send</button>
-            </div>
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                            aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">Contact Scott</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="highlight">Tell me a little about yourself and what you are looking for. </span></p>
+                    <form style="width:100%" id="contact" action="https://formspree.io/scott.frees@gmail.com"
+                        method="POST">
+                        <div class="form-group">
+                            <label for="name">Name </label>
+                            <input type="text" value="" name="name" class="form-control" id="mce-FNAME">
+                        </div>
+                        <div class="form-group">
+                            <label for="mce-EMAIL">Email Address <span class="asterisk">*</span></label>
+                            <input type="email" value="" name="_replyto" class="form-control required email"
+                                id="mce-EMAIL">
+                        </div>
+
+                        <div class="checkbox">
+                            <label>
+                                <input name="modernize" type="checkbox">I'm interested in help with modernizing existing
+                                app(s).
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input name="workflow" type="checkbox">I'm interested in getting some help automating
+                                workflows.
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input name="integration" type="checkbox">I'm interested in an integration project.
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input name="green" type="checkbox">I'm interested in help with a new project.
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input name="training" type="checkbox">I'm interested training for my team.
+                            </label>
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input name="other" type="checkbox"> Other.
+                            </label>
+                        </div>
+                        <div>
+                            <label>Details</label>
+                            <textarea name="details" class="form-control" rows="3"></textarea>
+                        </div>
+                        <input type="hidden" name="_subject" value="ConsultContact" />
+                        <input type="hidden" name="_next" value="http://scottfrees.com" />
+                        <input type="text" name="_gotcha" style="display:none" />
+
+                        <form>
+                </div>
+                <div class="modal-footer" style="text-align:left">
+                    <button onclick="$('#contact').submit()" type="button" class="btn btn-primary"
+                        data-dismiss="modal">Send</button>
+                </div>
             </div><!-- /.modal-content -->
         </div><!-- /.modal-dialog -->
-        </div><!-- /.modal -->
+    </div><!-- /.modal -->
 </body>
+
 </html>
