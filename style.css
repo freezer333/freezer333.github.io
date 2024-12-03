@@ -34,6 +34,9 @@ li.event {
 	margin-bottom: 1em;
 
 }
+.page_odd a {
+	color:silver !important;
+}
 
 li.event h2 a {
 	color: #DC9456;
