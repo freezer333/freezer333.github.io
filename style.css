@@ -254,9 +254,45 @@ p {
 	color: silver;
 }
 
+.book {
+	padding-top: 2rem;
+}
+
+@media (min-width: 600px) {
+	.book {
+		display: flex;
+		align-items: start;
+		gap: 3rem;
+	}
+	.book p {
+	padding-top:0px;
+	margin-top:0px;
+}
+}
+@media (max-width: 60px) {
+	.book img {
+		display: block;
+		margin-left: auto;
+		margin-right: auto;
+		margin-bottom: 1rem;
+	}
+	.book p {
+		padding-top:0px;
+		margin-top:1px;
+	}
+}
+
+
 .ebook-thumbnail {
 	float: left;
 	margin-right: 1em;
+	box-shadow: 8px 8px 8px 0 #C2C2C2;
+	border-radius: 4px;
+	border-style: solid;
+	border-width: 1px;
+	border-color: #C2C2C2;
+}
+.ebook-thumbnail-flex {
 	box-shadow: 8px 8px 8px 0 #C2C2C2;
 	border-radius: 4px;
 	border-style: solid;
