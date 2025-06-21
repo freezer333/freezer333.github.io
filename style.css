@@ -1,9 +1,38 @@
+* {
+    font-family:  system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", Segoe UI Symbol, "Noto Color Emoji"
+}
 html,
 body {
 	margin: 0px;
 	height: 100%;
-	font-size: 1rem;
-	font-family: Arial, Helvetica, sans-serif;
+	font-size: 2.2vmin;
+	
+}
+b, strong {
+    font-weight: 600;
+}
+.title {
+	font-size: 7.0vmin;
+	
+}
+.tagline {
+	font-size: 2.7vmin;
+}
+
+article {
+	font-weight: 300;
+    line-height: 28px;
+	font-size: 2.2vmin;
+}
+
+h1 {
+  font-size: 3.3vw;
+}
+h2 {
+  font-size: 2.4vh;
+}
+p {
+  font-size: 2.2vmin;
 }
 
 .header {
@@ -17,6 +46,11 @@ body {
 .header a,
 .footer a {
 	color: white;
+}
+
+a {
+	text-decoration: none;
+	color: #053e6e;
 }
 
 
@@ -40,7 +74,7 @@ li.event {
 
 li.event h2 a {
 	color: #DC9456;
-	font-size: larger;
+	/*font-size: larger;*/
 	font-weight: bold;
 }
 
@@ -111,7 +145,7 @@ a:hover {
 	padding: 0.5em;
 	padding-top: 2em;
 	padding-bottom: 2em;
-	font-size: 1.5rem;
+	/*font-size: 1.5rem;*/
 
 	/*text-align: justify;*/
 }
@@ -149,7 +183,7 @@ a:hover {
 }
 
 .header p {
-	font-size: 2rem;
+	/*font-size: 2rem;*/
 }
 
 .header p.tagline {
@@ -167,13 +201,13 @@ a:hover {
 }
 
 h1 {
-	font-size: 2rem;
+	/*font-size: 2rem;*/
 
 	margin-bottom: 1em;
 }
 
 h2 {
-	font-size: 1.5rem;
+	/*font-size: 1.5rem;*/
 }
 
 .page_odd h1 {
@@ -182,7 +216,7 @@ h2 {
 
 .header h1 {
 	font-weight: normal;
-	font-size: 3rem;
+	/*font-size: 3rem;*/
 	margin-bottom: 0px;
 	margin-top: 5px;
 	color: white;
