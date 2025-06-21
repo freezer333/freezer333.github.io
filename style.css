@@ -5,7 +5,7 @@ html,
 body {
 	margin: 0px;
 	height: 100%;
-	font-size: 3vw;
+	font-size: 3.5vw;
 	font-weight: 300;
 }
 
@@ -22,27 +22,27 @@ b, strong {
 	clear: both;
 }
 .title h1 {
-	font-size: 5.0vw;
+	font-size: 5.5vw;
 	font-weight: normal;
 	margin-bottom: 0px;
 	margin-top: 5px;
 	color: white;
 }
 .title small {
-	font-size: 2.0vw;
+	font-size: 2.5vw;
 	color:silver;
 }
 .title p {
-	font-size: 2.7vmw;
+	font-size: 3.0vmw;
 	margin-top: 0px;
 	margin-bottom: 0px;
 }
 
 h1 {
-  font-size: 3.3vw;
+  font-size: 3.5vw;
 }
 h2 {
-  font-size: 3vh;
+  font-size: 3.2vh;
 }
 
 .header {
