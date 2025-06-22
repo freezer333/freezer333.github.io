@@ -125,7 +125,7 @@ img {
 @media (min-width: 1024px) {
 	/* Desktop breakpoint */
 	body {
-		font-size: 24pt;
+		font-size: 20pt;
 		
 	}
 	.ipull {
@@ -133,7 +133,7 @@ img {
 		
 	}
 	h1 {
-		font-size: 36pt;	
+		font-size: 38pt;	
 	}
 	img {
 		width: 200px;
