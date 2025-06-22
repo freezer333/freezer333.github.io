@@ -52,8 +52,8 @@ a {
 
 .header {
 	padding: 0.5em;
-	padding-top:0.5rem;
-	padding-bottom:0.5rem;
+	padding-top:0.5em;
+	padding-bottom:0.5em;
 	color: white;
 	background-color: #053e6e;
 }
@@ -76,7 +76,7 @@ a {
 
 .ipull {
 	display: flex;
-	gap: 2rem;
+	gap: 2em;
 	align-items: flex-start;
 }
 
@@ -88,14 +88,14 @@ a {
 	max-width: 800px;
 	margin-left: auto;
 	margin-right: auto;
-	padding: 2rem;
+	padding: 2em;
 	padding-top: 2em;
 	padding-bottom: 2em;
 }
 
 img.hide-big {
 	width: 200px;
-	padding-bottom:1rem;
+	padding-bottom:1em;
 }
 
 img {
@@ -129,20 +129,20 @@ img {
 		
 	}
 	.ipull {
-		gap: 1rem;
+		gap: 1em;
 		
 	}
 	h1 {
-		font-size: 38pt;	
+		font-size: 28pt;	
 	}
 	img {
 		width: 200px;
 	}
 	.page_content {
-		max-width: 1000px;
+		max-width: 1100px;
 		margin-left: auto;
 		margin-right: auto;
-		padding: 2rem;
+		padding: 2em;
 		padding-top: 2em;
 		padding-bottom: 2em;
 	}
