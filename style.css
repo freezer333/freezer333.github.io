@@ -5,13 +5,161 @@ html,
 body {
 	margin: 0px;
 	height: 100%;
-	font-size: 3.5vw;
+	font-size: 4vw;
 	font-weight: 300;
 }
-
+h1 {
+	font-size: 5vw;
+}
 b, strong {
     font-weight: 600;
 }
+
+.nobreak{
+	white-space: nowrap;
+}
+.nobreak small {
+	font-size: 2vw;
+	color: silver;
+}
+
+
+
+
+/*********** Colors ***********/
+a {
+	color: #053e6e;
+	text-decoration: none;
+}
+
+.page_odd {
+	background-color: #053e6e;
+	color: white;
+}
+.page_odd a {
+	color:silver;
+}
+
+
+.services div p {
+	color: silver;
+}
+
+.services div p.cta {
+	color: white;
+}
+
+.header {
+	padding: 0.5em;
+	padding-top:0.5rem;
+	padding-bottom:0.5rem;
+	color: white;
+	background-color: #053e6e;
+}
+
+.footer {
+	background-color: #053e6e;
+	color: white;
+	min-height: 300px;
+	padding-top: 2em;
+	padding-bottom: 2em;
+}
+
+.footer img {
+	width: 40px;
+}
+
+.footer a {
+	color: white;
+}
+
+.ipull {
+	display: flex;
+	gap: 2rem;
+	align-items: flex-start;
+}
+
+/*********** Responsive Design ***********/
+.hide-small {
+	display: none;
+}
+.page_content {
+	max-width: 800px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 2rem;
+	padding-top: 2em;
+	padding-bottom: 2em;
+}
+
+img.hide-big {
+	width: 200px;
+	padding-bottom:1rem;
+}
+
+img {
+	width: 75px;
+}
+
+
+@media (min-width: 600px) and (max-width: 1023px) {
+	/* Tablet breakpoint */
+	body {
+		font-size: 2.5vw;
+		
+	}
+	h1 {
+		font-size: 4vw;
+	}
+	img {
+		width: 150px;
+	}
+	.hide-small {
+		display:block
+	}
+	.hide-big {
+		display: none;
+	}
+}
+
+@media (min-width: 1024px) {
+	/* Desktop breakpoint */
+	body {
+		font-size: 1.5vw;
+		
+	}
+	h1 {
+		font-size: 3vw;	
+	}
+	img {
+		width: 200px;
+	}
+	.page_content {
+		max-width: 1000px;
+		margin-left: auto;
+		margin-right: auto;
+		padding: 2rem;
+		padding-top: 2em;
+		padding-bottom: 2em;
+	}
+	.hide-small {
+		display:block
+	}
+	.hide-big {
+		display: none;
+	}
+}
+
+/* Everything from here is shit.
+
+Make this simpler - all image content is same width, left or right, flex.
+It's small on small to medium, larger on large and x-large screens.
+
+Consistent padding/margins.
+Colors specified once.  Use CSS variables and nesting.
+
+Modify the HTML structure to simplify
+
 
 .title {
 	display: flex;
@@ -49,9 +197,7 @@ h2 {
 	width: 100px;
 }
 
-.nobreak{
-	white-space: nowrap;
-}
+
 .header {
 	padding: 0.5em;
 	padding-top:0.5rem;
@@ -64,6 +210,16 @@ h2 {
 
 .profile img, .profile_r img {
 	width: 100px;
+}
+
+.page_content {
+	max-width: 800px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 2rem;
+	padding-top: 2em;
+	padding-bottom: 2em;
+	
 }
 
 @media (min-width: 768px) {
@@ -107,6 +263,12 @@ h2 {
 	.profile img, .profile_r img {
 		width: 200px;
 	}
+	.page_content {
+	max-width: 900px;
+	
+	
+}
+	
 }
 a {
 	color: #053e6e;
@@ -156,15 +318,7 @@ a:hover {
 
 
 
-.page_content {
-	max-width: 800px;
-	margin-left: auto;
-	margin-right: auto;
-	padding: 2rem;
-	padding-top: 2em;
-	padding-bottom: 2em;
-	
-}
+
 
 .page_odd {
 	background-color: #053e6e;
@@ -237,3 +391,5 @@ img {
 	color: white;
 
 }
+
+*/
