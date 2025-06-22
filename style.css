@@ -10,6 +10,7 @@ body {
 }
 h1 {
 	font-size: 5vw;
+
 }
 b, strong {
     font-weight: 600;
@@ -105,11 +106,10 @@ img {
 @media (min-width: 600px) and (max-width: 1023px) {
 	/* Tablet breakpoint */
 	body {
-		font-size: 2.5vw;
-		
+		font-size: 16pt;
 	}
 	h1 {
-		font-size: 4vw;
+		font-size: 24pt;
 	}
 	img {
 		width: 150px;
@@ -125,11 +125,15 @@ img {
 @media (min-width: 1024px) {
 	/* Desktop breakpoint */
 	body {
-		font-size: 1.5vw;
+		font-size: 24pt;
+		
+	}
+	.ipull {
+		gap: 1rem;
 		
 	}
 	h1 {
-		font-size: 3vw;	
+		font-size: 36pt;	
 	}
 	img {
 		width: 200px;
@@ -149,3 +153,4 @@ img {
 		display: none;
 	}
 }
+
