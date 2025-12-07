@@ -142,6 +142,48 @@
                     </section>
                 </article>
             </section>
+            <section style="margin-top: 1rem;">
+                <h1>Scaling LLM-Based Reporting Past the Demo</h1>
+                <p>LLM reporting tools break down at scale because context windows can't handle real datasets. My three part series of articles 
+                    shows you how to overcome those limitations and take full advantage of AI in business reporting systems.</p>
+                <div class="row">
+                <article class="col col-4">
+                    <p style="margin-top:0"><strong>Part 1:  Why Your LLM Can't Be Your Reporting Layer</strong></p>
+                    <section>
+                        <p>
+                            
+LLMs excel at translating natural language into database queries but fail when you push large result sets through
+  their context window. The solution: dual response. Return a sample (10-50 rows) for the LLM to validate its work,
+  plus a resource link for your app to fetch complete results out-of-band.
+                        </p>
+                        <p><a href="https://webfoundationsbook.com">Read it here</a>.</p>
+                    </section>
+                </article>
+                <article class="col col-4">
+                    <p style="margin-top:0"><strong>Part 2: The Dual Response Pattern: Scaling LLM-Powered Reports</strong></p>
+                    <section>
+                        <p>
+                            MCP's resource_link, outputSchema, and structuredContent primitives combine into a complete reporting
+  architecture. This post specifies the dual response schema, REST endpoints for paginated retrieval, resource
+  lifecycle management with expiration and pinning, multi-tenant security considerations, and the prompt engineering
+   that makes LLMs work reliably with the pattern.
+                        </p>
+                        <p><a href="https://webfoundationsbook.com">Read it here</a>.</p>
+                    </section>
+                </article>
+                <article class="col col-4">
+                    <p style="margin-top:0"><strong>Part 3:  Building a Dual Response MCP Server</strong></p>
+                    <section>
+                        <p>
+                            A complete Node.js implementation of dual response: an MCP server returning samples plus resource links, a shared
+  resource store mapping GUIDs to query definitions, REST endpoints serving paginated results, and client-side
+  detection that extracts resource URLs from tool outputs. Working code demonstrates the pattern end-to-end.
+                        </p>
+                        <p><a href="https://webfoundationsbook.com">Read it here</a>.</p>
+                    </section>
+                </article>
+                </div>
+            </section>
         </div>
        
         </p>

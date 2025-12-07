@@ -1,0 +1,129 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="../style.css?id=2331341">
+    <link rel="shortcut icon" href="../favicon.svg" />
+    <link href="https://unpkg.com/prismjs@1.20.0/themes/prism-okaidia.css" rel="stylesheet"/>
+    <title>FCD</title>
+    <script defer data-domain="scottfrees.com" src="https://plausible.io/js/script.js"></script>
+  </head>
+  <body>
+    <div class=" page">
+        <div class="title page_content">
+    <article>
+        <section class="ipull">
+                <img src="../gib.jpg" />
+                <div><h1>Why Your LLM Can't Be Your Reporting Layer</h1>
+                <p><em>Part 1 of &quot;Scaling LLM-Based Reporting Past the Demo&quot;</em><br/>
+                <em>November 16th, 2025</em></p>
+                </div>
+        </section>
+
+<section class="tldr">
+<h2>TLDR</h2>
+<p>LLMs excel at translating natural language into database queries but fail when you push large result sets through
+their context window. The solution: dual response. Return a sample (10-50 rows) for the LLM to validate its work,
+plus a resource link for your app to fetch complete results out-of-band.</p>
+</section>
+<p>So you've hooked an LLM up to your database and asked it to &quot;show me all customers in California.&quot; Works great in the demo - clean results, natural language interface, everyone's impressed. Then you try it with real data and watch your context window explode, your API costs spike, and your responses slow to a crawl.</p>
+<p>This is the wall that every LLM-based reporting project hits.</p>
+<h2>Solution - Dual Response</h2>
+<p>Before we dig into why this happens, here's the solution: <strong>don't make the LLM responsible for delivering results - just for generating the query.</strong></p>
+<p>Every query tool returns two things:</p>
+<ol>
+<li>A <strong>sample</strong> (10-50 rows) - enough for the LLM to validate its work</li>
+<li>A <strong>resource link</strong> - a handle the app uses to fetch the full dataset</li>
+</ol>
+<p>The LLM sees the sample, confirms the query looks right, and tells the user &quot;Found 847 customers matching your criteria.&quot; Your app fetches all 847 rows through the resource link and renders a proper table. The LLM never touches those 847 rows.</p>
+<p>Here's what's interesting: if you're building with the Model Context Protocol, the mechanism for this already exists. MCP's <code>resource_link</code> content type - introduced in the 2025-06-18 spec - lets tools return URI references that clients can fetch out-of-band. It's designed exactly for this scenario, but I've seen remarkably few implementations actually use it for reporting. Most developers either don't know it exists or aren't sure how to structure their tools around it.</p>
+<p>That's the gap this series fills. We're not inventing new protocol features - we're using MCP's existing primitives in a coordinated pattern optimized for large dataset reporting.</p>
+<p>The rest of this post series explains why this pattern is necessary - and why simpler approaches fail.</p>
+<h2>Why LLMs are good for reporting tools</h2>
+<p>Consider a dataset like <a href="https://nces.ed.gov/ipeds/">IPEDS</a> - the federal database of U.S. colleges and universities that we'll use as a running example. You've got thousands of institutions, each with hundreds of attributes: state, control type (public/private), Carnegie classification, program offerings, enrollment figures across a decade. Users want to search by any combination - &quot;private research universities in the Northeast with growing computer science programs.&quot;</p>
+<p>Traditional UI approaches force a bad choice. If you keep it simple with a few dropdowns, and power users will get frustrated because it's not expressive enough.  If you grow the UI, you'll have dozens controls that intimidate most users while still missing edge cases.</p>
+<p>Obviously there's a ton we can do on UX to design elegant interfaces that deliver a combination of simplicity and expressiveness, but it's a lot of work.  SQL is genuinely the right tool for this kind of query. But your users aren't programmers. As a field, we've been chasing natural language query for decades because of this problem.</p>
+<p>LLMs change the equation. They're a real-time programmer on call - translating &quot;show me nursing programs at public universities in California&quot; into the exact query needed. No rigid UI, no SQL knowledge required.</p>
+<p><em>That's</em> why LLMs are the natural fit for reporting - end users can query data without SQL, and we don't need sophisticated UX design.</p>
+<h2>Two Different Jobs</h2>
+<p>There's a problem though. When you are using an LLM to query data, you are asking it to do two fundamentally different things with data, and one of them breaks at scale.</p>
+<ol>
+<li>
+<p><strong>Analysis tasks</strong> need the LLM to compute an answer. &quot;What's the average CS enrollment at Ivy League schools?&quot; - that's 8 schools, maybe 5 columns, 40 data points. The LLM needs to see this data to do the math. The LLM is awesome at pulling the data it needs, synthesizing the result, and reporting it back to you.  It's giving you an answer to a specific question.</p>
+</li>
+<li>
+<p><strong>Retrieval tasks</strong> need the LLM to generate a query, but the <em>user</em> needs the results. &quot;Show me all institutions with computer science programs&quot; - that's 2,400+ schools. The LLM's job is translating &quot;computer science&quot; into CIP code 11.0701 and building the query. It doesn't need 2,400 rows to do that.</p>
+</li>
+</ol>
+<p>Turns out that actually a lot of reporting requests are retrieval, and retrieval is where context windows become a problem.</p>
+<h2>The Math That Kills Your Demo</h2>
+<p>Let's continue with our example of a database of colleges and universities - IPEDS. It's the canonical source for institutional data: enrollments, completions, finances, admissions, you name it (<a href="https://marketviewedu.com/blog/the-future-of-ipeds-is-uncertain-what-comes-next/">at least it was...</a>).</p>
+<ul>
+<li>~6,000 institutions</li>
+<li>~2,000 CIP codes (the Classification of Instructional Programs - the taxonomy for academic programs, where 11.0701 is &quot;Computer Science&quot; and 51.3801 is &quot;Registered Nursing&quot;)</li>
+<li>10+ years of completion data</li>
+<li>Each institution has 100+ metadata fields</li>
+</ul>
+<p>Enrollment management teams use this type of data to benchmark against peer institutions. Marketing needs competitive analysis for program launches. Academic administrators track trends to justify new programs or sunset declining ones. Everyone needs slightly different slices, filtered and grouped in ways unique for their needs.  There are plenty of <a href="https://appiversity.com/insights/directory">reporting tools and integrations</a> that expose the IPEDS dataset to higher ed in easier ways.</p>
+<p>When using an LLM, the problem starts when you get the following query:</p>
+<p>&quot;Show me nursing program enrollment trends across public universities in the Southeast&quot; could return 50,000+ rows. Each row might be 50-100 tokens with field names and values. You're looking at millions of tokens for a single query result.</p>
+<p>Context windows are finite. Even with 128K or 200K token models, you're burning through budget fast. Worse, attention mechanisms have quadratic complexity - costs scale with the square of context length. Research shows LLMs exhibit &quot;lost in the middle&quot; degradation: accuracy drops for information buried in long contexts.</p>
+<p>The key insight is that in this type of reporting task, you are really looking for the LLM to generate a query, not look at the results.  Traditional MCP tools <em>return results to the LLM</em> though, and then the LLM needs to include the results in it's own output.  You are paying for the output tokens, and the tool-call tokens are slowing down LLM request/response substantially.</p>
+<p><img src="../images/without-dual-response.png" style="width:100%" alt="Without dual response"></p>
+<h2>Why not just ask the LLM for the SQL?</h2>
+<p>The obvious solution is to tell the LLM about the schema, and ask it to give you SQL (or whatever query language you need).  Your application can use the SQL to query the data itself. This is where most reporting tool projects go to, pretty quickly.</p>
+<p>The problem is that studies show 15-20% error rates even on well-structured text-to-SQL benchmarks. In practice, LLMs need to <em>see</em> output to catch mistakes - wrong joins, missing filters, unexpected nulls. An LLM might generate a query for &quot;computer science programs&quot; that accidentally includes certificate programs when you wanted bachelor's degrees. It needs to see sample output to catch that.</p>
+<p>This is really bad news, because it means that in order for the LLM to really do well it does need to see results - the &quot;one shot&quot; SQL generation just fails too many times.  It's doubly bad news because that iteration means you are paying (time and money) for token exchanges in and out of tool calls repeatedly, while the LLM refines it's query.</p>
+<p>The dual-response strategy solves this problem - partial preview results are returned by the MCP tool, along with a reference to the full dataset.  The LLM gets 10-15 representative rows - enough to validate columns, spot data issues, and refine. When the query is finally correct, the full results flow through the resource link, never touching the context window.</p>
+<h3>Side note on tool design</h3>
+<p>Before going much further - exposing MCP tools that allow an LLM to specify an SQL (or other query) directly isn't always the right answer.  With most databases, you can limit SQL to read-only on a connection basis, and you can use row-level security to go further and make sure the LLM isn't generating queries that violate user access rules.  It can be done well, but sometimes you prefer to provide api-like tools - perhaps your application already has them.</p>
+<p><strong>API-style tools</strong> have structured parameters:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token function">search_institutions</span><span class="token punctuation">(</span><span class="token punctuation">{</span> state<span class="token operator">:</span> <span class="token string">"NJ"</span><span class="token punctuation">,</span> control<span class="token operator">:</span> <span class="token string">"public"</span> <span class="token punctuation">}</span><span class="token punctuation">)</span></code></pre>
+<p><strong>SQL-style tools</strong> let the LLM write queries directly:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token function">query</span><span class="token punctuation">(</span><span class="token string">"SELECT * FROM institutions WHERE state = 'NJ'"</span><span class="token punctuation">)</span></code></pre>
+<p>Sometimes its easier for LLMs to get api-style tool calls right, even though SQL-style is more flexible.  Either way though, everything we are talking about here still holds.  If your MCP tool call is going to return lots of data, you should consider dual-response, and allow the LLM to preview results and defer full result exchange to the host application.</p>
+<h2>Why Dual Response Works</h2>
+<p>Here's an example of the <em>result</em> of a dual-response MCP tool call returning institutions based on some sort of query:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token punctuation">{</span>
+  results<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token operator">...</span><span class="token punctuation">]</span><span class="token punctuation">,</span>        <span class="token comment">// 10-15 sample rows</span>
+  resource<span class="token operator">:</span> <span class="token punctuation">{</span>
+    uri<span class="token operator">:</span> <span class="token string">"resource://abc123"</span><span class="token punctuation">,</span>
+    name<span class="token operator">:</span> <span class="token string">"Institution Search Results"</span><span class="token punctuation">,</span>
+    mimeType<span class="token operator">:</span> <span class="token string">"application/json"</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  metadata<span class="token operator">:</span> <span class="token punctuation">{</span>
+    total_count<span class="token operator">:</span> <span class="token number">847</span><span class="token punctuation">,</span>
+    columns<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"name"</span><span class="token punctuation">,</span> <span class="token string">"state"</span><span class="token punctuation">,</span> <span class="token string">"enrollment"</span><span class="token punctuation">,</span> <span class="token operator">...</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    expires_at<span class="token operator">:</span> <span class="token string">"2025-01-15T10:30:00Z"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The <code>resource</code> object maps directly to MCP's <code>resource_link</code> content type. Your tool returns this alongside the sample data, and the host application knows it can fetch the full dataset via that URI without involving the LLM.</p>
+<p>The LLM sees 10-15 rows - maybe 500-1,000 tokens - plus metadata telling it the full result set has 847 records. That's enough to validate the query is correct: right columns, expected data types, reasonable values. The LLM responds to the user: &quot;Found 847 institutions matching your criteria. [View Results]&quot;</p>
+<p>Your app takes that resource URI (the LLM must return this), calls a REST endpoint, and fetches all 847 rows with pagination. Renders a sortable table, generates a CSV export, builds a chart - whatever the user needs. The LLM is already done.</p>
+<p><img src="../images/with-dual-response.png" style="width:100%" alt="With dual response"></p>
+<p><strong>The token math matters.</strong> Those 847 full rows might be 40,000+ tokens. With dual response, the LLM sees ~1,000. That's a 40x reduction on a single query. Factor in iteration - the LLM typically refines 2-3 times before getting the query right - and you're avoiding 80,000-120,000 tokens of wasted context on intermediate attempts.</p>
+<p><strong>Speed follows from tokens.</strong> LLM latency scales with context length. A response drawing on 1,000 tokens of tool output comes back in a second or two. One drawing on 40,000 tokens? You're waiting. For iterative refinement, this compounds - each round-trip is slower when you're hauling full result sets.</p>
+<p>Now you can see why the pattern solves each problem:</p>
+<ul>
+<li><strong>Context limits?</strong> The LLM only sees the sample.</li>
+<li><strong>Query iteration?</strong> The sample gives enough to validate without paying for full results on every attempt.</li>
+<li><strong>Users need full data?</strong> The resource link lets your app fetch and render everything outside the LLM's context.</li>
+<li><strong>Both tool styles?</strong> The server returns the same dual response structure regardless of how the query was specified.</li>
+</ul>
+<p>The LLM's job is understanding intent and generating queries. The app's job is rendering results. Dual response enforces this separation cleanly.</p>
+<hr>
+<p>In <a href="../mcp-dual-response-part2/">Part 2</a>, I'll show how this pattern maps to MCP's actual primitives - <code>resource_link</code>, <code>structuredContent</code>, <code>outputSchema</code> - and how to coordinate them into a complete reporting architecture. We'll cover the REST layer for out-of-band retrieval, resource lifecycle management (speculative queries pile up fast), and the prompt engineering that makes LLMs work with this structure reliably.</p>
+<p>If you're already familiar with MCP, you might be surprised how much of the infrastructure is already there. The protocol gives you the building blocks; what's been missing is a documented pattern for combining them.</p>
+<p>I've written up the formal specification in a <a href="https://arxiv.org/abs/2510.05968">paper</a> presented at ACDSA 2026 if you want the academic details. If you want to skip ahead to code, check out the <a href="https://github.com/freezer333/mcp-rlp">working implementation</a>.</p>
+<hr>
+<p><em>Next: <a href="../mcp-dual-response-part2/">Part 2 - The Dual Response Pattern</a></em></p>
+
+    </article>
+    </div>
+    </div>
+  </body>
+</html>

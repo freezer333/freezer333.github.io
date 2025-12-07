@@ -24,6 +24,12 @@ b, strong {
 	color: silver;
 }
 
+.tldr {
+    padding: 0.5rem;
+    background: #f8f8f8;
+    border-left: 4px solid #007bff;
+    margin-bottom: 1rem;
+}
 
 
 

@@ -1,0 +1,251 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="../style.css?id=2331341">
+    <link rel="shortcut icon" href="../favicon.svg" />
+    <link href="https://unpkg.com/prismjs@1.20.0/themes/prism-okaidia.css" rel="stylesheet"/>
+    <title>FCD</title>
+    <script defer data-domain="scottfrees.com" src="https://plausible.io/js/script.js"></script>
+  </head>
+  <body>
+    <div class=" page">
+        <div class="title page_content">
+    <article>
+        <section class="ipull">
+                <img src="../gib.jpg" />
+                <div><h1>Building a Dual Response MCP Server</h1>
+                <p><em>Part 3 of &quot;Scaling LLM-Based Reporting Past the Demo&quot;</em><br/>
+                <em>December 6th, 2025</em></p>
+                </div>
+        </section>
+    
+<section class="tldr">
+<h2>TLDR</h2>
+<p>A complete Node.js implementation of dual response: an MCP server returning samples plus resource links, a shared
+resource store mapping GUIDs to query definitions, REST endpoints serving paginated results, and client-side
+detection that extracts resource URLs from tool outputs. Working code demonstrates the pattern end-to-end.</p>
+</section>
+<p>In <a href="../mcp-dual-response-part1/">Part 1</a>, we established why LLMs choke on large result sets. In <a href="/posts/mcp-dual-response-part2/">Part 2</a>, we specified the dual response pattern - samples for the LLM, resource links for full retrieval. Now let's build it.</p>
+<p>This post walks through an implementation using Node.js, Express, and SQLite. We'll build both sides: an MCP server that returns dual responses, and a client that detects them and fetches full results. All code is available at <a href="https://github.com/freezer333/mcp-rlp">github.com/freezer333/mcp-rlp</a>.</p>
+<p><strong>A note on portability</strong>: The example uses OpenAI's Agent SDK for the client, but the server-side pattern works with any MCP client. Client-side detection will need adaptation for different SDKs since each structures tool outputs differently.</p>
+<hr>
+<h2>Architecture Overview</h2>
+<p>The dual response pattern needs two communication channels:</p>
+<p><img src="../images/with-dual-response.png" style="width:100%" alt="With dual response"></p>
+<p><strong>MCP</strong> handles the LLM conversation - tool discovery, query generation, sample validation. The LLM sees 10-15 rows, enough to catch mistakes.</p>
+<p><strong>REST</strong> handles bulk data transfer. Your application fetches complete results directly, with pagination. The LLM never touches these rows.</p>
+<p>On the server, three components work together:</p>
+<ul>
+<li><strong>MCP endpoint</strong> (<code>POST /mcp</code>) - Handles tool calls, returns samples + resource links</li>
+<li><strong>Resource store</strong> - Maps GUIDs to query definitions</li>
+<li><strong>REST endpoint</strong> (<code>GET /resources/:guid</code>) - Fetches paginated results by GUID</li>
+</ul>
+<p>On the client:</p>
+<ul>
+<li>Agent runs the conversation, calls MCP tools</li>
+<li>After each turn, check tool outputs for <code>resource.url</code></li>
+<li>When found, fetch full results via HTTP</li>
+</ul>
+<p>The resource store is the bridge. MCP creates resources; REST consumes them.</p>
+<hr>
+<h2>The Resource Store</h2>
+<p>When the query tool executes, it needs somewhere to stash the query so the REST endpoint can find it later. That's the resource store - a map from GUID to query definition.</p>
+<p>Here's the core of it (<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/server/resources/store.js">full source</a>):</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token keyword">class</span> <span class="token class-name">ResourceStore</span> <span class="token punctuation">{</span>
+    #resources <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Map</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token function">create</span><span class="token punctuation">(</span><span class="token parameter">queryDefinition</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">const</span> guid <span class="token operator">=</span> crypto<span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>#resources<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>guid<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+            <span class="token literal-property property">id</span><span class="token operator">:</span> guid<span class="token punctuation">,</span>
+            <span class="token literal-property property">sql</span><span class="token operator">:</span> queryDefinition<span class="token punctuation">.</span>sql<span class="token punctuation">,</span>
+            <span class="token literal-property property">totalCount</span><span class="token operator">:</span> queryDefinition<span class="token punctuation">.</span>totalCount<span class="token punctuation">,</span>
+            <span class="token literal-property property">createdAt</span><span class="token operator">:</span> <span class="token keyword">new</span> <span class="token class-name">Date</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toISOString</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> guid<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token function">get</span><span class="token punctuation">(</span>guid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>#resources<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>guid<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">delete</span><span class="token punctuation">(</span>guid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>#resources<span class="token punctuation">.</span><span class="token function">delete</span><span class="token punctuation">(</span>guid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>We store the SQL query, not the results. Three reasons:</p>
+<ol>
+<li><strong>Memory</strong> - Results could be millions of rows. The query is a few KB.</li>
+<li><strong>Freshness</strong> - Re-executing on fetch means results reflect current data.</li>
+<li><strong>Pagination</strong> - We can wrap any stored query with <code>LIMIT</code>/<code>OFFSET</code>.</li>
+</ol>
+<p>In production, this in-memory map becomes a database. You might add query rewriting (injecting tenant filters), security validation, or result caching for expensive queries. The client doesn't know or care - it just hits the REST endpoint with a GUID.</p>
+<hr>
+<h2>The Query Tool</h2>
+<p>This is the heart of dual response. The tool executes two queries:</p>
+<ol>
+<li><code>SELECT COUNT(*) FROM (user_query)</code> - How many total rows?</li>
+<li><code>SELECT * FROM (user_query) LIMIT 10</code> - What do they look like?</li>
+</ol>
+<p>Then it stores the base query (without LIMIT) and returns both the sample and a resource link.</p>
+<p>Here's the handler (<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/server/tools/database-dual-response.js">full source</a>):</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token function-variable function">handler</span><span class="token operator">:</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token parameter">args</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> <span class="token punctuation">{</span> sql <span class="token punctuation">}</span> <span class="token operator">=</span> args<span class="token punctuation">;</span>
+
+    <span class="token comment">// Step 1: Get total count</span>
+    <span class="token keyword">const</span> countSql <span class="token operator">=</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">SELECT COUNT(*) as count FROM (</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>sql<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">)</span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> totalCount <span class="token operator">=</span> database<span class="token punctuation">.</span><span class="token function">prepare</span><span class="token punctuation">(</span>countSql<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>count<span class="token punctuation">;</span>
+
+    <span class="token comment">// Step 2: Get sample rows</span>
+    <span class="token keyword">const</span> sampleSql <span class="token operator">=</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>sql<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string"> LIMIT </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span><span class="token constant">SAMPLE_SIZE</span><span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> sampleRows <span class="token operator">=</span> database<span class="token punctuation">.</span><span class="token function">prepare</span><span class="token punctuation">(</span>sampleSql<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">all</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// Step 3: Store for REST retrieval</span>
+    <span class="token keyword">const</span> guid <span class="token operator">=</span> resourceStore<span class="token punctuation">.</span><span class="token function">create</span><span class="token punctuation">(</span><span class="token punctuation">{</span> sql<span class="token punctuation">,</span> totalCount <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// Step 4: Return dual response</span>
+    <span class="token keyword">return</span> <span class="token punctuation">{</span>
+        <span class="token literal-property property">results</span><span class="token operator">:</span> sampleRows<span class="token punctuation">,</span>
+        <span class="token literal-property property">resource</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+            <span class="token literal-property property">uri</span><span class="token operator">:</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">resource://</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>guid<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">,</span>
+            <span class="token literal-property property">url</span><span class="token operator">:</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>baseUrl<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">/resources/</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>guid<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">,</span>
+            <span class="token literal-property property">name</span><span class="token operator">:</span> <span class="token string">'Query Results'</span><span class="token punctuation">,</span>
+            <span class="token literal-property property">mimeType</span><span class="token operator">:</span> <span class="token string">'application/json'</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token literal-property property">metadata</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+            <span class="token literal-property property">total_count</span><span class="token operator">:</span> totalCount<span class="token punctuation">,</span>
+            <span class="token literal-property property">sample_count</span><span class="token operator">:</span> sampleRows<span class="token punctuation">.</span>length<span class="token punctuation">,</span>
+            <span class="token literal-property property">executed_at</span><span class="token operator">:</span> <span class="token keyword">new</span> <span class="token class-name">Date</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toISOString</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The response gives the LLM what it needs to validate: sample rows and total count. The <code>resource.url</code> is for the client application - it's the REST endpoint where full results live.</p>
+<p>Note what we're <em>not</em> returning: column type definitions. The LLM can infer types from the sample data. Skipping them saves tokens.</p>
+<hr>
+<h2>The REST Layer</h2>
+<p>The REST endpoint takes a GUID and returns paginated data. It looks up the stored query, wraps it with pagination, and executes.</p>
+<pre class="language-javascript"><code class="language-javascript">router<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">'/:guid'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token parameter">req<span class="token punctuation">,</span> res</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> <span class="token punctuation">{</span> guid <span class="token punctuation">}</span> <span class="token operator">=</span> req<span class="token punctuation">.</span>params<span class="token punctuation">;</span>
+    <span class="token keyword">const</span> skip <span class="token operator">=</span> <span class="token function">parseInt</span><span class="token punctuation">(</span>req<span class="token punctuation">.</span>query<span class="token punctuation">.</span>skip<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> limit <span class="token operator">=</span> req<span class="token punctuation">.</span>query<span class="token punctuation">.</span>limit <span class="token operator">?</span> <span class="token function">parseInt</span><span class="token punctuation">(</span>req<span class="token punctuation">.</span>query<span class="token punctuation">.</span>limit<span class="token punctuation">)</span> <span class="token operator">:</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">const</span> resource <span class="token operator">=</span> resourceStore<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>guid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>resource<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> res<span class="token punctuation">.</span><span class="token function">status</span><span class="token punctuation">(</span><span class="token number">404</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">json</span><span class="token punctuation">(</span><span class="token punctuation">{</span> <span class="token literal-property property">error</span><span class="token operator">:</span> <span class="token string">'Resource not found'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// Wrap stored query with pagination</span>
+    <span class="token keyword">let</span> paginatedSql <span class="token operator">=</span> resource<span class="token punctuation">.</span>sql<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>limit <span class="token operator">!==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        paginatedSql <span class="token operator">=</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">SELECT * FROM (</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>resource<span class="token punctuation">.</span>sql<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string">) LIMIT </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>limit<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string"> OFFSET </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>skip<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">const</span> rows <span class="token operator">=</span> database<span class="token punctuation">.</span><span class="token function">prepare</span><span class="token punctuation">(</span>paginatedSql<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">all</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> hasNext <span class="token operator">=</span> limit <span class="token operator">&amp;&amp;</span> <span class="token punctuation">(</span>skip <span class="token operator">+</span> rows<span class="token punctuation">.</span>length<span class="token punctuation">)</span> <span class="token operator">&lt;</span> resource<span class="token punctuation">.</span>totalCount<span class="token punctuation">;</span>
+
+    res<span class="token punctuation">.</span><span class="token function">json</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+        <span class="token literal-property property">data</span><span class="token operator">:</span> rows<span class="token punctuation">,</span>
+        <span class="token literal-property property">total_count</span><span class="token operator">:</span> resource<span class="token punctuation">.</span>totalCount<span class="token punctuation">,</span>
+        <span class="token literal-property property">returned_count</span><span class="token operator">:</span> rows<span class="token punctuation">.</span>length<span class="token punctuation">,</span>
+        skip<span class="token punctuation">,</span>
+        <span class="token literal-property property">has_next</span><span class="token operator">:</span> hasNext<span class="token punctuation">,</span>
+        <span class="token literal-property property">has_prev</span><span class="token operator">:</span> skip <span class="token operator">></span> <span class="token number">0</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
+<p>The pagination pattern - <code>SELECT * FROM (original) LIMIT ? OFFSET ?</code> - works regardless of what the original query contained. Joins, aggregations, subqueries - they all become a derived table that we paginate over.</p>
+<p>Each page request re-executes the query. No caching, no stale data, no complexity. For most reporting use cases, query execution is fast enough that this is fine. If you need caching, add it in the resource store.</p>
+<p>(<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/server/resources/router.js">Full router source</a>)</p>
+<hr>
+<h2>Wiring It Together</h2>
+<p>The server entry point creates the resource store and shares it between MCP and REST:</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token comment">// Create shared resource store</span>
+<span class="token keyword">const</span> resourceStore <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ResourceStore</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Context provider injects dependencies into tools</span>
+<span class="token keyword">const</span> <span class="token function-variable function">contextProvider</span> <span class="token operator">=</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token parameter">req</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">(</span><span class="token punctuation">{</span>
+    resourceStore<span class="token punctuation">,</span>
+    <span class="token literal-property property">baseUrl</span><span class="token operator">:</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">http://localhost:</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span><span class="token constant">PORT</span><span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// MCP endpoint</span>
+app<span class="token punctuation">.</span><span class="token function">post</span><span class="token punctuation">(</span><span class="token string">'/mcp'</span><span class="token punctuation">,</span> mcpServer<span class="token punctuation">.</span><span class="token function">streamingEndpoint</span><span class="token punctuation">(</span>contextProvider<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// REST endpoint</span>
+app<span class="token punctuation">.</span><span class="token function">use</span><span class="token punctuation">(</span><span class="token string">'/resources'</span><span class="token punctuation">,</span> <span class="token function">createResourceRouter</span><span class="token punctuation">(</span>resourceStore<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
+<p>The <code>contextProvider</code> is called on each MCP request. It returns an object that gets passed to tool handlers - that's how <code>queryDualResponse</code> accesses the resource store.</p>
+<p>Both endpoints share the same store instance. When MCP creates a resource, REST can immediately serve it.</p>
+<p>(<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/server/index.js">Full server source</a>)</p>
+<hr>
+<h2>Client-Side Detection</h2>
+<p>After the agent finishes a conversation turn, you need to check if any tool returned a dual response. The detection is simple: look for <code>resource.url</code> in the tool output.</p>
+<p>The complication is <em>getting</em> to the tool output. Every LLM SDK structures responses differently. OpenAI's Agent SDK wraps outputs in nested JSON. Anthropic's doesn't. LangChain has its own format.</p>
+<p>The pattern I use: abstract the extraction into a helper function that you adapt per SDK.</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token comment">// SDK-specific: extract tool outputs from agent result</span>
+<span class="token keyword">const</span> toolOutputs <span class="token operator">=</span> <span class="token function">extractToolOutputs</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Universal: check for dual response</span>
+<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token punctuation">{</span> output <span class="token punctuation">}</span> <span class="token keyword">of</span> toolOutputs<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>output<span class="token operator">?.</span>resource<span class="token operator">?.</span>url<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// Found a dual response</span>
+        dualResponses<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+            <span class="token literal-property property">resourceUrl</span><span class="token operator">:</span> output<span class="token punctuation">.</span>resource<span class="token punctuation">.</span>url<span class="token punctuation">,</span>
+            <span class="token literal-property property">totalCount</span><span class="token operator">:</span> output<span class="token punctuation">.</span>metadata<span class="token punctuation">.</span>total_count<span class="token punctuation">,</span>
+            <span class="token literal-property property">sample</span><span class="token operator">:</span> output<span class="token punctuation">.</span>results
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The <code>extractToolOutputs</code> helper handles the SDK-specific unwrapping. For OpenAI's Agent SDK, that means parsing through nested JSON structures in <code>result.state._generatedItems</code>. For other SDKs, you'll write different extraction logic.</p>
+<p>The dual response detection itself is universal: does the output have <code>resource.url</code>? That's it.</p>
+<p>(<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/client/mcp/agent.js">Client agent source</a>)</p>
+<hr>
+<h2>Pagination</h2>
+<p>Once you have a dual response, fetching pages is straightforward HTTP:</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token keyword">async</span> <span class="token keyword">function</span> <span class="token function">fetchPage</span><span class="token punctuation">(</span><span class="token parameter">resourceUrl<span class="token punctuation">,</span> skip<span class="token punctuation">,</span> limit</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> url <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">(</span>resourceUrl<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    url<span class="token punctuation">.</span>searchParams<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token string">'skip'</span><span class="token punctuation">,</span> skip<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    url<span class="token punctuation">.</span>searchParams<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token string">'limit'</span><span class="token punctuation">,</span> limit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">const</span> response <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">fetch</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> response<span class="token punctuation">.</span><span class="token function">json</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The client tracks pagination state - which resource is active, what page we're on:</p>
+<pre class="language-javascript"><code class="language-javascript"><span class="token keyword">let</span> currentResource <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+<span class="token keyword">let</span> currentPage <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> <span class="token constant">PAGE_SIZE</span> <span class="token operator">=</span> <span class="token number">25</span><span class="token punctuation">;</span>
+
+<span class="token keyword">async</span> <span class="token keyword">function</span> <span class="token function">nextPage</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>currentResource<span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">const</span> skip <span class="token operator">=</span> <span class="token punctuation">(</span>currentPage <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token operator">*</span> <span class="token constant">PAGE_SIZE</span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">fetchPage</span><span class="token punctuation">(</span>currentResource<span class="token punctuation">.</span>url<span class="token punctuation">,</span> skip<span class="token punctuation">,</span> <span class="token constant">PAGE_SIZE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>result<span class="token punctuation">.</span>data<span class="token punctuation">.</span>length <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        currentPage<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token function">displayResults</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Each navigation triggers a fresh HTTP request. The server re-executes the stored query with new pagination parameters. No client-side caching of full result sets.</p>
+<p>The demo uses a terminal UI with <code>blessed</code> for rendering, but the fetching logic works with any framework. React, Vue, vanilla JS - it's just HTTP.</p>
+<p>(<a href="https://github.com/freezer333/mcp-rlp/blob/main/example/client/index.js">Client entry point</a>)</p>
+<hr>
+<h2>What's Not Covered</h2>
+<p>This implementation is a demonstration. Production systems need more:</p>
+<p><strong>Resource expiration</strong> - The in-memory store grows forever. Add TTLs and a cleanup job. 15 minutes covers most interactive sessions; let users pin resources they want to keep.</p>
+<p><strong>Authentication</strong> - Who can access which resources? Bind resources to user/tenant IDs at creation time, validate on fetch.</p>
+<p><strong>Persistent storage</strong> - Replace the in-memory Map with Redis or a database. Required for multi-server deployments.</p>
+<p><strong>Long-running queries</strong> - Some queries take seconds. MCP Tasks let you return immediately with a task ID, then poll for completion. The dual response structure fits naturally into task results.</p>
+<p><strong>Query security</strong> - If you're accepting SQL from the LLM, validate it. Read-only connections, row-level security, query timeouts.</p>
+<p>The core pattern - sample for the LLM, resource link for the app - stays the same. The infrastructure around it scales with your requirements.</p>
+<hr>
+<p><em>Previous: <a href="..//mcp-dual-response-part2/">Part 2 - The Dual Response Pattern</a></em></p>
+
+    </article>
+    </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,468 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="../style.css?id=2331341">
+    <link rel="shortcut icon" href="../favicon.svg" />
+    <link href="https://unpkg.com/prismjs@1.20.0/themes/prism-okaidia.css" rel="stylesheet"/>
+    <title>FCD</title>
+    <script defer data-domain="scottfrees.com" src="https://plausible.io/js/script.js"></script>
+  </head>
+  <body>
+    <div class=" page">
+        <div class="title page_content">
+    <article>
+        <section class="ipull">
+                <img src="../gib.jpg" />
+                <div><h1>The Dual Response Pattern: Scaling LLM-Powered Reports</h1>
+                <p><em>Part 2 of &quot;Scaling LLM-Based Reporting Past the Demo&quot;</em><br/>
+                <em>November 28th, 2025</em></p>
+                </div>
+        </section>
+    
+<section class="tldr">
+<h2>TLDR</h2>
+<p>MCP's resource_link, outputSchema, and structuredContent primitives combine into a complete reporting
+architecture. This post specifies the dual response schema, REST endpoints for paginated retrieval, resource
+lifecycle management with expiration and pinning, multi-tenant security considerations, and the prompt engineering
+that makes LLMs work reliably with the pattern.</p>
+</section>
+<p>In <a href="../mcp-dual-response-part1/">Part 1</a>, we established the problem: LLMs excel at translating natural language into database queries, but choke when you try to push full result sets through their context window. The solution is dual response - give the LLM a sample to validate its work, and give your app a handle to fetch the complete dataset out-of-band.</p>
+<p>This post specifies the pattern in detail. We'll walk through the schema, show how it builds on MCP's native primitives, and cover the lifecycle management that keeps your server from drowning in abandoned queries.</p>
+<p>Everything here is designed to work with the Model Context Protocol as it exists today - we're not inventing new protocol features, just using existing ones in a coordinated way.</p>
+<h2>MCP's Building Blocks</h2>
+<p>Before we dive into dual response, let's be clear about what MCP already gives us. The protocol has evolved significantly over the past year, and the 2025-06-18 and 2025-11-25 spec releases added primitives that make this pattern much cleaner than it would have been before.</p>
+<p><strong>Tool responses can include resource links.</strong> When your tool returns results, you're not limited to text. The <code>resource_link</code> content type lets you return a URI reference that the client can fetch separately:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"resource_link"</span><span class="token punctuation">,</span>
+  <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"resource://query/abc123"</span><span class="token punctuation">,</span>
+  <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Institution Search Results"</span><span class="token punctuation">,</span>
+  <span class="token property">"mimeType"</span><span class="token operator">:</span> <span class="token string">"application/json"</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The LLM sees this link. The host application can fetch the full data via that URI without it ever touching the context window.</p>
+<p><strong>Tools can declare output schemas.</strong> The <code>outputSchema</code> field lets you define exactly what structure your tool returns. Clients can validate against it, and - critically - the LLM knows what to expect:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"search_institutions"</span><span class="token punctuation">,</span>
+  <span class="token property">"outputSchema"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"object"</span><span class="token punctuation">,</span>
+    <span class="token property">"properties"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"results"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"array"</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"number"</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token property">"resource_uri"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"string"</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p><strong>Structured content provides typed responses.</strong> The <code>structuredContent</code> field in tool responses gives you a proper JSON object that machines can parse, alongside the text content the LLM reasons over.</p>
+<p>Dual response coordinates these primitives into a pattern optimized for reporting.</p>
+<h2>The Dual Response Schema</h2>
+<p>Here's what a query tool returns:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">interface</span> <span class="token class-name">DualResponse</span> <span class="token punctuation">{</span>
+  <span class="token comment">// Sample rows for LLM validation (10-50 typical)</span>
+  results<span class="token operator">:</span> Record<span class="token operator">&lt;</span><span class="token builtin">string</span><span class="token punctuation">,</span> <span class="token builtin">any</span><span class="token operator">></span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Reference to complete dataset</span>
+  resource<span class="token operator">:</span> <span class="token punctuation">{</span>
+    uri<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>           <span class="token comment">// e.g., "resource://query/abc123"</span>
+    name<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>          <span class="token comment">// Human-readable identifier</span>
+    mimeType<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>      <span class="token comment">// "application/json" for tabular data</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Query context</span>
+  metadata<span class="token operator">:</span> <span class="token punctuation">{</span>
+    total_count<span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>   <span class="token comment">// Full result set size</span>
+    columns<span class="token operator">:</span> ColumnDef<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>  <span class="token comment">// Schema information</span>
+    executed_at<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>   <span class="token comment">// ISO 8601 timestamp</span>
+    expires_at<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>   <span class="token comment">// When resource becomes unavailable</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">interface</span> <span class="token class-name">ColumnDef</span> <span class="token punctuation">{</span>
+  name<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>
+  type<span class="token operator">:</span> <span class="token string">"string"</span> <span class="token operator">|</span> <span class="token string">"number"</span> <span class="token operator">|</span> <span class="token string">"boolean"</span> <span class="token operator">|</span> <span class="token string">"date"</span><span class="token punctuation">;</span>
+  description<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre>
+<p>And here's what the actual MCP tool response looks like:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"content"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"text"</span><span class="token punctuation">,</span>
+      <span class="token property">"text"</span><span class="token operator">:</span> <span class="token string">"Found 847 institutions matching criteria. Sample results and full dataset link below."</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"resource_link"</span><span class="token punctuation">,</span>
+      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"resource://query/abc123"</span><span class="token punctuation">,</span>
+      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Institution Search Results"</span><span class="token punctuation">,</span>
+      <span class="token property">"mimeType"</span><span class="token operator">:</span> <span class="token string">"application/json"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"structuredContent"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"results"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+      <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"MIT"</span><span class="token punctuation">,</span> <span class="token property">"state"</span><span class="token operator">:</span> <span class="token string">"MA"</span><span class="token punctuation">,</span> <span class="token property">"enrollment"</span><span class="token operator">:</span> <span class="token number">11934</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Stanford"</span><span class="token punctuation">,</span> <span class="token property">"state"</span><span class="token operator">:</span> <span class="token string">"CA"</span><span class="token punctuation">,</span> <span class="token property">"enrollment"</span><span class="token operator">:</span> <span class="token number">17534</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Carnegie Mellon"</span><span class="token punctuation">,</span> <span class="token property">"state"</span><span class="token operator">:</span> <span class="token string">"PA"</span><span class="token punctuation">,</span> <span class="token property">"enrollment"</span><span class="token operator">:</span> <span class="token number">15818</span><span class="token punctuation">}</span>
+    <span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token property">"resource"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"resource://query/abc123"</span><span class="token punctuation">,</span>
+      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Institution Search Results"</span><span class="token punctuation">,</span> 
+      <span class="token property">"mimeType"</span><span class="token operator">:</span> <span class="token string">"application/json"</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">847</span><span class="token punctuation">,</span>
+      <span class="token property">"columns"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+        <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"name"</span><span class="token punctuation">,</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"string"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"state"</span><span class="token punctuation">,</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"string"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">{</span><span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"enrollment"</span><span class="token punctuation">,</span> <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"number"</span><span class="token punctuation">}</span>
+      <span class="token punctuation">]</span><span class="token punctuation">,</span>
+      <span class="token property">"executed_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:30:00Z"</span><span class="token punctuation">,</span>
+      <span class="token property">"expires_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:45:00Z"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The LLM gets three things:</p>
+<ol>
+<li>Text summary it can incorporate into its response</li>
+<li>The resource link it can reference when telling the user where to get full results</li>
+<li>Structured data with sample rows it can validate against</li>
+</ol>
+<p>The host application gets:</p>
+<ol>
+<li>The resource URI to fetch complete data</li>
+<li>Metadata to set up the UI (column definitions, total count for pagination)</li>
+<li>Lifecycle hints (expiration time)</li>
+</ol>
+<h2>Why Samples Matter: Iteration in Practice</h2>
+<p>Let's walk through a real query cycle using our IPEDS example.</p>
+<p><strong>User:</strong> &quot;Show me enrollment trends for computer science programs&quot;</p>
+<p><strong>LLM generates first query:</strong> Builds a query joining completions and institutions, filtering on CIP code 11.07 (computer science).</p>
+<p><strong>Server returns dual response:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"results"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2023</span><span class="token punctuation">,</span> <span class="token property">"program"</span><span class="token operator">:</span> <span class="token string">"Certificate"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">2847</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2023</span><span class="token punctuation">,</span> <span class="token property">"program"</span><span class="token operator">:</span> <span class="token string">"Certificate"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">1923</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2022</span><span class="token punctuation">,</span> <span class="token property">"program"</span><span class="token operator">:</span> <span class="token string">"Associate"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">4521</span><span class="token punctuation">}</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">12847</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p><strong>LLM notices the problem:</strong> The sample shows certificate and associate programs. The user probably meant bachelor's degrees when they said &quot;computer science programs.&quot; The LLM refines the query to filter for award level = &quot;Bachelor's&quot;.</p>
+<p><strong>Server returns refined dual response:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"results"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2023</span><span class="token punctuation">,</span> <span class="token property">"institution"</span><span class="token operator">:</span> <span class="token string">"MIT"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">1087</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2023</span><span class="token punctuation">,</span> <span class="token property">"institution"</span><span class="token operator">:</span> <span class="token string">"Stanford"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">892</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span><span class="token property">"year"</span><span class="token operator">:</span> <span class="token number">2022</span><span class="token punctuation">,</span> <span class="token property">"institution"</span><span class="token operator">:</span> <span class="token string">"MIT"</span><span class="token punctuation">,</span> <span class="token property">"completions"</span><span class="token operator">:</span> <span class="token number">1024</span><span class="token punctuation">}</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">23451</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p><strong>LLM validates:</strong> Data looks right - bachelor's degrees, reasonable institutions. Returns the resource link to the user.</p>
+<p>This iteration cycle happened with ~30 sample rows total in context. Without dual response, those two query attempts would have pushed 36,000+ rows through the context window.</p>
+<h3>Sampling Strategy</h3>
+<p>The sample needs to be <em>representative</em>, not random. If the user asks for results ordered by enrollment descending, your sample should be the top N rows, not a random slice. The LLM needs to see what the user will actually see.</p>
+<p>The server should apply the full query specification - all filters, joins, ordering - then limit to sample size. Think of it as:</p>
+<pre class="language-sql"><code class="language-sql"><span class="token comment">-- Full query the user requested</span>
+<span class="token keyword">SELECT</span> i<span class="token punctuation">.</span>name<span class="token punctuation">,</span> c<span class="token punctuation">.</span><span class="token keyword">year</span><span class="token punctuation">,</span> <span class="token function">SUM</span><span class="token punctuation">(</span>c<span class="token punctuation">.</span>completions<span class="token punctuation">)</span> <span class="token keyword">as</span> total
+<span class="token keyword">FROM</span> completions c
+<span class="token keyword">JOIN</span> institutions i <span class="token keyword">ON</span> c<span class="token punctuation">.</span>unit_id <span class="token operator">=</span> i<span class="token punctuation">.</span>unit_id
+<span class="token keyword">WHERE</span> c<span class="token punctuation">.</span>cip_code <span class="token operator">LIKE</span> <span class="token string">'11.07%'</span> <span class="token operator">AND</span> c<span class="token punctuation">.</span>award_level <span class="token operator">=</span> <span class="token number">4</span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> i<span class="token punctuation">.</span>name<span class="token punctuation">,</span> c<span class="token punctuation">.</span><span class="token keyword">year</span>
+<span class="token keyword">ORDER</span> <span class="token keyword">BY</span> total <span class="token keyword">DESC</span>
+
+<span class="token comment">-- Server applies sample limit</span>
+<span class="token keyword">LIMIT</span> <span class="token number">15</span></code></pre>
+<p>The sample shows the LLM exactly what shape the final results will have.</p>
+<h2>Out-of-Band Retrieval</h2>
+<p>The resource link points to data the host application fetches directly - it never goes through the LLM's context. This is where MCP and REST work together.</p>
+<p>MCP handles the conversation: tool discovery, query generation, sample validation. REST handles the bulk data transfer.</p>
+<h3>Why REST?</h3>
+<p>MCP is optimized for the LLM ↔ tool interaction pattern: request-response, JSON-RPC, relatively small payloads. It's not designed for streaming gigabytes of query results with pagination, sorting, and filtering.</p>
+<p>REST is. Your host application already knows how to make HTTP requests, handle pagination, render tables. We're not inventing new protocol features - we're using the right tool for each job.</p>
+<h3>Endpoint Design</h3>
+<p>Keep it simple. Two endpoints handle most needs:</p>
+<p><strong>GET /resources/{id}</strong> - Metadata only</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">847</span><span class="token punctuation">,</span>
+  <span class="token property">"columns"</span><span class="token operator">:</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"executed_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:30:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"expires_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:45:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"status"</span><span class="token operator">:</span> <span class="token string">"ready"</span>
+<span class="token punctuation">}</span></code></pre>
+<p><strong>POST /resources/{id}</strong> - Paginated data retrieval</p>
+<pre class="language-json"><code class="language-json"><span class="token comment">// Request</span>
+<span class="token punctuation">{</span>
+  <span class="token property">"offset"</span><span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+  <span class="token property">"limit"</span><span class="token operator">:</span> <span class="token number">100</span><span class="token punctuation">,</span>
+  <span class="token property">"sort"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"field"</span><span class="token operator">:</span> <span class="token string">"enrollment"</span><span class="token punctuation">,</span> <span class="token property">"order"</span><span class="token operator">:</span> <span class="token string">"desc"</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// Response</span>
+<span class="token punctuation">{</span>
+  <span class="token property">"data"</span><span class="token operator">:</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">847</span><span class="token punctuation">,</span>
+  <span class="token property">"returned_count"</span><span class="token operator">:</span> <span class="token number">100</span><span class="token punctuation">,</span>
+  <span class="token property">"offset"</span><span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+  <span class="token property">"pagination"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"has_next"</span><span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token property">"next_offset"</span><span class="token operator">:</span> <span class="token number">100</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Using POST for data retrieval lets clients specify complex parameters without URL length limits. The sort parameter here is client-side re-sorting of the already-filtered results - it doesn't re-execute the query.</p>
+<h3>Discovery</h3>
+<p>How does the client know where to find the REST endpoints? MCP's capability negotiation handles this during initialization.</p>
+<p>When your server starts up and a client connects, the initialization handshake includes capability declarations:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"protocolVersion"</span><span class="token operator">:</span> <span class="token string">"2025-11-25"</span><span class="token punctuation">,</span>
+  <span class="token property">"capabilities"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"tools"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"listChanged"</span><span class="token operator">:</span> <span class="token boolean">true</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token property">"resources"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"subscribe"</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+      <span class="token property">"listChanged"</span><span class="token operator">:</span> <span class="token boolean">true</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"serverInfo"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"ipeds-reporting"</span><span class="token punctuation">,</span>
+    <span class="token property">"version"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>For dual response, we extend this with custom metadata that tells clients where to find the REST layer:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"capabilities"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"tools"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token property">"experimental"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"dualResponse"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        <span class="token property">"enabled"</span><span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+        <span class="token property">"baseUrl"</span><span class="token operator">:</span> <span class="token string">"https://api.example.com/resources"</span><span class="token punctuation">,</span>
+        <span class="token property">"defaultExpiration"</span><span class="token operator">:</span> <span class="token number">900</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The <code>experimental</code> namespace is intentional - MCP encourages using it for capabilities not yet in the core spec. If this pattern gains adoption, it could become a formal MCP extension.</p>
+<p>The client constructs the full URL by appending the resource ID from the <code>resource_link</code> URI to the base URL. Resource URI <code>resource://query/abc123</code> + base URL <code>https://api.example.com/resources</code> = <code>https://api.example.com/resources/abc123</code>. Simple, predictable, no magic.</p>
+<h2>Resource Lifecycle</h2>
+<p>Here's something easy to miss: LLMs are speculative. They explore. They try queries, look at samples, refine, try again. A single user request might trigger a dozen query tool invocations as the LLM iterates toward the right answer.</p>
+<p>Each invocation creates a resource. Without lifecycle management, you're accumulating query results indefinitely.</p>
+<h3>Resource States</h3>
+<p>A resource moves through predictable states:</p>
+<pre><code>created → ready → [accessed] → expired → deleted
+                ↘ pinned → [accessed indefinitely]
+</code></pre>
+<p>The metadata endpoint reflects current state:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"status"</span><span class="token operator">:</span> <span class="token string">"ready"</span><span class="token punctuation">,</span>
+  <span class="token property">"total_count"</span><span class="token operator">:</span> <span class="token number">847</span><span class="token punctuation">,</span>
+  <span class="token property">"expires_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:45:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"access_count"</span><span class="token operator">:</span> <span class="token number">3</span><span class="token punctuation">,</span>
+  <span class="token property">"last_accessed"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:32:00Z"</span>
+<span class="token punctuation">}</span></code></pre>
+<p>For failed queries, the status tells clients what happened:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"status"</span><span class="token operator">:</span> <span class="token string">"failed"</span><span class="token punctuation">,</span>
+  <span class="token property">"error"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"QUERY_TIMEOUT"</span><span class="token punctuation">,</span>
+    <span class="token property">"message"</span><span class="token operator">:</span> <span class="token string">"Query exceeded 30 second timeout"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<h3>Expiration by Default</h3>
+<p>Every resource gets an expiration timestamp. The default should be aggressive - 15 minutes works for most interactive use cases. This handles the 90% case: exploratory queries the user never explicitly saves.</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"expires_at"</span><span class="token operator">:</span> <span class="token string">"2025-01-15T10:45:00Z"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Your server runs a cleanup job that purges expired resources. Simple, automatic, prevents unbounded growth.</p>
+<p>Consider extending expiration on access - if a user is actively paginating through results, you don't want the resource to expire mid-session. A simple approach: reset the expiration clock on each data retrieval request.</p>
+<h3>Pinning for Persistence</h3>
+<p>When users want to keep a query - for a dashboard, a recurring report, a shared artifact - they pin it:</p>
+<pre><code>PUT /resources/{id}
+</code></pre>
+<p>This removes the expiration timestamp. The resource persists until explicitly deleted:</p>
+<pre><code>DELETE /resources/{id}
+</code></pre>
+<p>The LLM can tell users about this: &quot;I've found 847 institutions matching your criteria. The results are available for the next 15 minutes, or you can save them for later.&quot;</p>
+<h3>Storage Strategies</h3>
+<p>You have two options for what gets stored:</p>
+<p><strong>Store query results:</strong> Faster retrieval, consistent snapshots, but storage grows with result size. Good for datasets where freshness isn't critical.</p>
+<p><strong>Store query definitions:</strong> Re-execute on retrieval, always fresh data, minimal storage. Good for frequently-changing data where users expect current values.</p>
+<p>The right choice depends on your data characteristics. For IPEDS - annual survey data that doesn't change frequently - storing results makes sense. For real-time metrics dashboards, store the query and re-execute.</p>
+<h3>Connection to MCP Tasks</h3>
+<p>The 2025-11-25 MCP spec introduced Tasks - a new primitive for tracking long-running work. Tasks have lifecycle states (<code>working</code>, <code>completed</code>, <code>failed</code>, <code>cancelled</code>) and can be polled for status. As of this writing, Tasks are marked as an experimental capability, meaning they're part of the spec but still being refined based on production feedback.</p>
+<p>For most reporting queries that execute in milliseconds, you don't need Tasks. But for expensive analytical queries - the kind that aggregate millions of rows or join across multiple data sources - Tasks provide a natural fit:</p>
+<ol>
+<li>Tool invocation returns immediately with a Task ID</li>
+<li>Client polls task status</li>
+<li>When complete, task result includes the dual response structure</li>
+<li>Resource lifecycle proceeds as normal</li>
+</ol>
+<p>This is an optional enhancement. The core dual response pattern works without Tasks for synchronous queries.</p>
+<h2>Prompt Integration</h2>
+<p>The LLM needs to understand how to work with dual responses. This goes in your system prompt:</p>
+<pre><code>When you invoke query tools, you'll receive:
+- A sample of results (typically 10-15 rows)  
+- A total_count indicating full result set size
+- A resource link for complete data access
+
+Decision logic:
+- If total_count ≤ sample size: Answer directly from results
+- If total_count &gt; sample size: Provide the resource link for full access
+- Always validate sample data before returning results to user
+
+When presenting results:
+- Summarize what you found: &quot;Found 847 institutions matching your criteria&quot;
+- Reference the resource link for users who need complete data
+- Note any limitations or refinements needed
+</code></pre>
+<p>The LLM learns to check sample data for issues (wrong columns, unexpected nulls, mixed data types) before committing to a response. This catches query errors before they reach the user.</p>
+<h2>Works for Both Tool Styles</h2>
+<p>Remember from Part 1: there are two ways to expose data to LLMs.</p>
+<p><strong>API-style tools</strong> have structured parameters:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token function">search_institutions</span><span class="token punctuation">(</span><span class="token punctuation">{</span> state<span class="token operator">:</span> <span class="token string">"NJ"</span><span class="token punctuation">,</span> control<span class="token operator">:</span> <span class="token string">"public"</span><span class="token punctuation">,</span> program_cip<span class="token operator">:</span> <span class="token string">"11.07"</span> <span class="token punctuation">}</span><span class="token punctuation">)</span></code></pre>
+<p><strong>SQL-style tools</strong> accept raw queries:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token function">query</span><span class="token punctuation">(</span><span class="token string">"SELECT * FROM institutions WHERE state = 'NJ' AND control = 1"</span><span class="token punctuation">)</span></code></pre>
+<p>Dual response works identically for both. The server receives either structured parameters or SQL text, executes the query, and returns the same dual response structure. The only difference is what gets stored for later retrieval:</p>
+<ul>
+<li>API-style: Store the structured parameters</li>
+<li>SQL-style: Store the validated SQL text</li>
+</ul>
+<p>When the client fetches via the resource link, the server re-executes from stored parameters or SQL. Same result, different input format.</p>
+<h2>Multi-Tenant Considerations</h2>
+<p>If your data has access controls - and most enterprise data does - the dual response pattern needs to respect them consistently.</p>
+<p>The authentication context from the original tool invocation must carry through to REST retrieval. The simplest approach: OAuth tokens that work for both MCP and REST endpoints, with tenant filtering injected at query execution time.</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">async</span> <span class="token keyword">function</span> <span class="token function">executeQuery</span><span class="token punctuation">(</span>query<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">,</span> auth<span class="token operator">:</span> AuthContext<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token comment">// Inject tenant filter regardless of query source</span>
+  <span class="token keyword">const</span> filtered <span class="token operator">=</span> <span class="token function">injectTenantFilter</span><span class="token punctuation">(</span>query<span class="token punctuation">,</span> auth<span class="token punctuation">.</span>tenantId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> db<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>filtered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre>
+<p>This applies to both the sample generation (during tool invocation) and full retrieval (during REST access). The user should see exactly the same rows through both paths.</p>
+<h3>Token Binding</h3>
+<p>Here's a subtle security issue: what prevents User A from taking a resource link returned to User B and accessing their data?</p>
+<p>The answer is token binding. When a resource is created, associate it with the authenticated user or tenant:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> resource <span class="token operator">=</span> <span class="token punctuation">{</span>
+  id<span class="token operator">:</span> <span class="token function">generateId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  query<span class="token operator">:</span> query<span class="token punctuation">,</span>
+  tenantId<span class="token operator">:</span> auth<span class="token punctuation">.</span>tenantId<span class="token punctuation">,</span>
+  userId<span class="token operator">:</span> auth<span class="token punctuation">.</span>userId<span class="token punctuation">,</span>
+  createdAt<span class="token operator">:</span> <span class="token keyword">new</span> <span class="token class-name">Date</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre>
+<p>On retrieval, validate that the requesting user matches:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">async</span> <span class="token keyword">function</span> <span class="token function">getResourceData</span><span class="token punctuation">(</span>resourceId<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">,</span> auth<span class="token operator">:</span> AuthContext<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> resource <span class="token operator">=</span> <span class="token keyword">await</span> storage<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>resourceId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>resource<span class="token punctuation">.</span>tenantId <span class="token operator">!==</span> auth<span class="token punctuation">.</span>tenantId<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ForbiddenError</span><span class="token punctuation">(</span><span class="token string">"Access denied"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+  
+  <span class="token keyword">return</span> <span class="token function">executeQuery</span><span class="token punctuation">(</span>resource<span class="token punctuation">.</span>query<span class="token punctuation">,</span> auth<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre>
+<p>This ensures that even if resource IDs leak, unauthorized users can't access the data.</p>
+<h3>Authorization with MCP</h3>
+<p>The 2025-11-25 MCP spec significantly improved authorization support. MCP servers are now classified as OAuth Resource Servers, and clients are required to use Resource Indicators (RFC 8707) to bind tokens to specific servers.</p>
+<p>For dual response, this means:</p>
+<ol>
+<li>The MCP tool invocation is protected by OAuth</li>
+<li>The REST endpoint shares the same authorization server</li>
+<li>Tokens are scoped to your specific server, not reusable elsewhere</li>
+</ol>
+<p>If you're building for enterprise, look at the new Client ID Metadata Documents flow - it solves the &quot;how do I register with every MCP server&quot; problem without requiring Dynamic Client Registration.</p>
+<p>For public datasets like IPEDS, multi-tenancy is less critical - but the pattern matters when you're building for enterprise deployment.</p>
+<h2>Error Handling</h2>
+<p>Queries fail. Connections drop. Data sources go down. The dual response pattern needs to handle errors gracefully at multiple levels.</p>
+<h3>Tool-Level Errors</h3>
+<p>When query execution fails during tool invocation, use MCP's standard error response with <code>isError: true</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"content"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"text"</span><span class="token punctuation">,</span>
+      <span class="token property">"text"</span><span class="token operator">:</span> <span class="token string">"Query failed: Unable to connect to database. Please try again."</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"isError"</span><span class="token operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The LLM sees this and can respond appropriately - maybe retry, maybe ask the user to wait, maybe try a simpler query.</p>
+<h3>Resource-Level Errors</h3>
+<p>Errors during out-of-band retrieval are standard HTTP:</p>
+<ul>
+<li><strong>404 Not Found:</strong> Resource expired or never existed</li>
+<li><strong>403 Forbidden:</strong> Authentication/authorization failure</li>
+<li><strong>410 Gone:</strong> Resource was explicitly deleted</li>
+<li><strong>503 Service Unavailable:</strong> Temporary backend issues</li>
+</ul>
+<p>The metadata endpoint should reflect error states for resources that failed during creation:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"status"</span><span class="token operator">:</span> <span class="token string">"failed"</span><span class="token punctuation">,</span>
+  <span class="token property">"error"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"QUERY_TIMEOUT"</span><span class="token punctuation">,</span>
+    <span class="token property">"message"</span><span class="token operator">:</span> <span class="token string">"Query exceeded 30 second timeout"</span><span class="token punctuation">,</span>
+    <span class="token property">"details"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"query_time_ms"</span><span class="token operator">:</span> <span class="token number">30000</span><span class="token punctuation">,</span>
+      <span class="token property">"estimated_rows"</span><span class="token operator">:</span> <span class="token number">5000000</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<h3>Validation Errors</h3>
+<p>For SQL-style tools where the LLM writes queries directly, validation errors are common:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"content"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"text"</span><span class="token punctuation">,</span> 
+      <span class="token property">"text"</span><span class="token operator">:</span> <span class="token string">"Query validation failed: Unknown column 'enrollmnt' in field list. Did you mean 'enrollment'?"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"isError"</span><span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+  <span class="token property">"structuredContent"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"error"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"VALIDATION_ERROR"</span><span class="token punctuation">,</span>
+      <span class="token property">"column"</span><span class="token operator">:</span> <span class="token string">"enrollmnt"</span><span class="token punctuation">,</span>
+      <span class="token property">"suggestions"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"enrollment"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>The structured error content helps the LLM understand <em>what</em> went wrong and potentially fix it automatically.</p>
+<h2>Putting It Together</h2>
+<p>Let's trace a complete flow:</p>
+<ol>
+<li>
+<p><strong>User asks:</strong> &quot;Show me CS programs at research universities&quot;</p>
+</li>
+<li>
+<p><strong>LLM invokes tool:</strong> <code>search_programs({ cip: &quot;11.07&quot;, carnegie: &quot;Doctoral&quot; })</code></p>
+</li>
+<li>
+<p><strong>Server executes query, returns dual response:</strong></p>
+<ul>
+<li>Sample: 15 rows</li>
+<li>Resource URI: <code>resource://query/abc123</code></li>
+<li>Metadata: <code>total_count: 847, expires_at: +15min</code></li>
+</ul>
+</li>
+<li>
+<p><strong>LLM validates sample:</strong> Columns look right, data makes sense</p>
+</li>
+<li>
+<p><strong>LLM responds to user:</strong> &quot;Found 847 computer science programs at doctoral research universities. [View Full Results]&quot;</p>
+</li>
+<li>
+<p><strong>Host application:</strong> Extracts resource URI, fetches from REST endpoint, renders sortable table</p>
+</li>
+<li>
+<p><strong>15 minutes later:</strong> Server cleans up expired resource (unless user pinned it)</p>
+</li>
+</ol>
+<p>The LLM saw ~1,000 tokens of tool output. The user got access to 847 complete records. The server didn't accumulate unbounded query results.</p>
+<p>That's the pattern.</p>
+<hr>
+<p>In <a href="../mcp-dual-response-part3/">Part 3</a>, I'll walk through a complete Node.js implementation - the MCP server, the REST endpoints, the lifecycle management. We'll use the IPEDS dataset as our example and test it with OpenAI's SDK. All the code is available at <a href="https://github.com/freezer333/mcp-rlp">github.com/freezer333/mcp-rlp</a>.</p>
+<p>For the formal specification of these patterns, I've written them up in a <a href="https://arxiv.org/abs/2510.05968">paper</a> presented at ACDSA 2026.</p>
+<hr>
+<p><em>Previous: <a href="../mcp-dual-response-part1/">Part 1 - Why Your LLM Can't Be Your Reporting Layer</a></em></p>
+<p><em>Next: <a href="../mcp-dual-response-part3/">Part 3 - Building a Dual Response MCP Server</a></em></p>
+
+    </article>
+    </div>
+    </div>
+  </body>
+</html>
