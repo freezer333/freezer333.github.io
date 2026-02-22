@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Controlling Generation — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Controlling Generation
+
+---
+
+# What Parameters Control Generation?
+
+In Lecture 3.1, we covered the structure of an API call — what goes in, what comes out. But we glossed over the parameters that control **how** the model generates its response.
+
+--
+
+These aren't obscure settings. They directly affect whether your agent is:
+
+- **reliable** or erratic
+- **concise** or verbose
+- **creative** or deterministic
+
+???
+[1-2 min] Frame this as practical. Students will see how to apply these settings immediately.
+
+---
+class: center, middle, inverse
+# Temperature
+
+---
+
+# Temperature Controls Randomness
+
+From Lecture 2.1: the model produces a **probability distribution** over possible next tokens. Temperature controls how that distribution is used.
+
+--
+
+**Temperature = 0.0** (deterministic)
+
+The model always picks the most probable token. Same input → same output every time.
+
+--
+
+**Temperature = 1.0** (creative)
+
+The model samples across the full distribution. Less likely tokens have a real chance. Different every time.
+
+???
+[2 min] Connect back to the probability distribution concept. Temperature is the control knob on that distribution.
+
+---
+
+# What This Looks Like in Practice
+
+**Prompt:** "Name a color."
+
+--
+
+**Temperature 0:** "Blue." Every time.
+
+--
+
+**Temperature 0.3:** "Blue." Usually. Occasionally "Red" or "Green."
+
+--
+
+**Temperature 1.0:** "Blue." Sometimes. But also "Cerulean," "Mauve," "Burnt sienna." Different every time.
+
+--
+
+The underlying knowledge doesn't change. What changes is how much the model **explores beyond the most obvious answer.**
+
+???
+[2 min] The color example makes temperature tangible. Students should be able to picture what each setting does. But don't just talk about it — let's see it.
+
+---
+class: center, middle, inverse
+# Live Coding
+## `temperature_demo.py`
+
+???
+[3-4 min] Switch to terminal. Run temperature_demo.py — students will see the variation (or lack thereof) in real time.
+
+---
+
+# Live Demo: Temperature in Action
+
+.small[
+```python
+PROMPT = "Name a color."
+TEMPERATURES = [0.0, 0.3, 1.0]
+RUNS_PER_TEMP = 5
+
+for temp in TEMPERATURES:
+    print(f"--- Temperature {temp} ---")
+    responses = []
+    for i in range(RUNS_PER_TEMP):
+*       response = client.messages.create(
+*           model="claude-haiku-4-5-20251001",
+*           max_tokens=50, temperature=temp,
+            messages=[{"role": "user", "content": PROMPT}]
+        )
+        text = response.content[0].text.strip()
+        responses.append(text)
+        print(f"  Run {i+1}: {text}")
+    unique = len(set(responses))
+    print(f"  → {unique} unique out of {RUNS_PER_TEMP}")
+```
+]
+
+.callout[**Watch the output.** Temperature 0 = identical every time. Temperature 1.0 = different every time. This is why agents use low temperature.]
+
+???
+Run temperature_demo.py. Let the output speak for itself. Count unique responses together. Point out we're using Haiku here — faster and cheaper for experiments. The temperature parameter works the same across all models.
+
+---
+
+# Temperature for Agents
+
+For most agent tasks, you want **low temperature** — typically 0 to 0.3.
+
+--
+
+**Why?** Because agents need to be *reliable*. When your agent reads a file and decides which tool to call next, you want it to make the same decision every time given the same context.
+
+--
+
+> Randomness in agent decision-making is a bug, not a feature.
+
+--
+
+Higher temperature is useful for:
+
+- Brainstorming or generating creative options
+- Producing varied examples
+- Tasks where diversity matters more than consistency
+
+.callout[**Default for agents: temperature 0 to 0.3.** You want reliability, not creativity, in the decision-making loop.]
+
+???
+[2 min] The blockquote is the key insight. Students should internalize: low temperature for agent reasoning, higher only for intentional variation.
+
+---
+class: center, middle, inverse
+# Sampling
+## Top-k and Top-p
+
+---
+
+# Narrowing the Options
+
+Temperature controls how **random** the selection is.
+
+Top-k and top-p control **which tokens are even considered.**
+
+???
+One-line framing to distinguish sampling from temperature.
+
+---
+
+# Top-k Sampling
+
+Top-k says: only consider the **k most probable** tokens, ignore everything else.
+
+--
+
+- **Top-k = 1** — Only the single most likely token. Essentially deterministic.
+- **Top-k = 10** — Top 10 tokens. Some variety, but constrained.
+- **Top-k = 50** — More options, more variety.
+
+--
+
+Think of it as **reducing the menu before ordering.** Instead of choosing from 50,000 possible next tokens, you're choosing from the top 10.
+
+???
+[2 min] The "menu" metaphor works well. Keep it intuitive — students don't need the math.
+
+---
+
+# Top-p (Nucleus) Sampling
+
+Instead of a fixed number, top-p says: consider the smallest set of tokens whose **combined probability exceeds p.**
+
+--
+
+- **Top-p = 0.1** — Only tokens making up 10% of the probability mass. Usually 1-3 tokens.
+- **Top-p = 0.9** — Tokens making up 90%. Most tokens that matter are included.
+
+--
+
+**The advantage over top-k:** it adapts.
+
+- Model is confident (one token at 95%)? Top-p narrows to just that token.
+- Model is uncertain? Top-p includes more options.
+
+.info[Top-p is an adaptive menu. Top-k is a fixed menu. Top-p is generally the smarter choice.]
+
+???
+[2 min] Top-p is harder to grasp. The "adaptive vs. fixed menu" contrast helps. Don't spend too long on the math.
+
+---
+
+# What to Use for Agents
+
+In practice, the settings are straightforward:
+
+--
+
+| Parameter | Agent Recommendation |
+|---|---|
+| **Temperature** | 0 to 0.3 |
+| **Top-p** | 0.9 or default |
+| **Top-k** | Leave at default |
+
+--
+
+**Don't overthink sampling parameters.** The big lever is temperature. Top-k and top-p are refinements that matter more for creative applications than for agents.
+
+.info[The important thing is understanding **what** these parameters do, so when your agent behaves erratically, you can check whether generation settings are the cause.]
+
+???
+[1 min] Practical recommendation students can follow. The big insight: temperature is the 90% lever.
+
+---
+class: center, middle, inverse
+# Output Control
+
+---
+
+# Max Tokens
+
+`max_tokens` sets the maximum number of tokens the model can generate in a single response.
+
+--
+
+.split-left[
+### Set it too low
+Response gets cut off mid-sentence. `stop_reason` = `max_tokens`.
+
+For agents, this can mean a **tool call gets truncated** and becomes unparseable.
+]
+
+.split-right[
+### Set it too high
+Reserving output capacity you don't need. Higher potential costs. Less room for input tokens on models with combined limits.
+]
+
+<div class="clear"></div>
+
+--
+
+.callout[**Reasonable default for agents: 4096 tokens.** Increase for long outputs (code, reports). Decrease to enforce brevity.]
+
+???
+[2 min] The truncated tool call scenario is worth emphasizing — it's a real bug students will encounter.
+
+---
+
+# Stop Sequences
+
+Stop sequences tell the model: if you generate this exact string, **stop immediately.**
+
+--
+
+Useful for agents to enforce output format — for example, stopping after a tool call instead of continuing with commentary.
+
+--
+
+In practice, modern APIs handle tool calling with structured formats that don't require manual stop sequences. But the concept is important:
+
+> You can control **when** the model stops, not just **how much** it generates.
+
+???
+[2 min] Mention the concept but don't over-invest. Modern tool calling APIs handle this. Students should know stop sequences exist for when they need fine-grained control.
+
+---
+
+# Putting It All Together
+
+A well-configured agent API call:
+
+```python
+response = client.messages.create(
+*   model="claude-sonnet-4-5-20250929",
+*   max_tokens=4096,
+*   temperature=0,
+    system=system_prompt,
+    messages=conversation_history
+)
+```
+
+Low temperature for reliability. Reasonable max_tokens. System prompt and conversation history providing context.
+
+--
+
+**That's it.** These are the settings you'll use for most agents in this course.
+
+.callout[Don't get lost in parameter tuning. **Low temperature, reasonable max_tokens, good context.** The context matters far more than the parameters.]
+
+???
+[2 min] The highlighted lines show what's new in this lecture. The closing callout is critical: context engineering > parameter tuning.
+
+---
+
+# Live Demo: `generation_config.py`
+
+A complete, well-configured agent call that analyzes code:
+
+.small[
+```python
+AGENT_CONFIG = {
+    "model": "claude-sonnet-4-5-20250929",
+    "max_tokens": 4096,
+    "temperature": 0,
+}
+SYSTEM_PROMPT = """You are a code analysis assistant. When asked about
+code, explain clearly and concisely. If you identify a bug, state
+the line, the problem, and the fix."""
+
+response = client.messages.create(
+    **AGENT_CONFIG, system=SYSTEM_PROMPT,
+    messages=[{"role": "user",
+        "content": "What happens if I call average([])?\n\n"
+                   "```python\ndef average(numbers):\n"
+                   "    total = 0\n    for n in numbers:\n"
+                   "        total += n\n    return total / len(numbers)\n```"
+    }]
+)
+```
+]
+
+???
+[2 min] Run generation_config.py. The model reliably identifies the ZeroDivisionError. Run it twice to show temperature=0 gives the same analysis both times. Point out the config dict pattern — this is how you'll structure agent configurations.
+
+---
+
+# Key Takeaways
+
+--
+
+**1. Temperature is the big lever**
+
+Low (0-0.3) for agent reliability. Higher only when you intentionally want variation.
+
+--
+
+**2. Sampling parameters are secondary**
+
+Top-p and top-k refine token selection. Default values are fine for most agent work.
+
+--
+
+**3. Context matters more than parameters**
+
+Getting the context right is the 10x improvement. Parameters are the 1.1x improvement.
+
+???
+Three clean takeaways. The third point sets up the next lecture on in-context learning and context engineering.
+
+---
+
+# Coming Up Next
+
+**Lecture 3.4: In-Context Learning and the Limits of Prompting**
+
+How in-context learning works and why it's fundamental to effective prompt design.
+
+???
+Brief transition to the next lecture.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

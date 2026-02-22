@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Course Philosophy and Roadmap — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Course Philosophy and Roadmap
+
+---
+
+# Why Build From Scratch?
+
+This course builds every major agent component from scratch before introducing any framework.
+
+--
+
+Why not start with LangChain, CrewAI, or another existing framework?
+
+--
+
+- **Debugging** — when an agent fails, you need to trace the problem through the agent loop, context assembly, and tool execution. You can't do that inside an abstraction you don't understand.
+- **Evaluation** — choosing the right framework requires knowing what each one is actually doing. Building the pieces yourself gives you that baseline.
+- **Durability** — frameworks change rapidly. The underlying patterns — the agent loop, context engineering, tool design — do not.
+
+???
+The build-first philosophy drives the entire course structure. Analogy: you wouldn't hire a web developer who can use React but doesn't understand HTTP.
+
+---
+
+# What Does "Build First" Look Like?
+
+A concrete example:
+
+--
+
+- You will build your own **tool registry** before using one from a framework
+- You will build your own **context management** before importing one
+- You will build your own **memory system** before adopting one
+
+--
+
+After building each component, you'll understand what frameworks provide — and what they hide.
+
+???
+Each of these becomes a module in the course. Students build it, then later compare their version to framework equivalents.
+
+---
+class: center, middle, inverse
+# Course Structure
+
+---
+
+# How Is the Course Organized?
+
+Four phases, each building on the last:
+
+| Phase | Focus | What You'll Do |
+|-------|-------|----------------|
+| **1. Foundations** | How LLMs work | Tokenization, attention, context windows, generation parameters, prompt and context engineering |
+| **2. Build** | Core agent components | Build a coding agent (~200 lines of Python), then add context management, RAG, memory, skills |
+| **3. Framework** | Unify into a framework | Combine your components into a reusable agent framework, then compare to existing frameworks |
+| **4. Patterns** | Production concerns | Multi-agent systems, autonomy management, guardrails, safety, real-world architectures |
+
+???
+The table gives students a clear map of the course. Phase 2 is the bulk of the work.
+
+---
+
+# What Do You Build in Phase 2?
+
+Starting from a ~200-line Python coding agent that can read files, edit code, and solve real tasks:
+
+--
+
+- **Context management** — keeping agents effective over long interactions
+- **Retrieval (RAG)** — accessing knowledge beyond training data
+- **Memory** — persistence across sessions
+- **Skills** — dynamic capability loading
+
+--
+
+Each component is built by hand, tested independently, then integrated.
+
+???
+The 200-line agent is a recurring reference point. Students keep extending it throughout the course.
+
+---
+
+# What Happens in Phase 3?
+
+You unify the components from Phase 2 into a **reusable agent framework**.
+
+--
+
+Then you compare your framework against existing ones (LangChain, CrewAI, etc.):
+
+- What does the framework give you that you didn't build?
+- What does it hide that you'd want control over?
+- Where does it make different design choices, and why?
+
+???
+The sequencing is deliberate: build first, then compare. Students evaluate frameworks from understanding, not dependence.
+
+---
+
+# What Are the Tools?
+
+**Language:** Python — the standard for AI engineering
+
+**API:** Anthropic (Claude) — clean, well-documented
+
+--
+
+The patterns you learn (message roles, system prompts, tool calling, context assembly) transfer directly to OpenAI, Google, and any other provider.
+
+--
+
+.info[Python proficiency is helpful but not required. The complexity in this course is in the **architecture**, not the syntax.]
+
+???
+Reassure students who aren't Python experts. The API choice is pragmatic, not exclusive.
+
+---
+
+# Why Not Focus on a Specific Framework?
+
+Agent engineering is a fast-moving field. New frameworks appear regularly. A course built around specific tools would be outdated quickly.
+
+--
+
+What stays stable:
+
+- The agent loop (perceive → reason → act)
+- Context engineering
+- Tool design and execution
+- Memory and retrieval patterns
+- Safety and autonomy boundaries
+
+--
+
+These are the focus of this course.
+
+???
+Reinforces the build-first philosophy from a different angle: stability of fundamentals vs. churn of tools.
+
+---
+
+# What Will You Be Able to Do?
+
+After completing this course, you should be able to:
+
+- **Evaluate** new frameworks and tools against the patterns you've built
+- **Debug** agent behavior at the architectural level — not just at the API call level
+- **Design** agents for problems that don't have existing templates
+- **Decide** when to build custom components vs. when to use existing tools
+
+???
+Four concrete outcomes. Each maps to skills developed across the four phases.
+
+---
+
+# Course Logistics
+
+Course policies, grading, deadlines, and administrative details are on the **course website**.
+
+Lectures focus on concepts and implementation. Logistics are documented separately.
+
+???
+One slide, brief. Direct students to the website.
+
+---
+
+# Coming Up Next
+
+**Module 2: Foundations — How LLMs Work**
+
+How LLMs work under the hood: neural networks, transformers, next-token prediction, attention, and context windows. The technical foundation for everything we build.
+
+???
+Brief transition to next module.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Model Landscape — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# The Model Landscape
+
+---
+
+# "Which Model?"
+
+In Lecture 3.1, you passed a `model` parameter that looked like this:
+
+```python
+model="claude-sonnet-4-5-20250929"
+```
+
+--
+
+What *is* that exactly? Why does it have a version date? Why are there different models?
+
+And how do you choose?
+
+???
+[1 min] Quick opening that connects directly to what they just did in Lecture 3.1. This is a shorter lecture (~12 min) — keep the pace up.
+
+---
+class: center, middle, inverse
+# Providers, Brands, and Models
+
+---
+
+# Three Layers
+
+There's a hierarchy that trips up beginners:
+
+--
+
+**Provider** — the company that builds and hosts the models. Anthropic, OpenAI, Google, Meta.
+
+--
+
+**Brand** — the product name. Claude, ChatGPT/GPT, Gemini, Llama. When someone says "I used ChatGPT," they're talking about the brand, not a specific model.
+
+--
+
+**Model** — the specific version you call through the API. `claude-sonnet-4-5-20250929` is a model. `gpt-4o` is a model.
+
+.callout[The brand is marketing. The model is what runs your tokens.]
+
+???
+[2 min] Make the hierarchy explicit. Students conflate "Claude" (brand) with a specific model all the time. The callout quote is worth emphasizing.
+
+---
+
+# Inside a Brand — Model Tiers
+
+Every major provider offers a family of models at different capability tiers. As of February 2026:
+
+| Tier | Anthropic (Claude) | OpenAI | Google (Gemini) |
+|---|---|---|---|
+| **Fastest / Cheapest** | Haiku 4.5 | GPT-5 mini | Gemini 3 Flash |
+| **Balanced** | Sonnet 4.6 | GPT-5 | Gemini 3 Pro |
+| **Most Capable** | Opus 4.6 | GPT-5.2 Pro | Gemini 3 Deep Think |
+
+--
+
+These names **will** change — the **pattern** won't. Every provider offers this tradeoff: you trade capability for speed and cost.
+
+.info[Each tier is a fundamentally different model — different size, different architecture, different training. Haiku isn't a dumbed-down Opus. They're separate models optimized for different points on the tradeoff curve.]
+
+???
+[2 min] The table will go stale — acknowledge this explicitly. The point is the consistent three-tier pattern across providers, not the specific model names.
+
+---
+class: center, middle, inverse
+# The Tradeoffs
+
+---
+
+# Four Axes
+
+When you choose a model tier, you're making decisions along four axes:
+
+.split-left[
+### Capability
+How well the model handles complex reasoning, nuanced instructions, and difficult tasks. Larger models generally produce better output on hard problems.
+
+### Speed (Latency)
+Time to first token and tokens per second. Smaller models respond faster. For agents in loops, latency compounds.
+]
+
+.split-right[
+### Cost
+Priced per token, input and output separately. Output tokens cost more (typically 3-5x). Frontier models can be 10-30x more expensive than the cheapest tier.
+
+### Context Window
+Maximum tokens the model can process in one call. Varies by model, not just by tier. Always check.
+]
+
+<div class="clear"></div>
+
+???
+[2 min] Four concepts, each briefly. The latency compounding point is worth emphasizing — a 2x slower model means a 2x slower agent on a 10-step task.
+
+---
+
+# Frontier Models
+
+> A **frontier model** is the most capable model currently available — pushing the boundary of what AI can do.
+
+--
+
+Today that means models like Claude Opus, GPT-4.5, and Gemini Ultra.
+
+--
+
+But **frontier is a moving target**. What's frontier today will be mid-tier in a year. The models we consider "balanced" today outperform what was frontier two years ago.
+
+.callout[Build your agents so that swapping models is easy — it's a one-line change if you've done it right.]
+
+???
+[1 min] The "moving target" framing helps students avoid anchoring on specific model names. The callout is practical advice they should follow from day one.
+
+---
+
+# Billing — How You Pay
+
+Most providers charge per token, billed monthly:
+
+--
+
+- **Input tokens** — what you send (system prompt + history + tool results). Charged at one rate.
+- **Output tokens** — what the model generates. Charged at a higher rate.
+- **No charge for "thinking time"** — you pay only for tokens in and tokens out.
+
+--
+
+### Ballpark Costs (Claude Sonnet)
+
+- 20-message conversation: **$0.01 – $0.05**
+- Agent running a multi-step task: **$0.10 – $0.50**
+- Casual chat loop session: **a few cents**
+
+.smaller[These numbers shift as models and pricing change. Check [anthropic.com/pricing](https://anthropic.com/pricing) for current rates.]
+
+???
+[2 min] The billing section should be reassuring, not scary. Students need to know this costs money but that it's manageable. Ballpark costs help them calibrate.
+
+---
+
+# Set a Spending Limit
+
+.warning[**Set a spending limit** on your API account before you start experimenting. It's easy to accidentally leave a script running in a loop. A hard budget cap ensures a bug costs you $20, not $200.]
+
+Go to [console.anthropic.com](https://console.anthropic.com) → Settings → Spending Limits
+
+Set a monthly budget that matches your comfort level. You can always increase it later.
+
+???
+[1 min] Important practical advice. Set a budget cap to prevent infinite-loop costs.
+
+---
+class: center, middle, inverse
+# Hardware and Local Models
+
+---
+
+# What Does It Take to Run These Models?
+
+**Frontier models** are *enormous*:
+
+--
+
+- Hundreds of billions of parameters
+- Each parameter stored as a 16-bit number
+- A 400B parameter model ≈ **800 GB** just for the weights
+
+--
+
+That's far beyond any single GPU. These run on clusters — dozens to hundreds of high-end GPUs (NVIDIA H100s at ~$30,000 each) networked together.
+
+.info[This is why frontier models are offered as cloud APIs. Nobody runs these on a laptop. You're renting access to massive infrastructure.]
+
+???
+[1 min] Ground the abstraction. "API call" means "someone else is running a massive GPU cluster for you."
+
+---
+
+# Running Models Locally
+
+Not every model is frontier-sized. Open-source models come in a range of sizes, and many *can* run on consumer hardware.
+
+**Tools like Ollama** make it straightforward to download and run open-source models (Llama, Mistral, Phi) on your own machine. No API key, no per-token billing, complete privacy.
+
+--
+
+The rule of thumb: **~1 GB of memory per billion parameters** (at 16-bit precision).
+
+Quantization — storing weights at lower precision — cuts that roughly in half, with a modest quality trade-off.
+
+???
+[1 min] Quick intro before the hardware table. Ollama is the tool they're most likely to use if they try local models.
+
+---
+
+# Local Model Hardware Requirements
+
+.small[
+| Model Size | Memory Needed | What Can Run It | Quality Level |
+|---|---|---|---|
+| **1-3B** | 2-4 GB | Any modern laptop (CPU) | Simple tasks, limited reasoning |
+| **7-8B** | 4-8 GB (quantized) | Laptop with decent GPU or 16GB RAM | Good for many tasks |
+| **13-14B** | 8-14 GB (quantized) | Gaming GPU (RTX 3080/4070+) | Strong general capability |
+| **30-70B** | 16-40 GB (quantized) | High-end GPU (RTX 4090, 24GB) | Approaching commercial quality |
+| **70B+** | 40+ GB | Multi-GPU or cloud instance | Near-frontier on some tasks |
+]
+
+--
+
+**Speed matters too:**
+
+- 7B model on a decent laptop: **20-30 tokens/sec** — perfectly usable
+- 70B model on the same hardware: **2-3 tokens/sec** — painfully slow
+
+???
+[2 min] The table gives students a concrete sense of what they could actually run. Most students have laptops in the 7-8B range.
+
+---
+
+# Local Model Tradeoffs
+
+.split-left[
+### Pros
+- **No cost per token** — inference is free after download
+- **Privacy** — data never leaves your machine
+- **No rate limits** — run as many requests as your hardware handles
+]
+
+.split-right[
+### Cons
+- **Hardware requirements** — need meaningful GPU/memory for anything beyond small models
+- **Model quality** — best open-source models generally trail frontier commercial models on complex reasoning
+- **Speed** — on consumer hardware, larger models are slow
+- **You manage everything** — updates, configuration, quantization
+]
+
+<div class="clear"></div>
+
+.info[For this course, we use the Anthropic API for a consistent, high-quality baseline. But local models are a real option for agents that process sensitive data or run at high volume.]
+
+???
+[1 min] Quick pros/cons. The info box explains the course decision without dismissing local models.
+
+---
+
+# Model Selection — The Short Version
+
+You don't need to agonize over model selection:
+
+--
+
+- Use **Sonnet** (balanced tier) as your default
+- Use **Haiku** (fast tier) for quick iterations or simple tasks
+- Use **Opus** (frontier tier) when you genuinely need the extra capability
+
+--
+
+- Define the model as a variable — make switching easy
+- Check the docs for current models and pricing — names and versions change
+
+???
+Practical guidance students can follow immediately. This is the slide to remember.
+
+---
+class: center, middle, inverse
+# Live Coding
+## `model_comparison.py`
+
+???
+[3-4 min] Switch to terminal. Run model_comparison.py and walk through the output. This makes the tradeoffs concrete.
+
+---
+
+# Live Demo: Comparing Model Tiers
+
+.small[
+```python
+PROMPT = "Explain what a REST API is in 2-3 sentences."
+MODELS = [
+    ("claude-haiku-4-5-20251001", "Haiku (fast/cheap)"),
+    ("claude-sonnet-4-5-20250929", "Sonnet (balanced)"),
+]
+
+for model_id, label in MODELS:
+*   start = time.time()
+    response = client.messages.create(
+        model=model_id, max_tokens=256,
+        messages=[{"role": "user", "content": PROMPT}]
+    )
+*   elapsed = time.time() - start
+
+    print(f"{label}: {elapsed:.2f}s")
+    print(f"  {response.usage.output_tokens} output tokens")
+    print(f"  {response.content[0].text}")
+```
+]
+
+--
+
+**Watch for:** speed difference, response length, and quality. For a simple task like this, both models handle it well — the gap widens on harder problems.
+
+???
+Run model_comparison.py. Have students notice: (1) Haiku is significantly faster, (2) both produce good answers for this simple prompt, (3) the model parameter is literally just a string — switching is trivial. Point out that this is why we define model as a variable.
+
+---
+
+# Coming Up Next
+
+**Lecture 3.3: Controlling Generation**
+
+Temperature, sampling, max tokens — the parameters that determine whether your agent is reliable or erratic.
+
+???
+Brief transition. Back to API mechanics with the generation parameters.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

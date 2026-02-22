@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>What is an Agent? — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# What is an Agent?
+
+---
+
+# Let's start with a question...
+
+In 2020, if you wanted software that could read your codebase, understand a bug report, find the relevant files, and fix the bug — you'd need a team of engineers building a highly specialized system.
+
+--
+
+In 2024, a single developer can build this in **200 lines of Python**.
+
+--
+
+What changed?
+
+--
+
+.callout[The answer is the subject of this entire course: **agents powered by large language models**.  By Lecture 8, you will have built exactly this.]
+
+???
+[2 min] Let this question hang. The answer frames the entire course. Mention that by Lecture 8, they'll have a working coding agent.
+
+---
+# Learning Objectives
+
+By the end of this lecture, you will be able to:
+
+1. **Define** what an AI agent is and articulate the perception-reasoning-action loop
+2. **Distinguish** between agents, chatbots, assistants, and copilots
+3. **Explain** why the LLM itself never directly executes actions
+4. **Trace** through the complete agent loop from user input to final response
+5. **Understand** why 2022-2024 represented a paradigm shift
+
+???
+These five objectives are the foundation for everything else in the course.
+
+---
+class: center, middle, inverse
+# Defining an Agent
+
+---
+
+# The Core Definition
+
+> **Agent**: Software that **perceives** its environment, **reasons** about what to do, and takes **autonomous action** to achieve goals.
+
+Three components:
+
+- **Perceive** — receive information (user messages, file contents, API responses)
+- **Reason** — analyze the situation, consider options, plan next steps
+- **Act** — take action in the world (create files, call APIs, execute code)
+
+.info[The reasoning component is where the LLM comes in.  This is new — before LLMs, the reasoning had to be hand-coded.]
+
+???
+[2 min] Break down each component. Perceive = input handling. Reason = LLM call. Act = tool execution. This maps directly to the system they'll build.
+
+---
+
+# The Perception-Reasoning-Action Loop
+
+<div style="text-align:center; padding: 1em 0">
+<svg width="600" height="200" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2196F3"/>
+    </marker>
+  </defs>
+  <!-- Boxes -->
+  <rect x="20" y="60" width="160" height="70" rx="10" fill="#e8f4fd" stroke="#2196F3" stroke-width="2"/>
+  <text x="100" y="95" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" font-weight="600" fill="#1a1a2e">PERCEIVE</text>
+  <text x="100" y="115" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#666">get information</text>
+
+  <rect x="220" y="60" width="160" height="70" rx="10" fill="#e8f4fd" stroke="#2196F3" stroke-width="2"/>
+  <text x="300" y="95" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" font-weight="600" fill="#1a1a2e">REASON</text>
+  <text x="300" y="115" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#666">LLM processes</text>
+
+  <rect x="420" y="60" width="160" height="70" rx="10" fill="#e8f4fd" stroke="#2196F3" stroke-width="2"/>
+  <text x="500" y="95" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" font-weight="600" fill="#1a1a2e">ACT</text>
+  <text x="500" y="115" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#666">use tools</text>
+
+  <!-- Arrows -->
+  <line x1="180" y1="95" x2="218" y2="95" stroke="#2196F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="380" y1="95" x2="418" y2="95" stroke="#2196F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Return arrow -->
+  <path d="M500 135 L500 170 L100 170 L100 135" stroke="#2196F3" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+</svg>
+</div>
+
+This loop is **the** fundamental pattern. Every agent — from a simple chatbot to the most sophisticated autonomous system — follows this pattern.
+
+.callout[When something goes wrong with an agent, it's almost always a problem in one of these three phases.]
+
+???
+[2 min] The loop is the mental model students should internalize. We'll return to it throughout the entire course.
+
+---
+class: center, middle, inverse
+# Agents vs. Chatbots vs. Assistants vs. Copilots
+
+---
+
+# The Spectrum of AI Systems
+
+| | Chatbot | Assistant | Copilot | **Agent** |
+|---|---|---|---|---|
+| **Perception** | User text only | Text + some context | Text + work context | Rich environment data |
+| **Reasoning** | Pattern matching | Simple LLM | LLM + suggestions | LLM + planning |
+| **Action** | Text responses | Limited actions | Suggestions only | Autonomous tool use |
+| **Autonomy** | None | Low | Low-Medium | **Medium-High** |
+
+???
+[2 min] Walk through each column with concrete examples. FAQ bot (chatbot), Siri (assistant), GitHub Copilot (copilot), Claude Code (agent).
+
+---
+
+# What Makes Each Different
+
+.split-left[
+### Chatbot
+FAQ bot answering store hours. Receives your message, responds with text. Can't *do* anything.
+
+### Assistant
+Siri setting a timer. Accesses some context, takes limited actions. Reactive and limited in scope.
+]
+
+.split-right[
+### Copilot
+GitHub Copilot suggesting code. Sees your work, makes suggestions. **You** decide whether to accept.
+
+### Agent
+"Fix the auth bug" &rarr; reads code, identifies issue, edits files, runs tests. **It** handles execution.
+]
+
+???
+[2 min] The key progression is increasing autonomy. Each step up the ladder gives the system more ability to act independently.
+
+---
+
+# The Key Distinction
+
+.split-left[
+## Copilots **suggest** actions.
+When GitHub Copilot suggests a line of code, *you* press Tab to accept it.
+
+The human executes.
+]
+
+.split-right[
+## Agents **take** actions.
+When a coding agent decides to edit a file, *it* makes the edit.
+
+The agent executes.
+]
+
+.callout[This is a fundamental difference in autonomy and responsibility.  This course is about building **agents** — systems that can act autonomously to achieve goals.]
+
+???
+[1 min] Let this distinction land. It's the core idea that separates agents from everything else.
+
+---
+class: center, middle, inverse
+# The Critical Insight
+## LLMs Don't Execute
+
+---
+
+# The LLM Never Touches Your Filesystem
+
+> The LLM never executes code. Never sends emails. Never calls APIs. The LLM only does one thing: **it generates text**.
+
+--
+
+When you ask an LLM to "create a file called hello.py":
+
+- The LLM **does not** create any file
+- It generates text that **represents a request** to create a file
+- **Your code** — the agent — parses that request and creates the file
+
+???
+[2 min] State this clearly and let it sink in. This is counterintuitive to students who've only used ChatGPT's interface where it "feels like" the AI is doing things.
+
+---
+
+# The Request-Execute Pattern
+
+```
+User: "Create hello.py with a hello world function"
+              │
+              ▼
+     ┌──────────────────┐
+     │       LLM        │   Generates text only!
+     └────────┬─────────┘
+              │
+              ▼
+     Output:  tool: edit_file({
+                "path": "hello.py",
+                "content": "def hello():\n    print('Hello!')"
+              })
+              │
+              ▼
+     ┌──────────────────┐
+     │    YOUR CODE      │   Parses and executes
+     └────────┬─────────┘
+              │
+              ▼
+     hello.py created on disk ✓
+```
+
+???
+[2 min] Walk through step by step. The LLM output is just text. It happens to be text formatted like a function call. The agent code parses it and does the actual work.
+
+---
+
+# Why This Distinction Matters
+
+.split-left[
+### Security
+You control what actions are possible. The LLM can only *request* actions you've implemented.
+
+### Reliability
+You validate requests before executing. If the LLM hallucinates a dangerous command, you catch it.
+]
+
+.split-right[
+### Debugging
+When something fails: did the LLM generate a bad request, or did your execution code fail?
+
+### Architecture
+This separation is the foundation of every agent system we'll build.
+]
+
+???
+[1 min] These reasons make the insight practical. Security is especially important — the LLM can't do anything you haven't explicitly allowed.
+
+---
+class: center, middle, inverse
+# The Complete Agent Loop
+
+---
+
+# The Agent Loop — Step by Step
+
+.small[
+1. **User Input** — User provides a goal or instruction
+2. **Context Assembly** — Build prompt: system prompt + history + user message
+3. **LLM Call** — Send context to the LLM; it generates a response (text only!)
+4. **Parse Response** — Did the LLM request any tool calls?
+ - If **no** &rarr; go to step 7 (return to user)
+ - If **yes** &rarr; continue to step 5
+5. **Execute Tools** — Run the requested tool(s)
+6. **Append Results** — Add tool results to conversation, go back to step 3
+7. **Return to User** — Display final response
+]
+
+.info[Steps 3-6 form the **inner loop** — the agent keeps working until the LLM stops requesting tools. Steps 1 and 7 form the **outer loop** — the back-and-forth conversation with the user.]
+
+???
+[2 min] This is the full picture. A single user request may trigger many iterations of the inner loop.
+
+---
+
+# Tracing a Real Interaction
+
+**User**: "What files are in my project?"
+
+--
+
+**LLM responds**: "I'll check that for you." + `tool: list_files({"path": "."})`
+
+--
+
+**Agent executes**: `list_files(".")` &rarr; `['main.py', 'utils.py', 'README.md']`
+
+--
+
+**LLM sees result, responds**: "Your project contains 3 files: main.py, utils.py, and README.md"
+
+--
+
+**No more tool calls** &rarr; response returned to user.
+
+The inner loop ran **twice**: once to call the tool, once to formulate the answer.
+
+???
+[2 min] This concrete example makes the abstract loop tangible. Point out that the agent made TWO LLM calls for one user question — this is normal.
+
+---
+
+# Inner Loop vs. Outer Loop
+
+.split-left[
+### Outer Loop
+User &rarr; Agent &rarr; User &rarr; Agent
+
+The conversation. Each iteration is a "turn."
+]
+
+.split-right[
+### Inner Loop
+LLM &rarr; Tool &rarr; LLM &rarr; Tool
+
+The agent's internal work cycle. Many iterations per user turn.
+
+Continues until LLM responds without tool calls.
+]
+
+.callout[A single user request might trigger **many** iterations of the inner loop. The agent keeps working — reading files, making edits, running tests — until the task is done or it needs user input.]
+
+???
+This terminology comes up throughout the course. The inner loop is where most of the interesting agent engineering happens.
+
+---
+class: center, middle, inverse
+# Why Now?
+## The 2022-2024 Paradigm Shift
+
+---
+
+# A Brief Timeline
+
+| Period | State of Agents |
+|---|---|
+| Pre-2020 | Rule-based, reinforcement learning, narrow domains |
+| 2020-2022 | GPT-3 shows promise, but not reliable enough for autonomy |
+| 2022 | ChatGPT demonstrates conversational ability; tool-use experiments begin |
+| 2023 | GPT-4, Claude — reliable instruction-following and reasoning |
+| 2024 | Tool use becomes standard API feature; agents go mainstream |
+
+--
+
+The breakthrough: LLMs became **reliable enough** to serve as the reasoning engine in the perception-reasoning-action loop.
+
+???
+[2 min] The key insight is reliability. Earlier LLMs could sometimes reason, but not consistently enough to trust with autonomous execution.
+
+---
+
+# The New Paradigm
+
+.split-left[
+### Before
+Programmer writes **explicit logic** for every situation.
+
+Hard-coded rules, decision trees, if/else chains. Every edge case handled manually.
+]
+
+.split-right[
+### Now
+Programmer provides **tools and context**; LLM reasons about what to do.
+
+Flexible, adaptive, handles novel situations. New challenges: reliability, context, safety.
+]
+
+<div class="clear"></div>
+
+--
+
+This is both incredibly powerful and introduces new challenges — challenges we'll spend this entire course learning to address.
+
+???
+Frame this as the motivation for the course. The power is real, but so are the challenges.
+
+---
+
+# Key Takeaways
+
+Three things to remember from this lecture:
+
+--
+
+**1. Agents = Perceive + Reason + Act**
+
+The fundamental loop that every agent follows.
+
+--
+
+**2. LLMs generate text, not actions**
+
+Your code parses requests and executes. The LLM never touches the filesystem.
+
+--
+
+**3. 2022-2024 made LLMs reliable enough**
+
+To serve as the reasoning engine for autonomous software agents.
+
+???
+These three points form the foundation for everything we'll build.
+
+---
+
+# Coming Up Next
+
+**Lecture 1.2: Human-Agent Engineering**
+
+How *you* as a developer work with agents — why "human-agent engineering" is different from traditional programming or "vibe coding", and what it means to manage AI "interns."
+
+???
+Brief transition. Next lecture shifts from "what are agents?" to "how do humans work with agents effectively?"
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

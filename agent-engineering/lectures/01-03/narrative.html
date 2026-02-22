@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Philosophy and Roadmap — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 1.3</a></div></nav>
+<div class="page_content"><h1>Course Philosophy and Roadmap</h1>
+<h2>The Build-First Philosophy</h2>
+<p>The central design principle of this course is that you build every major agent component from scratch before introducing any framework. There is no point in the course where you install LangChain, CrewAI, or any other agent framework and follow its tutorial. Instead, you write the code yourself — the tool registry, the context manager, the memory system, the retrieval pipeline — and only after you understand how each piece works do you compare your implementation to what existing frameworks provide.</p>
+<p>The reasoning behind this approach has three parts.</p>
+<p><strong>Debugging requires understanding.</strong> Agents, like all software, behave in unexpected ways. When an agent fails — produces incorrect output, calls the wrong tool, loses track of context — you need to trace the problem through the agent loop, the context assembly, and the tool execution. If you built those components yourself, you can do that. If you imported them from a library you have not studied, you are debugging a black box.</p>
+<p><strong>Framework evaluation requires a baseline.</strong> Choosing between frameworks is a design decision that requires understanding what each one actually does. After building your own tool registry, your own context management, and your own memory system, you know exactly what a framework is providing — and what it is hiding. You can make an informed judgment about whether its abstractions help or hurt for a given use case.</p>
+<p><strong>Fundamentals outlast frameworks.</strong> The agent framework landscape changes rapidly. Popularity shifts based on documentation quality, community momentum, and which tools influential practitioners happen to adopt. But the underlying patterns — the agent loop, context engineering, tool design, memory management — are stable. A course built around a specific framework risks obsolescence within a year. A course built around the patterns those frameworks implement does not.</p>
+<p>The analogy is web development. You would not hire a web developer who can use React but does not understand HTTP, the DOM, or how a browser renders a page. Framework knowledge is useful, but the fundamentals are what enable you to solve novel problems. The same principle applies to agent engineering.</p>
+<h2>Course Structure</h2>
+<p>The course is organized into four phases, each building on the last.</p>
+<h3>Phase 1: Foundations</h3>
+<p>The course begins with enough LLM internals to make you an effective agent engineer. You do not need a background in machine learning or neural network theory. What you do need is a working understanding of the mechanisms that determine how an LLM behaves: tokenization (how text becomes numbers), attention (how models decide what to focus on), context windows (the hard limits on what a model can process), and generation parameters (the knobs that control output). From there, the course covers prompt engineering and context engineering — the core discipline of structuring the information an agent receives so that it produces useful output.</p>
+<h3>Phase 2: Build</h3>
+<p>This is the bulk of the course. You start by building a working coding agent in roughly 200 lines of Python. It reads files, edits code, and solves real tasks. It is simple, but it is functional — and it becomes the foundation you extend throughout the course.</p>
+<p>From that starting point, you add components one at a time:</p>
+<ul>
+<li><strong>Context management</strong> — techniques for keeping an agent effective as conversations grow longer than the context window can hold.</li>
+<li><strong>Retrieval (RAG)</strong> — giving agents access to knowledge beyond their training data by retrieving relevant documents at query time.</li>
+<li><strong>Memory</strong> — persisting information across sessions so that an agent can recall prior interactions.</li>
+<li><strong>Skills</strong> — dynamically loading capabilities into an agent without consuming the entire context budget.</li>
+</ul>
+<p>Each component is built by hand, tested independently, and then integrated into the growing system. The instructor live-codes most of these components during lectures; labs and assignments provide opportunities to build variations yourself.</p>
+<h3>Phase 3: Framework</h3>
+<p>Once you have built all the major components individually, you unify them into a reusable agent framework — your own equivalent of LangChain, built from code you wrote and understand completely. Then you step back and evaluate existing frameworks against what you have built. The questions at this stage are concrete: What does the framework give you that you did not build? What does it hide that you would want control over? Where does it make different design choices, and why?</p>
+<h3>Phase 4: Patterns and Production</h3>
+<p>With a solid foundation in place, the course moves to the patterns that matter for real-world deployment: multi-agent systems (agents coordinating with other agents), autonomy management (deciding how much independence to grant), guardrails and safety (keeping agents reliable and under control), and production architectures (making agents work in real environments with real constraints).</p>
+<h2>Why Coding Agents?</h2>
+<p>The course uses coding agents as its primary running example — not because the course is about coding with AI, but because software development happens to be an exceptionally good environment for demonstrating agent concepts. Programming languages are structured, which plays to an LLM&#39;s strengths. Software engineers use text-based tools — file systems, terminals, version control — which an agent can operate directly. The result is that a coding agent can accomplish a meaningful subset of what a human developer can accomplish, making it a rich and concrete example for every concept the course covers.</p>
+<p>Nothing built in the course is unique to coding agents. The same patterns — tool design, context management, memory, retrieval — apply to agents in any domain.</p>
+<h2>Tools and Prerequisites</h2>
+<p>The course uses <strong>Python</strong> as its primary language. Python is the standard language for AI engineering, and the examples use it throughout. However, deep Python expertise is not required. The code in this course is architecturally interesting, not syntactically complex. If you can write functions, use dictionaries, and handle basic control flow, you have enough Python to follow along. Everything built in the course could be implemented in any language — the patterns are language-agnostic.</p>
+<p>For LLM access, the course uses the <strong>Anthropic API</strong> (Claude). The choice is pragmatic: the API has a clean design surface that makes it straightforward to learn. But the patterns — message roles, system prompts, tool calling, context assembly — transfer directly to OpenAI, Google, and any other provider. The course is not tied to a single vendor.</p>
+<h2>What You Will Be Able to Do</h2>
+<p>By the end of the course, you will be able to:</p>
+<ul>
+<li><strong>Evaluate</strong> new frameworks and tools by understanding what they do under the hood, because you will have built the equivalent yourself.</li>
+<li><strong>Debug</strong> agent behavior at the architectural level — tracing problems through the agent loop rather than guessing at API-level symptoms.</li>
+<li><strong>Design</strong> agents for domains and problems that do not yet have templates or tutorials.</li>
+<li><strong>Decide</strong> when to build custom components versus when to adopt existing tools — a judgment that requires understanding the tradeoffs involved.</li>
+</ul>
+<p>These capabilities are not limited to people who build AI products. Understanding how agents work — how context shapes output, how tools extend capability, how autonomy creates risk — makes you a more effective user of every AI tool you encounter.</p>
+</div>
+</body>
+</html>

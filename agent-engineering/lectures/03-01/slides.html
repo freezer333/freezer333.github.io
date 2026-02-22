@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Working with the API — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Working with the API
+
+---
+
+# From Theory to Practice
+
+Module 2 gave you the mental model — what LLMs are, how they're trained, and what bridges the gap from language model to agent.
+
+This lecture covers the hands-on mechanics of working with LLMs through their APIs. By the end, you'll understand every piece of an API call — what you send, what you get back, and what can go wrong.
+
+.info[Agents are built on top of API calls. You'll interact with these concepts in every project.]
+
+???
+Module 3 shifts from conceptual to practical. Focus on code structure and concrete examples.
+
+---
+
+# Learning Objectives
+
+By the end of this lecture, you will be able to:
+
+1. **Describe** the anatomy of an LLM API call — messages, model, parameters, response
+2. **Explain** the role of system, user, and assistant messages
+3. **Understand** streaming vs. non-streaming responses
+4. **Implement** basic error handling patterns (retries, rate limits, timeouts)
+
+???
+These four objectives take students from "I understand agents conceptually" to "I can make an LLM do something."
+
+---
+class: center, middle, inverse
+# Anatomy of an API Call
+
+---
+
+# What You Send, What You Get Back
+
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-5-20250929",
+    max_tokens=1024,
+    system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user", "content": "What does map() do in Python?"}
+    ]
+)
+```
+
+???
+[2 min] Show actual code structure but keep it readable. Students don't need to memorize the API — they need the mental model of what flows in and out. We'll run this live in a moment.
+
+---
+
+# Breaking Down the Call
+
+**`model`** — Which model to use. Different models have different capabilities, context sizes, speeds, and costs.
+
+--
+
+**`max_tokens`** — The maximum number of tokens the model can generate. Your output budget. Too low and the response gets cut off. Too high and you waste money.
+
+--
+
+**`system`** — The system message. Establishes identity, tools, and behavioral guidelines. The model treats it as foundational context.
+
+--
+
+**`messages`** — The conversation history. An array of messages with roles and content. This is the context window in practice.
+
+???
+[2 min] Walk through each parameter. The key connection: messages = context window. Students will manage this array in every agent they build.
+
+---
+
+# Message Roles
+
+Every message has a role that shapes how the model interprets it:
+
+--
+
+**`system`** — Instructions that frame everything. Operating guidelines. Set once, rarely changed.
+
+--
+
+**`user`** — Messages from the human (or from your orchestration code). The model treats these as requests, questions, or instructions to act on.
+
+--
+
+**`assistant`** — The model's own previous responses. Including these maintains conversational continuity.
+
+.info[The conversation is the messages array. When you build an agent, you'll manage this array yourself — appending user messages, assistant responses, and tool results. The array **is** the context window.]
+
+???
+[2 min] Emphasize that "user" role isn't always a human — agent orchestration code also sends "user" messages (tool results). This will make more sense when they see tool calling.
+
+---
+
+# The Response Object
+
+What comes back from the API:
+
+```python
+response.content      # The model's text (or tool use request)
+response.stop_reason  # Why it stopped: "end_turn", "max_tokens", "tool_use"
+response.usage        # Token counts: input_tokens, output_tokens
+```
+
+--
+
+**`stop_reason`** is critical for agents:
+
+- `end_turn` — the model is done talking
+- `tool_use` — the model wants to call a tool (your signal to execute and continue the loop)
+- `max_tokens` — response was cut off (you may need to increase the budget)
+
+--
+
+**`usage`** tells you how many tokens were consumed — for cost tracking and detecting context limits.
+
+???
+[2 min] The stop_reason → agent loop connection is the key insight. tool_use is the mechanism that makes the agent loop work — students will see this in detail in Module 4.
+
+---
+class: center, middle, inverse
+# Live Coding
+## `hello_api.py`
+
+???
+[3-4 min] Switch to the terminal. Open hello_api.py and walk through it line by line before running.
+
+---
+
+# Live Demo: Your First API Call
+
+.small[
+```python
+import anthropic
+
+client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY from environment
+
+response = client.messages.create(
+*   model="claude-sonnet-4-5-20250929",
+*   max_tokens=1024,
+*   system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user", "content": "What does map() do in Python?"}
+    ]
+)
+
+print(response.content[0].text)
+print(response.stop_reason)        # "end_turn"
+print(response.usage.input_tokens)  # How many tokens we sent
+print(response.usage.output_tokens) # How many tokens came back
+```
+]
+
+.callout[Run `hello_api.py` and examine the response object — content, stop_reason, and usage. These three fields are what you'll inspect on every API call.]
+
+???
+Walk through the code, then run `python hello_api.py`. Point out: (1) the client reads the API key from the environment, (2) the response has structure, not just text, (3) usage tells you exactly what you're paying for.
+
+---
+class: center, middle, inverse
+# Conversation History as Context
+
+---
+
+# The Messages Array Is Everything
+
+From Lecture 2.1: "If it's not in the context, it doesn't exist."
+
+Here's what that looks like in practice:
+
+```python
+messages = [
+    {"role": "user", "content": "What's the capital of France?"},
+    {"role": "assistant", "content": "The capital of France is Paris."},
+    {"role": "user", "content": "What's its population?"}
+]
+```
+
+--
+
+The model sees the entire conversation. It knows "its" refers to Paris because the previous exchange is in context.
+
+Remove the first two messages, and the model has no idea what "its" means.
+
+???
+[2 min] Simple example first. This is obvious for chat. The next slide shows why it gets interesting for agents.
+
+---
+
+# How Agents Build Context
+
+Agent conversations grow with tool calls and results:
+
+.small[
+```python
+messages = [
+    {"role": "user", "content": "Fix the bug in main.py"},
+    {"role": "assistant", "content": "[tool_use: read_file('main.py')]"},
+    {"role": "user", "content": "[tool_result: contents of main.py...]"},
+    {"role": "assistant", "content": "I see the issue. [tool_use: edit_file(...)]"},
+    {"role": "user", "content": "[tool_result: file edited successfully]"},
+    {"role": "assistant", "content": "I've fixed the off-by-one error..."}
+]
+```
+]
+
+--
+
+Every tool call and every tool result becomes a message. A single user request might generate 10, 20, 50 messages.
+
+.warning[This is why context management matters. The messages array grows and grows. Attention is finite, context degrades. We'll spend a lot of time on this.]
+
+???
+[2 min] Connect the conceptual (attention budget, context rot from Lecture 2.1) to the practical (the messages array literally getting longer with every tool call). This sets up context engineering later.
+
+---
+class: center, middle, inverse
+# Live Coding
+## `conversation.py`
+
+???
+[3-4 min] Switch to terminal. Walk through conversation.py — the chat() function, how messages accumulate, then run it.
+
+---
+
+# Live Demo: Multi-Turn Conversation
+
+.small[
+```python
+messages = []
+
+def chat(user_message):
+    messages.append({"role": "user", "content": user_message})
+    response = client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+*       system="You are a concise assistant. Keep answers to 1-2 sentences.",
+*       messages=messages
+    )
+    assistant_message = response.content[0].text
+*   messages.append({"role": "assistant", "content": assistant_message})
+    return assistant_message, response.usage
+```
+]
+
+--
+
+**Watch the token count grow with each turn** — the full history is re-sent every time.
+
+???
+Run conversation.py. Point out: (1) the messages array grows after each turn, (2) input tokens increase because the full history is resent, (3) "its" in turn 2 works because turn 1 is in context. Print the messages array at the end to show the full context.
+
+---
+class: center, middle, inverse
+# Streaming and Error Handling
+
+---
+
+# Streaming Responses
+
+By default, you send a request and wait for the complete response. But LLMs generate tokens one at a time — you can receive them as they're generated.
+
+--
+
+Why streaming matters:
+
+- **User experience** — text appears in real time instead of a blank screen
+- **Time to first token** — first token in milliseconds, even if the full response takes seconds
+- **Agent decisions** — detect tool calls as they start, rather than waiting for the full response
+
+--
+
+.info[For agents, streaming is optional — you can wait for the complete response. But for user-facing applications, streaming is almost always the right choice.]
+
+???
+[2 min] Keep it conceptual. Students don't need to implement streaming yet. They need to know it exists and why it matters.
+
+---
+
+# What Goes Wrong
+
+API calls fail. They fail more often than you'd expect, especially under load.
+
+--
+
+.split-left[
+### Rate Limits (429)
+Too many requests. Wait and retry with exponential backoff.
+
+### Timeouts
+Model taking too long. Complex prompts or large contexts. Set reasonable timeouts.
+]
+
+.split-right[
+### Malformed Responses
+Output isn't the format you expected. Text when you expected a tool call, or invalid JSON. Validate before acting.
+
+### Overloaded (529)
+Service at capacity. Back off and retry — same pattern as rate limits.
+]
+
+<div class="clear"></div>
+
+???
+[2 min] Students will encounter all of these errors in the lab. Name the specific HTTP codes so they recognize them.
+
+---
+
+# The Retry Pattern
+
+A simple but essential pattern for every agent:
+
+```python
+for attempt in range(max_retries):
+    try:
+        response = client.messages.create(...)
+        return response
+    except RateLimitError:
+        wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+        time.sleep(wait_time)
+raise Exception("Max retries exceeded")
+```
+
+--
+
+**Exponential backoff**: wait longer after each failure. Polite to the API and effective in practice.
+
+.callout[Agents that don't handle errors gracefully crash in production. Implement error handling from the start.]
+
+???
+[2 min] The retry pattern is something students will copy into every project. Show the actual code — this is one of the few patterns worth memorizing.
+
+---
+
+# Live Demo: `retry_pattern.py`
+
+The complete retry function with proper error handling:
+
+.small[
+```python
+def call_with_retry(messages, system="", max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1024, system=system, messages=messages
+            )
+            return response
+*       except anthropic.RateLimitError:
+            wait_time = 2 ** attempt
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+*       except anthropic.APIStatusError as e:
+*           if e.status_code == 529:  # Overloaded
+                wait_time = 2 ** attempt
+                time.sleep(wait_time)
+            else:
+                raise
+    raise Exception(f"Max retries ({max_retries}) exceeded")
+```
+]
+
+???
+[2 min] Walk through the retry function. Highlight: (1) RateLimitError is the most common, (2) 529 = overloaded, same treatment, (3) other errors we don't retry — a 401 means your key is wrong. The complete file is retry_pattern.py — students should keep this as a utility.
+
+---
+
+# Key Takeaways
+
+Three things to remember from this lecture:
+
+--
+
+**1. The API call has a clear anatomy**
+
+Model, system prompt, messages in — content, stop_reason, usage out.
+
+--
+
+**2. The messages array is the context window**
+
+Every message, every tool result, every response — it all goes in the array. The array is everything.
+
+--
+
+**3. Build error handling from day one**
+
+Retries with exponential backoff. Validate responses. Don't trust that the API will always work.
+
+???
+These three points are the practical foundation. Everything from here builds on this understanding.
+
+---
+
+# Coming Up Next
+
+**Lecture 3.2: The Model Landscape**
+
+Which model should you actually use? How do you choose between Haiku, Sonnet, and Opus — or between providers entirely? And what does it all cost?
+
+???
+Brief transition. Lecture 3.2 is a shorter, practical orientation before diving back into API mechanics with temperature and sampling.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

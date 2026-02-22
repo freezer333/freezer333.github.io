@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>How LLMs Actually Work — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+    <style>
+        .nn-diagram text { font-family: 'Roboto', sans-serif; }
+        .transformer-diagram text { font-family: 'Roboto', sans-serif; }
+        .attention-diagram text { font-family: 'Roboto', sans-serif; }
+    </style>
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# How LLMs Actually Work
+
+---
+
+# What Do You Need to Know About LLMs?
+
+Before we build anything, you need a working mental model of the thing at the center of every agent — the **LLM**.
+
+--
+
+This is not a deep learning course. We're not going to derive backpropagation or implement attention from scratch.
+
+--
+
+We *are* going to give you enough understanding to **reason about why LLMs behave the way they do**.
+
+--
+
+.info[You need practical understanding, not theory for theory's sake. This foundation will help you make better decisions as an agent developer.]
+
+???
+Practical understanding focused on behavior and decision-making.
+
+---
+class: center, middle, inverse
+# Under the Hood (Briefly)
+
+---
+
+# Neural Networks in 60 Seconds
+
+At its core, an LLM is a **neural network** — a mathematical function with billions of adjustable numbers called *parameters* or *weights*.
+
+<div style="text-align:center; padding: 0.5em 0">
+<svg class="nn-diagram" width="680" height="220" viewBox="0 0 680 220">
+  <defs>
+    <marker id="nn-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#64748b"/></marker>
+  </defs>
+  <!-- Input layer -->
+  <circle cx="80" cy="50" r="18" fill="#e8f4fd" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="80" cy="110" r="18" fill="#e8f4fd" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="80" cy="170" r="18" fill="#e8f4fd" stroke="#3b82f6" stroke-width="2"/>
+  <text x="80" y="215" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500">Input</text>
+  <text x="80" y="230" text-anchor="middle" font-size="10" fill="#94a3b8">(tokens)</text>
+  <!-- Hidden layer 1 -->
+  <circle cx="240" cy="35" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="240" cy="85" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="240" cy="135" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="240" cy="185" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="240" y="215" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500">Hidden layers</text>
+  <text x="240" y="230" text-anchor="middle" font-size="10" fill="#94a3b8">(billions of weights)</text>
+  <!-- Hidden layer 2 -->
+  <circle cx="400" cy="35" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="400" cy="85" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="400" cy="135" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="400" cy="185" r="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <!-- Output layer -->
+  <circle cx="560" cy="70" r="18" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <circle cx="560" cy="140" r="18" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <text x="560" y="215" text-anchor="middle" font-size="12" fill="#64748b" font-weight="500">Output</text>
+  <text x="560" y="230" text-anchor="middle" font-size="10" fill="#94a3b8">(prediction)</text>
+  <!-- Connections: input to hidden 1 -->
+  <line x1="98" y1="50" x2="220" y2="35" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="50" x2="220" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="50" x2="220" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="110" x2="220" y2="35" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="110" x2="220" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="110" x2="220" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="110" x2="220" y2="185" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="170" x2="220" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="170" x2="220" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="98" y1="170" x2="220" y2="185" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <!-- Connections: hidden 1 to hidden 2 -->
+  <line x1="258" y1="35" x2="380" y2="35" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="35" x2="380" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="85" x2="380" y2="35" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="85" x2="380" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="85" x2="380" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="135" x2="380" y2="85" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="135" x2="380" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="135" x2="380" y2="185" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="185" x2="380" y2="135" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="258" y1="185" x2="380" y2="185" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <!-- Connections: hidden 2 to output -->
+  <line x1="418" y1="35" x2="540" y2="70" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="418" y1="85" x2="540" y2="70" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="418" y1="85" x2="540" y2="140" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="418" y1="135" x2="540" y2="70" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="418" y1="135" x2="540" y2="140" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+  <line x1="418" y1="185" x2="540" y2="140" stroke="#cbd5e1" stroke-width="1" marker-end="url(#nn-arrow)"/>
+</svg>
+</div>
+
+Each connection has a **weight** — the model "learns" by adjusting these weights during training.
+
+--
+
+The model's "knowledge" — everything it knows about language, code, reasoning — is **stored in those weights**. No database, no lookup table. Billions of numbers, learned from patterns in training data.
+
+???
+Key insight: knowledge stored in weights learned from training data. No hidden databases. The diagram shows a simplified view — real LLMs have hundreds of layers with billions of parameters.
+
+---
+
+# What Changed with Transformers?
+
+Before transformers (2017), language models were **sequential** — they processed text one word at a time, left to right, passing a summary forward at each step.
+
+<div style="text-align:center; padding: 0.3em 0">
+<svg class="transformer-diagram" width="700" height="100" viewBox="0 0 700 100">
+  <defs><marker id="t-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#64748b"/></marker></defs>
+  <text x="20" y="18" font-size="11" fill="#64748b" font-weight="500">Sequential (RNN):</text>
+  <rect x="20" y="30" width="80" height="40" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="60" y="55" text-anchor="middle" font-size="12" fill="#334155">The</text>
+  <line x1="100" y1="50" x2="140" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#t-arrow)"/>
+  <rect x="145" y="30" width="80" height="40" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="185" y="55" text-anchor="middle" font-size="12" fill="#334155">capital</text>
+  <line x1="225" y1="50" x2="265" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#t-arrow)"/>
+  <rect x="270" y="30" width="80" height="40" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="310" y="55" text-anchor="middle" font-size="12" fill="#334155">of</text>
+  <line x1="350" y1="50" x2="390" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#t-arrow)"/>
+  <rect x="395" y="30" width="80" height="40" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="435" y="55" text-anchor="middle" font-size="12" fill="#334155">France</text>
+  <line x1="475" y1="50" x2="515" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#t-arrow)"/>
+  <rect x="520" y="30" width="80" height="40" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="560" y="55" text-anchor="middle" font-size="12" fill="#334155">is</text>
+  <line x1="600" y1="50" x2="640" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#t-arrow)"/>
+  <text x="655" y="55" font-size="14" fill="#334155" font-weight="600">???</text>
+  <text x="350" y="90" text-anchor="middle" font-size="10" fill="#ef4444" font-style="italic">Each step only sees a compressed summary of what came before</text>
+</svg>
+</div>
+
+The problem: by the time the model reaches "is", the word "capital" has been compressed through several steps. **Distant connections get lost.**
+
+???
+The sequential bottleneck was the fundamental limitation. Information degrades as it passes through the chain.
+
+---
+
+# The Transformer Architecture
+
+Transformers process **all tokens simultaneously** — every token can directly connect to every other token through **attention**.
+
+<div style="text-align:center; padding: 0.3em 0">
+<svg class="transformer-diagram" width="700" height="180" viewBox="0 0 700 180">
+  <text x="20" y="18" font-size="11" fill="#64748b" font-weight="500">Transformer (parallel):</text>
+  <!-- Token boxes — positioned lower to leave room for arcs above -->
+  <rect x="60" y="95" width="80" height="40" rx="6" fill="#e8f4fd" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="100" y="120" text-anchor="middle" font-size="12" fill="#334155">The</text>
+  <rect x="185" y="95" width="80" height="40" rx="6" fill="#e8f4fd" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="225" y="120" text-anchor="middle" font-size="12" fill="#334155">capital</text>
+  <rect x="310" y="95" width="80" height="40" rx="6" fill="#e8f4fd" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="350" y="120" text-anchor="middle" font-size="12" fill="#334155">of</text>
+  <rect x="435" y="95" width="80" height="40" rx="6" fill="#e8f4fd" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="475" y="120" text-anchor="middle" font-size="12" fill="#334155">France</text>
+  <rect x="560" y="95" width="80" height="40" rx="6" fill="#e8f4fd" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="600" y="120" text-anchor="middle" font-size="12" fill="#334155">is</text>
+  <!-- Attention arcs above the boxes -->
+  <!-- capital ↔ France (strong — semantic pair) -->
+  <path d="M 225 95 Q 350 30 475 95" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-opacity="0.6"/>
+  <!-- is → capital (strong) -->
+  <path d="M 600 95 Q 412 20 225 95" fill="none" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.5"/>
+  <!-- is → France (strong) -->
+  <path d="M 600 95 Q 537 55 475 95" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-opacity="0.6"/>
+  <!-- The → of (weak) -->
+  <path d="M 100 95 Q 225 65 350 95" fill="none" stroke="#93c5fd" stroke-width="1" stroke-opacity="0.35"/>
+  <!-- The → capital (weak) -->
+  <path d="M 100 95 Q 162 72 225 95" fill="none" stroke="#93c5fd" stroke-width="1" stroke-opacity="0.35"/>
+  <!-- of → France (weak) -->
+  <path d="M 350 95 Q 412 72 475 95" fill="none" stroke="#93c5fd" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="350" y="160" text-anchor="middle" font-size="10" fill="#3b82f6" font-style="italic">Every token attends directly to every other — no information bottleneck</text>
+</svg>
+</div>
+
+--
+
+Every major LLM — GPT, Claude, Llama, Gemini — is a transformer. The differences are in size, training data, and fine-tuning, not fundamental architecture.
+
+???
+The visual contrast between sequential and parallel processing is the key takeaway. Don't get into multi-head attention details here — that's covered in supplemental material.
+
+---
+
+# Go Deeper on Your Own
+
+That's the flyover. If you want the math — backpropagation, gradient descent, multi-head attention, layer normalization — check the **Additional Resources** linked from this lecture's summary page.
+
+--
+
+For this course, the intuitive understanding we'll build over the next few slides is what you need.
+
+???
+Direct interested students to the supplemental resources listed on this lecture's page.
+
+---
+class: center, middle, inverse
+# Next-Token Prediction
+
+---
+
+# One Token at a Time
+
+LLMs have one fundamental operation:
+
+--
+
+> **They predict the next token.**
+
+--
+
+Given a sequence of tokens, the model produces a probability distribution over what comes next. It picks one. Then it takes the whole sequence *including* that new token, and predicts the next one.
+
+--
+
+Over and over. One token at a time. Left to right.
+
+--
+
+When Claude produces a paragraph of text, that paragraph was generated **one token at a time** — each token conditioned on everything that came before it.
+
+???
+The simplicity is the foundation. Coherence, instruction-following, and reasoning all emerge from this mechanism.
+
+---
+
+# What's a Token?
+
+Tokens aren't quite words. They're **sub-word pieces** — fragments the model has learned are useful building blocks.
+
+--
+
+- Common words like "the" or "and" → single tokens
+- Less common words like "tokenization" → "token" + "ization"
+- Code tokenizes differently — variable names, brackets, operators each consume tokens
+
+--
+
+**Rule of thumb:** 1 token ≈ ¾ of a word in English
+
+--
+
+.callout[As an agent developer, you'll think about tokens constantly. Every tool result, every conversation message, every piece of context costs tokens. **Tokens are your budget.**]
+
+???
+Tokens are the unit of cost and context. Different content types tokenize differently.
+
+---
+class: center, middle, inverse
+# Attention
+
+---
+
+# How Does It Know What Matters?
+
+If the model is just predicting the next token, how does it produce coherent paragraphs? How does it follow instructions? How does it "remember" something you said 50 messages ago?
+
+--
+
+The answer is **attention** — the mechanism at the heart of every modern LLM.
+
+???
+Establish the problem, then introduce the mechanism.
+
+---
+
+# Attention, Intuitively
+
+When the model is deciding what token comes next, it doesn't weigh all previous tokens equally. It **attends** to the ones most relevant to the current prediction.
+
+--
+
+*"The capital of France is ___."*
+
+--
+
+The model attends heavily to **"capital"** and **"France"** — those carry the signal. It attends less to "The" and "of" — structural but not informative.
+
+???
+The "capital of France" example demonstrates how attention weights information relevance.
+
+---
+
+# How Attention Works
+
+Think of it like a search engine. Each token produces three things:
+
+- **Query (Q):** the search — *"what information do I need right now?"*
+- **Key (K):** the label — *"here's what I'm about"*
+- **Value (V):** the content — *"here's the actual information I carry"*
+
+--
+
+The model compares each Query against every Key to get a **relevance score**, then pulls a weighted mix of the matching Values.
+
+???
+The search engine analogy makes Q/K/V concrete. Query = your search terms. Key = the page title (used for matching). Value = the page content (what you actually read). Students don't need to know these are matrix multiplications.
+
+---
+
+# Attention in Action
+
+*"The capital of France is \_\_\_."* — what token comes next?
+
+.split-left[
+**The token "is" generates a Query:**
+*"I need a specific fact — a name that answers the question set up before me."*
+
+That Query is compared against each token's Key:
+
+1. "capital" Key: *geography, type of place* — **strong match**
+2. "France" Key: *country, specific place* — **strong match**
+3. "The" / "of" Keys: *structural* — weak match
+]
+
+.split-right[
+
+| Token | Key | Score |
+|-------|-----|-------|
+| The | article | 0.05 |
+| **capital** | **geography** | **0.45** |
+| of | preposition | 0.05 |
+| **France** | **place** | **0.45** |
+]
+
+<div class="clear"></div>
+
+???
+The Query/Key descriptions here are intuitive glosses — in reality these are numeric vectors, not English phrases. But this conveys the right mental model: the Query encodes what kind of information is needed, the Keys encode what kind of information each token offers.
+
+---
+
+# From Attention to Prediction
+
+.split-left[
+**Attention focused on:**
+
+| Token | Key | Score |
+|-------|-----|-------|
+| The | article | 0.05 |
+| **capital** | **geography** | **0.45** |
+| of | preposition | 0.05 |
+| **France** | **place** | **0.45** |
+]
+
+.split-right[
+**Next-token probabilities:**
+
+| Token | Probability |
+|-------|------------|
+| **Paris** | **0.92** |
+| Lyon | 0.03 |
+| Marseille | 0.01 |
+| the | 0.01 |
+| ... | ... |
+
+The blended Values from "capital" and "France" produce a distribution heavily favoring **Paris** — the model learned this association from training data.
+]
+
+<div class="clear"></div>
+
+???
+This connects attention back to next-token prediction. The attention scores determine which Values get pulled, and those Values shape the probability distribution. Paris dominates because the model saw "capital of France" → "Paris" thousands of times during training.
+
+---
+
+# Multiple Attention Heads
+
+One Q/K/V pass finds one type of relationship. But language has many types of relationships happening simultaneously.
+
+--
+
+An **attention head** is a single Q/K/V pass with its own learned weights. Engineers decide **how many heads** each layer gets — typically 64 to 128 in a frontier LLM. But **what each head learns to look for** emerges from training.
+
+--
+
+For *"The capital of France is \_\_\_"*, different heads in the same layer might learn to find:
+
+- **Head A:** "capital" + "France" → *factual relationship*
+- **Head B:** "is" + "The" → *grammatical structure*
+- **Head C:** nearby tokens → *word order*
+
+--
+
+No one programs these specializations. The model discovers them during training — whichever attention patterns reduce prediction error get reinforced.
+
+???
+Important distinction: the number of heads is a hyperparameter (design choice). What each head specializes in is learned. Researchers have studied this — some heads reliably track syntax, others track coreference, others track factual associations.
+
+---
+
+# Layers Build Understanding
+
+A frontier LLM stacks attention into **layers** — typically 80 to 120 of them. The output of one layer feeds into the next.
+
+--
+
+Each layer builds on the one before it:
+
+- **Early layers:** basic patterns — grammar, word proximity, parts of speech
+- **Middle layers:** relationships — "capital" relates to "France" as a geographic fact
+- **Later layers:** complex reasoning — combining facts to produce "Paris"
+
+--
+
+With 80+ layers of 100+ heads each, the model runs **thousands of Q/K/V passes** over the input — each one refining the representation further.
+
+--
+
+.info[You don't need to implement any of this. The intuition: the model builds meaning through repeated rounds of "what in this context is relevant?" — and every answer is *learned* from training data.]
+
+???
+The layer analogy is like successive rounds of analysis. Each round has access to the conclusions of the previous round. Keep it at this level — don't get into residual connections or layer normalization.
+
+---
+
+# Why Attention Matters for Agents
+
+Attention is a **finite resource**. As context gets longer, the model's ability to focus on the right information degrades.
+
+--
+
+- Context windows have a **hard token limit** (128K, 200K+ tokens)
+- Even *within* that limit, **quality degrades** as context grows
+- Information at the beginning and end gets more attention than the middle — the **"lost in the middle"** problem
+
+--
+
+.warning[Every decision you make as an agent developer — what to include in context, what to leave out, when to summarize — is fundamentally about **managing this attention budget**.]
+
+???
+The "lost in the middle" phenomenon has direct implications for context design. Longer context degrades quality, not just cost.
+
+---
+class: center, middle, inverse
+# The Context Window
+
+---
+
+# Everything Is Context
+
+When your agent calls the LLM, it sends a **context window** — everything the model has to work with:
+
+--
+
+- **System prompt** — who the agent is, what tools it has, how it should behave
+- **Conversation history** — every message exchanged so far
+- **Tool results** — file contents, search results, anything gathered
+- **Current user message** — what the human is asking right now
+
+--
+
+The model sees *all* of this, reasons over *all* of this, and predicts its response based on *all* of this. **Nothing else.**
+
+--
+
+No memory outside this window. No hidden state. If it's not in the context, it doesn't exist.
+
+???
+Core principle: if information is not in the context window, the model cannot access it.
+
+---
+
+# The Agent Developer's Job
+
+Context engineering is at the heart of agent development. You're curating the information the LLM reasons over.
+
+--
+
+- **Too much context** → attention diluted, quality drops, costs rise
+- **Too little context** → model hallucinates to fill gaps
+- **Wrong context** → model is led astray by irrelevant information
+- **Right context** → model performs remarkably well
+
+--
+
+.callout[The sweet spot — **the smallest possible set of high-signal tokens** — is what we'll spend a lot of this course learning to find.]
+
+???
+The context window is the agent developer's primary design space for controlling behavior.
+
+---
+
+# Coming Up Next
+
+**Lecture 2.2: How LLMs Are Trained**
+
+Now you know *what* LLMs do. Next: *how did they learn to do it?* And why their training data explains a lot of the behaviors you've probably already noticed.
+
+???
+Transition to next lecture on training data and model behavior.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

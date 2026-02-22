@@ -1,0 +1,179 @@
+/* Agent Engineering — Shared Slide Theme
+   Used by all RemarkJS lecture slides.
+   Edit this file to change visual styling across all lectures. */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+    --navy: #0f172a;
+    --navy-mid: #1e293b;
+    --slate: #334155;
+    --accent: #3b82f6;
+    --accent-light: #93c5fd;
+    --accent-bg: #eff6ff;
+    --warm: #f59e0b;
+    --warm-bg: #fffbeb;
+    --red: #ef4444;
+    --red-bg: #fef2f2;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --bg: #ffffff;
+    --border: #e2e8f0;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    color: var(--text);
+}
+
+h1 {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 0.3em;
+}
+
+h2, h3 {
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    color: var(--slate);
+}
+
+.remark-code, .remark-inline-code {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.remark-inline-code {
+    background: #f1f5f9;
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.88em;
+    color: var(--slate);
+}
+
+/* Inverse slides — title and section dividers */
+.inverse {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+    color: #e2e8f0;
+}
+.inverse h1 {
+    color: #ffffff;
+    font-size: 2.2em;
+    line-height: 1.2;
+}
+.inverse h2 {
+    color: var(--accent-light);
+    font-weight: 400;
+    font-size: 1.3em;
+}
+.inverse .subtitle {
+    color: var(--accent-light);
+    font-size: 1.1em;
+    font-weight: 300;
+    margin-top: 0.8em;
+}
+
+/* Accent bar at top of content slides */
+.remark-slide-content:not(.inverse) {
+    border-top: 4px solid var(--accent);
+    padding-top: 1.5em;
+}
+
+/* Callout boxes — display:block + clear:both prevents:
+   1. Inline span overlap artifacts from RemarkJS .classname[] rendering
+   2. Callouts overlapping floated split-left/split-right columns */
+.callout, .info, .warning {
+    display: block;
+    clear: both;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.95em;
+}
+.callout {
+    background-color: var(--warm-bg);
+    border-left: 4px solid var(--warm);
+}
+.info {
+    background-color: var(--accent-bg);
+    border-left: 4px solid var(--accent);
+}
+.warning {
+    background-color: var(--red-bg);
+    border-left: 4px solid var(--red);
+}
+
+/* Two-column layout */
+.split-left {
+    float: left;
+    width: 47%;
+}
+.split-right {
+    float: right;
+    width: 47%;
+}
+.clear { clear: both; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 0.8em 0; }
+th, td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+th {
+    background-color: var(--navy);
+    color: white;
+    font-weight: 500;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+td {
+    font-size: 0.92em;
+}
+tr:nth-child(even) td {
+    background-color: #f8fafc;
+}
+
+/* Blockquotes — definitions and key quotes */
+blockquote {
+    border-left: 4px solid var(--accent);
+    padding: 0.6em 1.2em;
+    margin: 1em 0;
+    background-color: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: var(--slate);
+}
+
+/* Slide numbers */
+.remark-slide-number {
+    font-size: 0.7em;
+    opacity: 0.3;
+    color: var(--text-light);
+}
+
+/* Footnote positioning */
+.footnote {
+    position: absolute;
+    bottom: 1em;
+    left: 2em;
+    font-size: 0.75em;
+    color: var(--text-light);
+}
+
+/* Utility classes */
+.small { font-size: 0.85em; }
+.smaller { font-size: 0.75em; }
+.dim { color: var(--text-light); }
+.accent { color: var(--accent); }
+
+/* List styling */
+ul { line-height: 1.7; }
+li { margin-bottom: 0.2em; }
+
+/* Strong emphasis */
+strong { color: var(--navy); }

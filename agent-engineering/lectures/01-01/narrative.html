@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What is an Agent? — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 1.1</a></div></nav>
+<div class="page_content"><h1>What Is an Agent?</h1>
+<p>An agent is software that perceives its environment, reasons about what to do, and takes autonomous action to achieve goals. This definition is not new — the perception-reasoning-action loop has been a foundational concept in artificial intelligence for decades. What is new is that large language models have made it practical. Before LLMs, the reasoning component of an agent had to be hand-coded: explicit rules, decision trees, if-else chains. That approach worked in tightly controlled environments but collapsed in the face of ambiguity. LLMs changed this by providing a general-purpose reasoning engine that can interpret unstructured input and decide what to do next.</p>
+<p>This lecture introduces the agent loop, distinguishes agents from related systems (chatbots, assistants, copilots), and establishes a critical architectural insight: the LLM generates text — your code executes actions.</p>
+<hr>
+<h2>The Perception-Reasoning-Action Loop</h2>
+<p>Every agent follows a three-phase cycle:</p>
+<p><strong>Perceive.</strong> The agent receives information from its environment. This may include user messages, file contents, API responses, search results, or database queries. Perception is the input phase — the agent gathers whatever data it needs to understand its current situation.</p>
+<p><strong>Reason.</strong> The agent analyzes the situation, considers its options, and decides what to do next. In an LLM-powered agent, this is the model call. The LLM receives a prompt constructed from the agent&#39;s perceptions and generates a response that includes either a direct answer or a request to take some action.</p>
+<p><strong>Act.</strong> The agent executes an action in the world — creating or modifying files, calling APIs, running code, sending messages. After acting, the agent returns to the perception phase: it observes the result of its action and the cycle continues.</p>
+<p>This loop is universal. Every agent, regardless of complexity, follows this pattern. A simple FAQ bot and a sophisticated coding agent both cycle through perceive, reason, and act. When something goes wrong with an agent, the problem lies in one of these three phases, and identifying which one is the first step in debugging.</p>
+<hr>
+<h2>Agents, Chatbots, Assistants, and Copilots</h2>
+<p>The term &quot;agent&quot; sits at one end of a spectrum of AI-powered systems. The distinctions are not rigid, but they reflect meaningful differences in capability and autonomy.</p>
+<p>A <strong>chatbot</strong> is the simplest form. It receives text input, performs pattern matching or basic language processing, and returns text. It cannot take action outside the conversation. A customer service FAQ bot that answers questions about store hours is a chatbot.</p>
+<p>An <strong>assistant</strong> adds limited context awareness and limited action capability. It may access a calendar, a knowledge base, or a set of simple commands. Setting a timer or adding an item to a shopping list falls within the scope of an assistant. The range of actions is narrow and predefined.</p>
+<p>A <strong>copilot</strong> operates alongside a user within their existing workflow. It observes what the user is doing — writing code, drafting a document — and offers suggestions. The defining characteristic of a copilot is that the human retains control over execution. GitHub Copilot suggests code completions; the developer presses Tab to accept. The copilot suggests, the human executes.</p>
+<p>An <strong>agent</strong> takes autonomous action. Given a goal (&quot;fix the authentication bug&quot;), an agent reads code, identifies the problem, edits files, and runs tests — without waiting for approval at each step. The human sets the goal; the agent handles execution. This autonomy is the defining characteristic that separates agents from everything else on the spectrum.</p>
+<hr>
+<h2>The LLM Never Executes</h2>
+<p>This is one of the most important architectural concepts in agent engineering, and one of the most commonly misunderstood.</p>
+<p>The LLM does not touch the filesystem. It does not execute code. It does not send emails or call APIs. The LLM does exactly one thing: it generates text.</p>
+<p>When a user asks a coding agent to &quot;create a file called hello.py,&quot; the LLM does not create any file. It generates text that represents a request to create a file — something like a structured tool call specifying the filename and contents. The agent code, which the developer writes, parses that text and performs the actual file creation. The LLM proposes; the agent disposes.</p>
+<p>This separation has several important consequences:</p>
+<p><strong>Security.</strong> The agent developer controls what actions are possible. The LLM can only request actions that the developer has implemented as tools. If no tool exists to delete files, the LLM cannot delete files, regardless of what it generates.</p>
+<p><strong>Reliability.</strong> Because the agent code sits between the LLM and the real world, it can validate requests before executing them. If the LLM hallucinates a dangerous command, the agent can intercept it.</p>
+<p><strong>Debugging.</strong> When something fails, the developer needs to determine whether the LLM generated an incorrect request or whether the execution code failed. These are different problems with different solutions. Understanding the separation makes diagnosis possible.</p>
+<p><strong>Privacy.</strong> The LLM often runs on a remote server. The execution environment — where files are read, code is run, and actions are taken — is typically local. Data sent to the LLM for reasoning may be different from data available to the execution environment. Understanding this boundary matters for handling sensitive information.</p>
+<hr>
+<h2>The Complete Agent Loop</h2>
+<p>The perception-reasoning-action cycle, when implemented in code, takes the following form:</p>
+<ol>
+<li><strong>User input.</strong> The user provides a goal or instruction.</li>
+<li><strong>Context assembly.</strong> The agent constructs a prompt by combining the user&#39;s message with a system prompt, conversation history, and any other relevant data (retrieved documents, tool descriptions, prior results). This step — context engineering — becomes increasingly important as agents grow in sophistication.</li>
+<li><strong>LLM call.</strong> The assembled context is sent to the LLM, which generates a response.</li>
+<li><strong>Parse response.</strong> The agent examines the response. If the LLM returned plain text with no tool requests, the agent skips to step 7. If the response contains a tool call, the agent continues to step 5.</li>
+<li><strong>Execute tools.</strong> The agent runs the requested tool and collects the result.</li>
+<li><strong>Append results.</strong> The tool result is added to the conversation history, and the agent returns to step 3 for another LLM call.</li>
+<li><strong>Return to user.</strong> The agent displays the final response and waits for the next input.</li>
+</ol>
+<p>Steps 3 through 6 form the <strong>inner loop</strong> — the agent&#39;s internal work cycle, which may iterate many times for a single user request. Steps 1 and 7 form the <strong>outer loop</strong> — the back-and-forth conversation between user and agent.</p>
+<p>Consider a concrete example. A user asks a coding agent: &quot;What files are in my project?&quot; The LLM cannot answer this directly because it has no access to the filesystem. Instead, it generates a tool call requesting a file listing. The agent executes that tool, collects the result, and sends it back to the LLM. The LLM now has the information it needs and generates a plain-text response: &quot;Your project contains three files: main.py, utils.py, and README.md.&quot; The inner loop ran twice — one iteration to call the tool, one to formulate the answer — even though the user asked a single question. This is normal. A more complex request might involve dozens of inner-loop iterations as the agent reads files, makes edits, runs tests, and iterates.</p>
+<hr>
+<h2>Why Now: The 2022–2024 Shift</h2>
+<p>Agents are not a new idea. Researchers have built software agents for decades, and in narrowly scoped environments — automated phone trees, rule-based customer service systems — they worked adequately. The limitation was always the reasoning component. Hand-coded logic could only handle situations the programmer anticipated in advance.</p>
+<p>The shift began around 2022, when large language models reached a threshold of reliability that made them viable as reasoning engines. GPT-3 had shown promise but was not consistent enough for autonomous action. ChatGPT in 2022 demonstrated that models could sustain coherent multi-turn conversations and interpret unstructured natural language input. By 2023, models like GPT-4 and Claude demonstrated reliable instruction-following and, critically, the ability to produce structured output — specifically, tool calls that agent code could parse and execute.</p>
+<p>This was the key change. Once models could reliably output structured tool requests, and once APIs supported this as a standard feature, developers could build agents that followed the full perception-reasoning-action loop with an LLM as the reasoning engine. The developer&#39;s role shifted: instead of writing the reasoning logic directly, the developer designs the tools, manages the context, and builds the execution infrastructure. The LLM handles the judgment.</p>
+<p>This is both powerful and challenging. The flexibility of LLM reasoning introduces new categories of problems — hallucination, context degradation, unreliable multi-step planning — that the rest of this course addresses.</p>
+</div>
+</body>
+</html>

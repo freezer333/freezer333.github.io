@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>In-Context Learning — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# In-Context Learning
+## and the Limits of Prompting
+
+---
+
+# What Is In-Context Learning?
+
+We've covered the API mechanics — how to make calls, how to control generation.
+
+--
+
+Now: a core capability that enables precise control over LLM behavior.
+
+--
+
+It's called **in-context learning**, and it's the reason you can get an LLM to do remarkably specific things — without training a custom model, without fine-tuning, without any changes to the weights at all.
+
+???
+[1-2 min] Explain the core concept. Students may already use this intuitively (giving examples in prompts), but understanding it as a mechanism helps them use it effectively.
+
+---
+class: center, middle, inverse
+# In-Context Learning
+
+---
+
+# Learning Without Training
+
+You can teach an LLM a new pattern just by **showing it examples in the prompt.**
+
+--
+
+The model's weights don't change. It hasn't been retrained.
+
+--
+
+But it "learns" the pattern from the examples in its context and applies it.
+
+???
+[1 min] State the core idea clearly. The "no weight change" part is important — students should understand this is a property of inference, not training.
+
+---
+
+# Zero-Shot Prompting
+
+Give the instruction with **no examples:**
+
+```
+Classify the sentiment of this review as
+positive, negative, or neutral:
+
+"The food was decent but the service was painfully slow."
+```
+
+--
+
+The model can usually handle this — it understands sentiment from pre-training.
+
+--
+
+But it might format the answer differently than you want, or be **inconsistent** across inputs.
+
+???
+[2 min] Set up the contrast. Zero-shot works but has consistency problems. Few-shot solves that.
+
+---
+
+# Few-Shot Prompting
+
+Give examples first, then the task:
+
+.small[
+```
+Classify the sentiment of each review:
+
+Review: "Absolutely loved it, best meal I've had in years!"
+Sentiment: positive
+
+Review: "It was fine. Nothing special."
+Sentiment: neutral
+
+Review: "The food was decent but the service was painfully slow."
+Sentiment:
+```
+]
+
+--
+
+The model has learned your **exact format**, your **classification style**, and your **standards** — all from examples. No training required.
+
+???
+[2 min] The side-by-side with zero-shot makes the power of few-shot concrete. The model matches the pattern reliably. We'll see this live in a moment.
+
+---
+class: center, middle, inverse
+# Live Coding
+## `zero_vs_few_shot.py`
+
+???
+[3-4 min] Switch to terminal. Run zero_vs_few_shot.py to show the consistency difference.
+
+---
+
+# Live Demo: Zero-Shot vs Few-Shot
+
+.small[
+```python
+def classify_zero_shot(review):
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=50, temperature=0,
+*       messages=[{"role": "user",
+*           "content": f'Classify as positive, negative, or neutral:\n\n"{review}"'}]
+    )
+    return response.content[0].text.strip()
+
+def classify_few_shot(review):
+*   prompt = """Classify as exactly one word: positive, negative, or neutral.
+*
+*   Review: "Loved it, best meal in years!"
+*   Sentiment: positive
+*
+*   Review: "It was fine."
+*   Sentiment: neutral
+*   ...
+*   """
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=10, temperature=0,
+        messages=[{"role": "user", "content": prompt + f'\nReview: "{review}"\nSentiment:'}]
+    )
+    return response.content[0].text.strip()
+```
+]
+
+???
+Run zero_vs_few_shot.py. Have students look at the output table. Zero-shot may return full sentences like "The sentiment is negative." Few-shot returns exactly one word. The format consistency is the point.
+
+---
+
+# What Did You See?
+
+.split-left[
+### Zero-Shot
+- May return full sentences
+- Inconsistent formatting
+- Often correct, but **unpredictable output structure**
+]
+
+.split-right[
+### Few-Shot
+- Returns exactly one word
+- Consistent across all inputs
+- The examples **taught the model your format**
+]
+
+<div class="clear"></div>
+
+.callout[For agents, output format matters as much as output correctness. If your code needs to parse the response, few-shot is almost always worth the token cost.]
+
+???
+[1 min] This is the practical takeaway. Agents parse LLM output — they need predictable formatting. Few-shot gives you that.
+
+---
+
+# Why In-Context Learning Matters for Agents
+
+You can teach your agent new behaviors just by including examples in the prompt:
+
+--
+
+- Teach a **new tool format** by showing example tool calls in the system prompt
+- Establish a **coding style** by including example code
+- Define **output formats** by demonstrating them
+- Correct **specific behaviors** by showing right alongside wrong
+
+--
+
+But there's a cost: **every example consumes tokens.** Three examples at 50 tokens each = 150 tokens permanently in your system prompt.
+
+.info[Few-shot prompting is one of the most reliable techniques you have. Use it when consistency matters more than token efficiency — which, for critical agent behaviors, is most of the time.]
+
+???
+[2 min] Connect few-shot to agent development specifically. The token cost trade-off connects directly to context engineering later.
+
+---
+class: center, middle, inverse
+# When Prompting Hits Its Limits
+
+---
+
+# Prompting Works — Until It Doesn't
+
+In-context learning and clever prompting can get you very far. But there are real limits.
+
+For agent developers, hitting those limits is **inevitable.**
+
+???
+[1 min] Transition to limitations of prompting for agent development.
+
+---
+
+# Limit 1: Context Rot
+
+As the context grows, the model's ability to attend to relevant information **degrades.**
+
+--
+
+For a simple chat, this might mean the model forgets something from 30 messages ago.
+
+--
+
+For an agent running in a loop, it's worse:
+
+.small[
+- Agent reads a file → **500 tokens** added to context
+- Agent reads another file → **500 more tokens**
+- Agent edits a file → old content AND new content in context
+- Agent reads the file again to verify → **another 500 tokens**
+- After 10 tool calls: **5,000+ tokens** of tool results that are no longer relevant
+]
+
+--
+
+.warning[The context fills with **historical** information that was useful at the time but is now noise. The model's attention is spread thinner and thinner.]
+
+???
+[3 min] This is the most important limit for this course. The file-reading example makes the problem concrete.
+
+---
+
+# Limit 2: Conflicting Instructions
+
+As your system prompt gets longer and more detailed, instructions can subtly **contradict** each other.
+
+--
+
+"Be concise" and "Always explain your reasoning" — which one wins?
+
+--
+
+The model doesn't resolve contradictions. It **averages** them, and the result is inconsistent behavior.
+
+???
+[1 min] Quick but important. Students will encounter this when building complex system prompts.
+
+---
+
+# Limit 3: The Single-Context Constraint
+
+Everything must fit in **one context window.**
+
+--
+
+You can't split a task across multiple contexts and have the model maintain coherence.
+
+--
+
+.info[Multi-agent systems work around this — but that's a later topic. For now, understand that you're working within a single, finite context.]
+
+???
+[1 min] Plant the seed for multi-agent architecture without going into detail. Students should feel the constraint.
+
+---
+class: center, middle, inverse
+# From Prompt Engineering
+# to Context Engineering
+
+---
+
+# The Shift
+
+At this point, most students are thinking about **"prompt engineering"** — how to write better prompts.
+
+--
+
+That matters. But I want to reframe your thinking:
+
+--
+
+> **Prompt engineering** asks: "How do I write a better prompt?"
+>
+> **Context engineering** asks: "How do I curate the entire context state — system prompt, conversation history, tool results, external data — so the model has exactly what it needs and nothing it doesn't?"
+
+???
+[2 min] This is the conceptual climax of the lecture. Let the distinction land.
+
+---
+
+# Prompt Engineering ⊂ Context Engineering
+
+The system prompt is **one piece** of the context.
+
+--
+
+For agents, the system prompt might be **5%** of the total context.
+
+--
+
+The other **95%** is conversation history, tool results, and accumulated data.
+
+--
+
+**That's** where quality lives or dies.
+
+???
+[1 min] The 5% / 95% framing makes the subset relationship concrete. Students should understand that optimizing the system prompt alone is insufficient.
+
+---
+
+# The Context Engineering Mindset
+
+**You ask different questions:**
+
+--
+
+- Not "how do I phrase this instruction?" but **"what information does the model need right now?"**
+
+--
+
+- Not "how do I make the prompt longer?" but **"how do I keep the context small and high-signal?"**
+
+--
+
+- Not "why didn't it follow my instruction?" but **"what else is in the context that's competing for attention?"**
+
+???
+[2 min] Each question reframes a common student instinct. The third one is especially useful for debugging.
+
+---
+
+# Managing the Full Lifecycle
+
+.split-left[
+### What enters
+Tool results, messages, examples, retrieved documents
+
+### What stays
+Which messages to preserve, which to summarize, which to keep verbatim
+]
+
+.split-right[
+### What leaves
+Summarization, truncation, compaction — removing what's no longer useful
+
+### What gets priority
+Placement matters: beginning and end of context get more attention than the middle
+]
+
+<div class="clear"></div>
+
+???
+[1 min] Four dimensions of context management. Each of these becomes a concrete technique in later modules.
+
+---
+
+# Context Engineering Defined
+
+> **Context engineering — curating the smallest possible set of high-signal tokens — is the central discipline of agent development.**
+
+--
+
+Everything we build from here — context management, RAG, memory, skills — is a context engineering technique.
+
+--
+
+We're learning to manage the **finite resource** that determines whether your agent is effective or ineffective.
+
+.callout[The entire context matters — system prompt, examples, conversation history, tool results — not just the user's prompt.]
+
+???
+[1 min] This is the thesis statement of the course. Emphasize the scope and importance.
+
+---
+
+# Key Takeaways
+
+--
+
+**1. In-context learning is real and powerful**
+
+You can teach new patterns with examples alone — no training, no fine-tuning.
+
+--
+
+**2. Context degrades as it grows**
+
+Every tool call adds tokens. Stale information accumulates. Quality drops.
+
+--
+
+**3. Context engineering > prompt engineering**
+
+The prompt is 5%. The other 95% is where agent quality lives or dies.
+
+???
+Three takeaways that build on each other. The progression: power → limits → the discipline that manages both.
+
+---
+
+# Module 3 in Review
+
+In this module we went from theory to practice:
+
+--
+
+- **Lecture 3.1** — anatomy of an API call, messages, responses
+- **Lecture 3.2** — the model landscape, tiers, costs, local models
+- **Lecture 3.3** — temperature, sampling, output control
+- **Lecture 3.4** — in-context learning, context rot, context engineering
+
+--
+
+**Next:** we go deeper into context windows, prompt and context engineering techniques, and then we start building.
+
+???
+[1 min] Recap of module topics. Transition to upcoming hands-on work.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

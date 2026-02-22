@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human-Agent Engineering — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 1.2</a></div></nav>
+<div class="page_content"><h1>Human-Agent Engineering</h1>
+<p>The previous lecture established the perception-reasoning-action loop and the architectural separation between the LLM and the agent&#39;s execution code. This lecture turns to the other side of the equation: the human. How a person interacts with an agent — the context they provide, the oversight they maintain, the judgment they exercise — determines whether the agent produces reliable results or unreliable ones. This applies to every kind of agent, not just coding agents.</p>
+<p>The lecture uses agentic coding as a concrete, familiar example to explore a broader set of principles. AI coding agents like Claude Code, Cursor, and GitHub Copilot follow the same perception-reasoning-action loop defined in Lecture 1.1. When a user tells a coding agent to &quot;add input validation to the login form,&quot; the agent perceives the codebase, reasons about what validation to add and where, acts by editing files, and then loops — checking for errors, running tests, and iterating. The mechanics are identical to the general agent loop. What varies is how effectively the human participates.</p>
+<hr>
+<h2>Vibe Coding and Why It Fails</h2>
+<p><strong>Vibe coding</strong> is the practice of giving an AI agent vague instructions, accepting whatever it produces, and hoping for the best. The term, coined by Andrej Karpathy, describes a mode of interaction where the user &quot;fully gives in to the vibes&quot; — watching code appear without understanding it, running it, and moving on.</p>
+<p>Vibe coding can work for throwaway prototypes and personal experiments. It fails for anything that matters, and it fails for three specific reasons.</p>
+<p><strong>LLMs do not know your constraints.</strong> The model has no access to your security requirements, performance targets, coding conventions, or business rules unless you provide them. It will make reasonable-sounding choices based on its training data, but those choices may be wrong for your context. A login page generated without explicit security guidance may omit CSRF protection, expose passwords in the URL, or store session tokens insecurely — not because the model is incapable of implementing these protections, but because it was never told to.</p>
+<p><strong>Quality compounds over time.</strong> A single poorly understood function becomes a fragile foundation. When something breaks, the user cannot debug code they never reviewed. Technical debt from unexamined AI output accumulates faster than human-written debt because the volume of generated code is higher and the comprehension lower.</p>
+<p><strong>The user loses the ability to evaluate.</strong> As unreviewed code accumulates, the codebase becomes intractable. The user becomes dependent on the agent to make any changes — not because the agent is the best tool for the job, but because the user has lost sight of what the code does. This is analogous to starting a new job at a company with a hundred thousand lines of code you have never seen: you may be a capable developer, but your effectiveness is near zero until you understand the system. Vibe coding creates this situation within your own project.</p>
+<p>These failure modes are not specific to coding. A research agent that produces reports the user does not verify, a customer service agent that sends responses the user never reviews, a data analysis agent that generates graphs the user cannot interpret — all exhibit the same pattern. Delegating without understanding leads to brittle, unreliable results.</p>
+<hr>
+<h2>Agent as Expert vs. Agent as Tool</h2>
+<p>There are two fundamental mindsets when working with an agent.</p>
+<p><strong>Agent as expert.</strong> The user treats the agent as the authority. They give it a problem, hope it knows the answer, and accept what comes back. This is the vibe coding mindset generalized. It works when the agent happens to be right — but the user has no way to tell when it is not.</p>
+<p><strong>Agent as tool.</strong> The user is the expert. They use the agent to amplify their own knowledge and abilities. They know what they want before they ask, they understand the domain well enough to catch mistakes, and they take responsibility for evaluating the result.</p>
+<p>The distinction matters because it predicts the trajectory of the collaboration. When the agent is the user&#39;s tool, the user stays in control: they learn from each interaction, their expertise grows, and the quality of what they produce with the agent improves over time. When the agent is the user&#39;s expert, the user is stuck: they cannot distinguish good output from bad, they do not learn anything, and they become increasingly dependent.</p>
+<p>For agent engineers, this framing has a direct design implication. The agents you build should support the &quot;agent as tool&quot; model. They should keep users informed, give them enough visibility to evaluate results, and avoid creating dependence. An agent that leaves its user unable to function without it is a poorly designed agent.</p>
+<hr>
+<h2>The Developer as Manager</h2>
+<p>Human-agent engineering is the discipline of effectively collaborating with AI agents — providing clear context, maintaining oversight, and ensuring quality outcomes. The relationship between a human and an agent is closer to management than to tool use in the traditional sense.</p>
+<p>A good manager, when delegating to a junior developer, does five things:</p>
+<ol>
+<li><strong>Provides clear context</strong> — the codebase, the conventions, the goal.</li>
+<li><strong>Sets expectations</strong> — edge cases to handle, tests to include, style to follow.</li>
+<li><strong>Reviews the work</strong> — reads the output, evaluates it, does not simply accept it.</li>
+<li><strong>Iterates</strong> — provides specific feedback and asks for revisions.</li>
+<li><strong>Knows when to take over</strong> — recognizes when a task is too complex or too sensitive to delegate.</li>
+</ol>
+<p>A bad manager says &quot;just handle it&quot; and never checks the result. The parallel to vibe coding is direct.</p>
+<p>This analogy also applies in reverse. When designing an agent, the developer must think about the human side of the collaboration: what context does the human need to provide (which drives system prompt design), how does the human review output (which drives approval workflow design), when should the agent ask for help (which drives escalation logic), and what is the feedback loop (which drives conversation design). These are not afterthoughts — they are core architectural decisions that determine whether the agent is usable in practice.</p>
+<hr>
+<h2>Context Determines Quality</h2>
+<p>The quality of an agent&#39;s output is directly proportional to the quality of context the user provides. The LLM&#39;s raw capability is constant; what varies is what it has to work with.</p>
+<p>Consider a progression. A vague instruction — &quot;write a function to process user data&quot; — gives the model almost nothing: no language, no format, no behavior, no edge cases. The model will guess, and it will guess wrong. A more specific instruction — &quot;write a Python function that validates an email address using regex, returns True or False, and handles None input gracefully&quot; — gives the model a language, an approach, expected behavior, and an edge case. The output will be substantially better. The best context goes further: it includes the existing codebase, shows the patterns and conventions already in use, and provides concrete examples of similar functions. The model now has style, structure, and precedent to follow.</p>
+<p>The components of an agent&#39;s context — the system prompt, conversation history, tool results, and user instructions — are each an opportunity to improve or degrade quality. The system prompt defines the agent&#39;s identity and behavioral guidelines. Conversation history captures what has been discussed and decided. Tool results provide the data the agent has gathered from its environment. User instructions specify the current goal. Every one of these can be engineered.</p>
+<p>This is why context engineering becomes a major topic later in the course. The agent engineer&#39;s job is to take the user&#39;s inevitably incomplete, vague input and assemble it into context that allows the LLM to produce intelligent results. Users will always tend toward vibe coding — giving incomplete instructions without sufficient context. The agent must compensate by pulling in relevant information, anticipating needs, and structuring the prompt so the LLM can do its work.</p>
+<p>The quality of the operating environment also matters. In a coding agent, a codebase with clear naming conventions, consistent patterns, good documentation, and modular architecture produces better agent output than a messy codebase — because the LLM reasons about the code it can see. Vibe coding is self-defeating in this regard: the sloppy code it produces degrades the environment for future agent interactions, creating a negative feedback loop. In a conversational agent, maintaining a well-managed conversation history — compacting it without losing important information, retaining relevant context while discarding noise — serves the same purpose.</p>
+<hr>
+<h2>The Autonomy Spectrum</h2>
+<p>Not every task warrants the same level of human involvement. Effective human-agent engineering requires matching the level of autonomy to the characteristics of each task.</p>
+<p>The spectrum has five levels. At one extreme, <strong>full human control</strong> means the agent has no involvement — the human performs the action directly. Setting production database credentials is a task that belongs here. At the other extreme, <strong>full agent autonomy</strong> means the agent handles everything independently, such as auto-formatting code on save.</p>
+<p>Between these extremes sit three intermediate levels. <strong>Agent suggests</strong> means the agent proposes and the human decides — code review suggestions work this way. <strong>Agent acts, human approves</strong> means the agent does the work but the human reviews before it takes effect — an agent that writes code for a human to review before merging follows this pattern. <strong>Agent acts, human monitors</strong> means the agent executes autonomously while the human watches for problems — automated test generation is a reasonable example.</p>
+<p>Three criteria guide where a given task should fall on this spectrum.</p>
+<p><strong>Reversibility.</strong> If the action is easy to undo — formatting code, renaming a variable — higher autonomy is appropriate. If it cannot be reversed — deleting a production database, sending an email — the human must be in control.</p>
+<p><strong>Consequence of error.</strong> If the agent gets it wrong and the impact is minor — an imperfect variable name — more autonomy is acceptable. If the impact is severe — a security vulnerability in authentication — human review is essential.</p>
+<p><strong>Agent capability.</strong> If the task falls within the LLM&#39;s reliable capabilities — generating boilerplate, following well-established patterns — more autonomy is warranted. If the task requires judgment that LLMs handle inconsistently — complex architectural decisions, novel design problems — human involvement should increase.</p>
+<p>When building agents, these autonomy levels become explicit design decisions. Which tools can the agent invoke without asking? Which require user confirmation? When should the agent stop and request guidance? What actions should the agent never be permitted to take? These questions define the permission boundaries and approval workflows that make an agent safe and productive in practice.</p>
+</div>
+</body>
+</html>

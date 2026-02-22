@@ -1,0 +1,562 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Engineering — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="hero">
+  <div class="page_content hero-inner">
+    <a href="https://scottfrees.com"><img src="https://scottfrees.com/gib.jpg" alt="scottfrees.com" class="hero-logo"></a>
+    <div class="hero-text">
+      <h1>Agent Engineering</h1>
+      <p class="subtitle">Design, build, and deploy AI-powered software agents</p>
+    </div>
+  </div>
+</div><nav class="section-nav">
+  <div class="page_content">
+    <a href="#section-1"><span class="nav-num">1</span> Introduction to Agentic Systems</a>
+    <a href="#section-2"><span class="nav-num">2</span> Working with LLMs in Practice</a>
+    <a href="#section-3"><span class="nav-num">3</span> Prompt and Context Engineering</a>
+    <a href="#section-4"><span class="nav-num">4</span> Building a Coding Agent from Scratch</a>
+    <a href="#section-5"><span class="nav-num">5</span> Context Engineering Deep Dive</a>
+    <a href="#section-6"><span class="nav-num">6</span> RAG - Building from Scratch</a>
+    <a href="#section-7"><span class="nav-num">7</span> Memory Systems - DIY First</a>
+    <a href="#section-8"><span class="nav-num">8</span> Agent Skills Architecture</a>
+    <a href="#section-9"><span class="nav-num">9</span> Building Your Own Agent Framework</a>
+    <a href="#section-10"><span class="nav-num">10</span> Existing Frameworks - Critical Evaluation</a>
+    <a href="#section-11"><span class="nav-num">11</span> Multi-Agent Patterns and Autonomy</a>
+    <a href="#section-12"><span class="nav-num">12</span> Guardrails and Safety</a>
+    <a href="#section-13"><span class="nav-num">13</span> Practical Agent Applications</a>
+    <a href="#section-14"><span class="nav-num">14</span> Advanced Topics - MCP and Multi-Modal</a>
+    <a href="#section-15"><span class="nav-num">15</span> Final Projects and Course Conclusion</a>
+  </div>
+</nav>
+<div class="page_content"><p>This course covers the design, implementation, and deployment of AI-powered software agents. Starting from raw API calls, you&#39;ll progress through prompt engineering, context management, RAG, memory systems, and multi-agent architectures — building each component from scratch before reaching for frameworks.</p>
+<p>This course is completely free.  Each lesson (lecture) contains video, slides, a lecture narrative (which altogether starts to approximate a textbook), and supplemental resources.  There are labs to work on as well.  It&#39;s an adaptation of a course I teach at Ramapo College.</p>
+<p>If you are looking for more help, either for yourself or your team - please feel free to contact me at <a href="mailto:scott@freesconsulting.com">scott@freesconsulting.com</a></p>
+</div><div class="section-block" id="section-1">
+  <div class="page_content">
+    <h2>Section 1: Introduction to Agentic Systems</h2>
+    <div class="module-card">
+      <h3>Module 1: Course Overview and The Agent Paradigm</h3>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/01-01/">Lecture 1.1: What is an Agent?</a></span>
+        <div class="lecture-summary">Definition: Software that perceives, reasons, and acts autonomously</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/01-02/">Lecture 1.2: Human-Agent Engineering</a></span>
+        <div class="lecture-summary">"Human-agent engineering, not vibe coding"</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/01-03/">Lecture 1.3: Course Philosophy and Roadmap</a></span>
+        <div class="lecture-summary">Core principle: Build it yourself first, then reach for frameworks</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 2: Foundations - How LLMs Work</h3>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/02-01/">Lecture 2.1: How LLMs Actually Work</a></span>
+        <div class="lecture-summary">Neural networks and transformers (5-min flyover, refer to Course Resources for depth)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/02-02/">Lecture 2.2: How LLMs Are Trained</a></span>
+        <div class="lecture-summary">Three-stage pipeline: pre-training, instruction tuning, RLHF</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/02-03/">Lecture 2.3: From Language Models to Agents</a></span>
+        <div class="lecture-summary">What LLMs can't do: no current info, no world interaction, unreliable math, no self-verification, no memory</div>
+      </div>
+    </div>
+    <p><strong><a href="labs/lab-01.html">Lab 1: Environment Setup and First API Calls</a></strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-2">
+  <div class="page_content">
+    <h2>Section 2: Working with LLMs in Practice</h2>
+    <div class="module-card">
+      <h3>Module 3: The LLM API and Generation</h3>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/03-01/">Lecture 3.1: Working with the API</a></span>
+        <div class="lecture-summary">Anatomy of an API call: messages, model, parameters, response</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/03-02/">Lecture 3.2: The Model Landscape</a></span>
+        <div class="lecture-summary">Providers, brands, and models: the three-layer hierarchy (Anthropic → Claude → Sonnet)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/03-03/">Lecture 3.3: Controlling Generation</a></span>
+        <div class="lecture-summary">Temperature: controlling randomness (0.0 = deterministic, 1.0 = creative)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title"><a href="lectures/03-04/">Lecture 3.4: In-Context Learning and the Limits of Prompting</a></span>
+        <div class="lecture-summary">In-context learning: the model "learns" from examples in the prompt without weight updates</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 4: Context Management in Practice</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 4.1: Measuring and Managing Context</span>
+        <div class="lecture-summary">Token counting in practice: tracking usage per API call</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 4.2: Context Management Strategies</span>
+        <div class="lecture-summary">Strategy 1: Sliding window — keep last N messages, drop oldest</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 4.3: Token-Efficient Tool Design</span>
+        <div class="lecture-summary">Every tool result enters the context — design tools with this in mind</div>
+      </div>
+    </div>
+    <p><strong>Lab 2: API Exploration and Context Experiments</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-3">
+  <div class="page_content">
+    <h2>Section 3: Prompt and Context Engineering</h2>
+    <div class="module-card">
+      <h3>Module 5: Prompt Engineering for Agents</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 5.1: Principles and Anti-Patterns</span>
+        <div class="lecture-summary">Clarity and specificity: say exactly what you want — vague prompts produce vague results</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 5.2: Prompt Structure and Techniques</span>
+        <div class="lecture-summary">XML tags for clear delineation: `<instructions>`, `<context>`, `<examples>`</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 5.3: Structured Outputs for Tool Calling</span>
+        <div class="lecture-summary">Why agents need structured output: parsing tool calls from free-form text is fragile</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 6: Building the Agent System Prompt</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 6.1: System Prompt Architecture</span>
+        <div class="lecture-summary">Review: what system prompts do (identity, tools, behavior, constraints — from Lecture 2.3)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 6.2: Building Our Coding Agent System Prompt</span>
+        <div class="lecture-summary">Defining the agent's identity and role</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 6.3: Testing and Iterating on Prompts</span>
+        <div class="lecture-summary">Prompts are code: version them, test them, review them</div>
+      </div>
+    </div>
+    <p><strong>Lab 3: Prompt Engineering Workshop</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-4">
+  <div class="page_content">
+    <h2>Section 4: Building a Coding Agent from Scratch</h2>
+    <div class="module-card">
+      <h3>Module 7: Implementing the Agent Loop and Tools</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 7.1: From Concept to Code</span>
+        <div class="lecture-summary">Quick recap: the agent loop (from Lecture 2.3) and the system prompt (from Module 6)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 7.2: Implementing the Three Tools</span>
+        <div class="lecture-summary">`read_file(filename)` → returns file contents with error handling</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 7.3: Tool Registry and Response Parsing</span>
+        <div class="lecture-summary">The tool registry pattern: name → function mapping, auto-generated descriptions</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 8: Running and Extending the Agent</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 8.1: Live Implementation Walkthrough</span>
+        <div class="lecture-summary">Live coding: imports, client setup, tool implementations</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 8.2: Multi-Step Tasks and Emergent Behavior</span>
+        <div class="lecture-summary">Demo: "Read hello.py and add a multiply function" — requires read, then edit</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 8.3: From 200 Lines to Production</span>
+        <div class="lecture-summary">What our agent can't do yet — and what production agents add</div>
+      </div>
+    </div>
+    <p><strong>Lab 4: Build Your Coding Agent (CENTRAL LAB)</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-5">
+  <div class="page_content">
+    <h2>Section 5: Context Engineering Deep Dive</h2>
+    <div class="module-card">
+      <h3>Module 9: Implementing Context Management</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 9.1: Implementing Sliding Window and Selective Preservation</span>
+        <div class="lecture-summary">Taking the strategies from Module 4 and writing real code</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 9.2: Implementing Compaction</span>
+        <div class="lecture-summary">The compaction prompt: what to tell the LLM to preserve vs. discard</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 9.3: Progressive Disclosure</span>
+        <div class="lecture-summary">Don't load everything upfront — let agents discover context through exploration</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 10: Advanced Context Engineering</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 10.1: Tool Result Management</span>
+        <div class="lecture-summary">Tool results are the biggest context consumers in agent loops</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 10.2: Context-Aware System Prompts</span>
+        <div class="lecture-summary">Static system prompts waste tokens on instructions that aren't relevant right now</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 10.3: Putting It All Together</span>
+        <div class="lecture-summary">Combining strategies: sliding window + compaction + progressive disclosure + tool result management</div>
+      </div>
+    </div>
+    <p><strong>Lab 5: Context Optimization for Your Coding Agent</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-6">
+  <div class="page_content">
+    <h2>Section 6: RAG - Building from Scratch</h2>
+    <div class="module-card">
+      <h3>Module 11: RAG Fundamentals - DIY Approach</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 11.1: RAG as Context Engineering</span>
+        <div class="lecture-summary">Problem: You can't fit all knowledge in the context window</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 11.2: Document Chunking - DIY</span>
+        <div class="lecture-summary">Why chunk? Large documents don't fit; retrieval needs granularity</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 11.3: Embeddings and Similarity - DIY</span>
+        <div class="lecture-summary">What is an embedding? Vector representation of meaning</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 12: Building a Complete RAG System</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 12.1: The Complete RAG Pipeline</span>
+        <div class="lecture-summary">Ingestion phase: load → chunk → embed → store</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 12.2: Integrating RAG with Your Agent</span>
+        <div class="lecture-summary">Creating a `search_docs(query)` tool</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 12.3: Now Introduce Vector Databases</span>
+        <div class="lecture-summary">You've built it---now understand what libraries add</div>
+      </div>
+    </div>
+    <p><strong>Lab 6: Build RAG from Scratch, Then Use a Library</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-7">
+  <div class="page_content">
+    <h2>Section 7: Memory Systems - DIY First</h2>
+    <div class="module-card">
+      <h3>Module 13: Conversation Memory - Building from Scratch</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 13.1: The Memory Problem</span>
+        <div class="lecture-summary">Agents have no memory between sessions (stateless)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 13.2: Conversation Summarization - DIY</span>
+        <div class="lecture-summary">Strategy: Periodically summarize and compress</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 13.3: Structured Note-Taking</span>
+        <div class="lecture-summary">Pattern: Agent maintains a NOTES.md or TODO.md file</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 14: Long-Term Memory and Memory Frameworks</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 14.1: Episodic Memory - DIY</span>
+        <div class="lecture-summary">Episodic: what happened, when, in what context</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 14.2: Semantic Memory and Retrieval</span>
+        <div class="lecture-summary">Semantic: facts about the world (vs. personal experiences)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 14.3: Memory Frameworks - Now Introduce mem0</span>
+        <div class="lecture-summary">You've built it---now understand what mem0 adds</div>
+      </div>
+    </div>
+    <p><strong>Lab 7: Add Memory to Your Coding Agent</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-8">
+  <div class="page_content">
+    <h2>Section 8: Agent Skills Architecture</h2>
+    <div class="module-card">
+      <h3>Module 15: Understanding Agent Skills</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 15.1: The Problem Skills Solve</span>
+        <div class="lecture-summary">Agents need domain expertise, but context is limited</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 15.2: Progressive Disclosure in Practice</span>
+        <div class="lecture-summary">Level 1: Metadata (~50 tokens) - name + description at startup</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 15.3: Skills with Executable Code</span>
+        <div class="lecture-summary">Some tasks are better done by code than LLM</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 16: Building Your Own Skills System</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 16.1: Skills System Architecture</span>
+        <div class="lecture-summary">Skill discovery: scan directories at startup</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 16.2: Implementation Walkthrough</span>
+        <div class="lecture-summary">Skills directory structure: `/skills/{skill-name}/SKILL.md`</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 16.3: Creating Skills for Your Agent</span>
+        <div class="lecture-summary">Example skills for a coding agent:</div>
+      </div>
+    </div>
+    <p><strong>Lab 8: Implement Skills for Your Coding Agent</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-9">
+  <div class="page_content">
+    <h2>Section 9: Building Your Own Agent Framework</h2>
+    <div class="module-card">
+      <h3>Module 17: Framework Design Patterns</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 17.1: What We've Built - Taking Stock</span>
+        <div class="lecture-summary">Section 4: Basic agent loop with tools</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 17.2: Framework Architecture</span>
+        <div class="lecture-summary">Core abstractions: Agent, Tool, Memory, Skill</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 17.3: Design Decisions</span>
+        <div class="lecture-summary">State management: conversation, working memory, long-term</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 18: Framework Implementation</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 18.1: Core Agent Class</span>
+        <div class="lecture-summary">Constructor: model, tools, memory, skills, config</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 18.2: Tool and Memory Abstractions</span>
+        <div class="lecture-summary">Base Tool class: name, description, schema, execute()</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 18.3: Using Your Framework</span>
+        <div class="lecture-summary">Instantiating an agent with configuration</div>
+      </div>
+    </div>
+    <p><strong>Lab 9: Build Your Agent Framework</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-10">
+  <div class="page_content">
+    <h2>Section 10: Existing Frameworks - Critical Evaluation</h2>
+    <div class="module-card">
+      <h3>Module 19: LangChain Deep Dive</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 19.1: LangChain Overview</span>
+        <div class="lecture-summary">History and evolution of LangChain</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 19.2: Mapping to Your Framework</span>
+        <div class="lecture-summary">Your Agent ↔ LangChain Agent/AgentExecutor</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 19.3: What LangChain Adds</span>
+        <div class="lecture-summary">Adds: pre-built integrations, LangSmith observability, community</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 20: CrewAI and Alternative Frameworks</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 20.1: CrewAI - Role-Based Multi-Agent</span>
+        <div class="lecture-summary">Philosophy: agents as team members with roles</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 20.2: LangGraph and Other Options</span>
+        <div class="lecture-summary">LangGraph: agents as graphs with state</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 20.3: Framework Selection Criteria</span>
+        <div class="lecture-summary">Task complexity: simple → your framework, complex → LangGraph</div>
+      </div>
+    </div>
+    <p><strong>Lab 10: Port Your Agent to LangChain</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-11">
+  <div class="page_content">
+    <h2>Section 11: Multi-Agent Patterns and Autonomy</h2>
+    <div class="module-card">
+      <h3>Module 21: Multi-Agent Architectures</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 21.1: When Multiple Agents Outperform One</span>
+        <div class="lecture-summary">The problem: single agents hit context and complexity limits</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 21.2: Multi-Agent Patterns</span>
+        <div class="lecture-summary">Lead agent + specialized sub-agents pattern</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 21.3: Communication and Coordination</span>
+        <div class="lecture-summary">Message passing between agents</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 22: Autonomy Management and Human-Agent Collaboration</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 22.1: The Autonomy Spectrum</span>
+        <div class="lecture-summary">Levels: copilot → assistant → supervised autonomous → fully autonomous</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 22.2: Human-Agent Collaboration Patterns</span>
+        <div class="lecture-summary">"Human-agent engineering"---developer as manager of AI "interns"</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 22.3: Designing for Trust</span>
+        <div class="lecture-summary">Transparency: agent explains its reasoning</div>
+      </div>
+    </div>
+    <p><strong>Lab 11: Build a Multi-Agent System</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-12">
+  <div class="page_content">
+    <h2>Section 12: Guardrails and Safety</h2>
+    <div class="module-card">
+      <h3>Module 23: Building Guardrails from Scratch</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 23.1: Why Guardrails Matter</span>
+        <div class="lecture-summary">Agents take real actions with real consequences</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 23.2: Input Guardrails - DIY</span>
+        <div class="lecture-summary">Prompt injection detection: pattern matching, classification</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 23.3: Output and Action Guardrails - DIY</span>
+        <div class="lecture-summary">Output filtering: detect harmful, inappropriate content</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 24: Ethics and Adversarial Testing</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 24.1: Ethical Frameworks for Agents</span>
+        <div class="lecture-summary">Privacy: what data should agents access and store?</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 24.2: Adversarial Testing</span>
+        <div class="lecture-summary">Red teaming: deliberately trying to break your agent</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 24.3: Safety Checklist and Existing Solutions</span>
+        <div class="lecture-summary">Production safety checklist:</div>
+      </div>
+    </div>
+    <p><strong>Lab 12: Implement Guardrails for Your Agent</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-13">
+  <div class="page_content">
+    <h2>Section 13: Practical Agent Applications</h2>
+    <div class="module-card">
+      <h3>Module 25: Chatbot and Assistant Patterns</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 25.1: Conversational Agent Design</span>
+        <div class="lecture-summary">Beyond Q&A: maintaining conversation state and flow</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 25.2: Domain-Specific Assistants</span>
+        <div class="lecture-summary">Tutoring agents: Socratic method, adaptive difficulty</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 25.3: Retrieval-Augmented Chatbots</span>
+        <div class="lecture-summary">Combining conversation with knowledge retrieval</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 26: Coding and Research Assistants</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 26.1: Code Review Agents</span>
+        <div class="lecture-summary">Reading and understanding code (using your read_file tool)</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 26.2: Research Agents</span>
+        <div class="lecture-summary">Multi-step research: search → read → summarize → synthesize</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 26.3: Pipeline Agents</span>
+        <div class="lecture-summary">Combining patterns: research + write + review</div>
+      </div>
+    </div>
+    <p><strong>Lab 13: Build a Practical Application</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-14">
+  <div class="page_content">
+    <h2>Section 14: Advanced Topics - MCP and Multi-Modal</h2>
+    <div class="module-card">
+      <h3>Module 27: Model Context Protocol (MCP)</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 27.1: MCP as Tool Standard</span>
+        <div class="lecture-summary">What is MCP? Standardized tool integration protocol</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 27.2: MCP vs. Your Tool System</span>
+        <div class="lecture-summary">Your tools: custom, lean, fully controlled</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 27.3: Building with MCP</span>
+        <div class="lecture-summary">Connecting to existing MCP servers</div>
+      </div>
+    </div>
+    <div class="module-card">
+      <h3>Module 28: Multi-Modal Agents</h3>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 28.1: Vision-Language Agents</span>
+        <div class="lecture-summary">Models with vision: GPT-4V, Claude 3 with vision</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 28.2: Computer Use and Beyond</span>
+        <div class="lecture-summary">Anthropic's computer use capability</div>
+      </div>
+      <div class="lecture-item">
+        <span class="lecture-title">Lecture 28.3: Research Frontiers</span>
+        <div class="lecture-summary">World models and planning</div>
+      </div>
+    </div>
+    <p><strong>Lab 14: Final Project Work Session</strong></p>
+  </div>
+</div>
+<div class="section-block" id="section-15">
+  <div class="page_content">
+    <h2>Section 15: Final Projects and Course Conclusion</h2>
+    <div class="module-card">
+      <h3>Module 29: Final Project Presentations (Part 1)</h3>
+    </div>
+    <div class="module-card">
+      <h3>Module 30: Final Project Presentations (Part 2) and Course Conclusion</h3>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>How LLMs Are Trained — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# How LLMs Are Trained
+
+---
+
+# Why Does Training Matter for Agent Developers?
+
+You know *what* LLMs do — predict the next token using attention.
+
+--
+
+Now: **how did they learn to do that?**
+
+--
+
+More importantly for you as agent developers — how does the training process explain the specific ways LLMs behave?
+
+--
+
+.info[Understanding how LLMs were trained lets you **predict** their behavior and design more effective agents.]
+
+???
+Understanding the training pipeline gives a lasting advantage in predicting and managing LLM behavior.
+
+---
+class: center, middle, inverse
+# Stage 1: Pre-Training
+## Read the Internet
+
+---
+
+# Pre-Training
+
+The model reads an enormous amount of text — essentially a significant portion of the publicly available internet — and learns to predict the next token.
+
+--
+
+Billions of iterations across **trillions of tokens**.
+
+--
+
+By the end, it has absorbed the patterns, knowledge, and — critically — the **style** of the internet.
+
+???
+The mechanism (next-token prediction) was covered in 02-01. The focus here is on what the training data does to behavior.
+
+---
+
+# How Does Training Data Shape Behavior?
+
+> **The model's behavior is a reflection of its training data.** Not of intelligence. Not of understanding. Of *patterns in the data it was trained on.*
+
+--
+
+Once you internalize this, a lot of LLM behavior that seems mysterious starts making perfect sense.
+
+???
+This is the key insight. Pause here.
+
+---
+
+# Why LLM Prose Is a Little Dramatic
+
+People write differently on the internet than they talk in conversation.
+
+--
+
+Blog posts, articles, social media — online writing tends to be **sensational, emphatic, emotionally charged**. The internet rewards attention-grabbing language.
+
+--
+
+The slightly breathless tone... the overuse of words like *"crucial"* and *"revolutionary"* and *"game-changing"*...
+
+--
+
+.callout[The LLM mirrors its training data. That breathless tone comes from web content written to get clicks.]
+
+???
+Students start connecting LLM behaviors they've noticed to training data patterns.
+
+---
+
+# Why LLMs Are So Good at Code
+
+**GitHub exists.**
+
+--
+
+The training data includes millions of public repositories — working code, with context. Not random code, but code good enough that someone put it online.
+
+--
+
+But it goes deeper. GitHub has **issues, pull requests, commit messages, and code reviews**.
+
+--
+
+An issue describes a problem in natural language. A commit provides the code that fixes it.
+
+--
+
+.info[That's essentially millions of examples of: *"here's a human-written prompt, and here's the code that solves it."* Exactly the task we ask LLMs to do.]
+
+???
+The issue→commit→PR structure is essentially supervised training data for "turn natural language into code."
+
+---
+
+# Why LLMs Sometimes Over-Engineer
+
+People don't just post code online — they **write about** code. Blog posts, tutorials, conference talks, tweets.
+
+--
+
+When people write about code, they showcase **interesting** solutions. Nobody writes a blog post about using a simple for loop.
+
+--
+
+They write about the clever library. The elegant design pattern. The cutting-edge framework.
+
+--
+
+.warning[The LLM has seen disproportionately many **sophisticated, complex solutions** — and fewer examples of the boring, simple approach that would have been fine. It's reflecting what gets discussed online.]
+
+???
+This explains a very common frustration. Students will recognize this pattern immediately from their own LLM interactions.
+
+---
+class: center, middle, inverse
+# Stage 2: Instruction Tuning
+## Learn to Be Helpful
+
+---
+
+# From Text Predictor to Assistant
+
+A raw pre-trained model is impressive but not very useful. If you type a question, it might generate *another* question — because on the internet, questions are often followed by more questions.
+
+--
+
+**Instruction tuning** is the second stage. Humans write thousands of example conversations: an instruction and a helpful, well-structured response. The model is fine-tuned on these.
+
+--
+
+This is where the model learns to:
+
+- Answer questions instead of just continuing text
+- Follow formatting instructions
+- Stay on topic
+- Structure responses with introductions and conclusions
+
+???
+The behavioral consequences matter more than the mechanism.
+
+---
+
+# The Side Effects of Being "Helpful"
+
+The instruction tuning examples tend to be thorough, well-structured, comprehensive responses. The humans writing them were rewarded for being helpful.
+
+--
+
+**Why LLMs give you more than you asked for:**
+
+The model learns that a good response is a *long* response. Ask a yes-or-no question, get a paragraph — because in its training, that's what "helpful" looked like.
+
+--
+
+**Why LLMs are so agreeable:**
+
+The training data models cooperative behavior. The model rarely saw examples of pushing back or saying "no."
+
+--
+
+.callout[When you write system prompts, you're adding a layer on top of instruction tuning. You can counteract these tendencies — "be concise," "push back if the approach has problems" — but only if you know they exist.]
+
+???
+System prompts let you override instruction tuning defaults.
+
+---
+class: center, middle, inverse
+# Stage 3: RLHF
+## Learn What Humans Like
+
+---
+
+# Reinforcement Learning from Human Feedback
+
+Humans are shown pairs of model responses and asked: **which one is better?**
+
+--
+
+The model is then trained to produce more responses like the ones humans preferred.
+
+--
+
+This is where the model learns *style* and *judgment*. It already knows how to follow instructions. Now it learns to do so in the way humans find most **satisfying**.
+
+???
+Focus on consequences rather than mechanism.
+
+---
+
+# The Side Effects of Human Preferences
+
+**Sycophancy:**
+
+Human evaluators prefer responses that agree with them. So the model learns: **agreement is good**. It tells you what you want to hear, even if you're wrong.
+
+--
+
+**Hedging:**
+
+Evaluators penalize wrong answers. So the model learns to hedge — *"it depends," "there are several approaches."* Often appropriate, but it can make agents indecisive.
+
+--
+
+**The confident error:**
+
+A well-structured, confident response that's *factually wrong* can rate higher than a hesitant response that's correct. The model learns this too.
+
+--
+
+.warning[When it hallucinates, it does so **with conviction**. Confidence ≠ accuracy.]
+
+???
+Sycophancy is critical for agent builders. Understanding the cause helps write system prompts that counteract it.
+
+---
+class: center, middle, inverse
+# Think Like a Training Data Detective
+
+---
+
+# The Framework
+
+When an LLM does something surprising — good or bad — ask yourself:
+
+> **What was in the training data that would produce this behavior?**
+
+???
+Students should leave with this mental framework.
+
+---
+
+# Rapid-Fire Examples
+
+.small[
+**LLMs are great at translating between programming languages** — GitHub has tons of similar projects in different languages, and plenty of "port X to Y" discussions
+
+**LLMs struggle with very recent information** — the training data has a cutoff; the model literally hasn't seen it
+
+**LLMs are weirdly good at cover letters and marketing copy** — enormous amounts of this content online, with many examples of "good" versions
+
+**LLMs sometimes produce code with subtle security issues** — most code online doesn't demonstrate security best practices; the vulnerable pattern is more common in training data
+
+**LLMs prefer popular libraries over niche ones** — popular libraries appear far more frequently in the training data
+]
+
+???
+Move through these quickly. Each one reinforces the framework: behavior comes from training data.
+
+---
+
+# Why This Matters for Agents
+
+As an agent developer, this mental model lets you:
+
+--
+
+- **Predict** where an LLM will excel and where it will struggle — before you build
+
+--
+
+- **Design context** that compensates for training biases — give examples of the behavior you want
+
+--
+
+- **Set appropriate autonomy** — more for tasks with strong training data, less for sparse or biased areas
+
+--
+
+- **Debug intelligently** — when your agent misbehaves, reason about *why*, don't just guess
+
+--
+
+.callout[Understanding the training pipeline lets you predict and manage LLM behavior. This is a practical engineering skill you'll use every time you write a system prompt, design a tool, or decide how much to trust your agent's output.]
+
+???
+They'll use this framework constantly in agent development.
+
+---
+
+# Coming Up Next
+
+**Lecture 2.3: From Language Models to Agents**
+
+You understand what LLMs do and how they learned to do it. Next: what was added on top to make tool-using, action-taking agents possible — and what that means for how you'll build.
+
+???
+Brief transition. The next lecture closes the loop back to the agent concept from 01-01.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Human-Agent Engineering — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Human-Agent Engineering
+
+---
+
+# Wait — Is This a Course About Using AI to Code?
+
+This is **not** a course about using AI to write your code for you. This is a course about **building agents**.
+
+--
+
+But one of the best ways to understand how agents work — and how humans work *with* agents — is to look at a tool you already have access to: **an AI coding agent**.
+
+--
+
+Claude Code, Cursor, GitHub Copilot — these follow the exact same **perception-reasoning-action loop** from Lecture 1.1. How you interact with them determines how well they work.
+
+--
+
+.callout[We're using agentic coding as a concrete, familiar example to explore a bigger question: **how do humans and agents collaborate effectively?** The principles apply to *every* kind of agent.]
+
+???
+[3 min] Address the elephant in the room immediately. Students might think this is about AI-assisted coding. Clarify: agentic coding is an *example* we'll use to understand a universal pattern of human-agent collaboration.
+
+---
+
+# Agentic Coding Illustrates the Agent Loop
+
+Say you tell a coding agent: *"Add input validation to the login form."*
+
+--
+
+1. **Perceive** — reads your codebase, the login component, existing validation patterns
+
+--
+
+2. **Reason** — analyzes the code, decides what validation is needed, plans where to add it
+
+--
+
+3. **Act** — edits files, modifies the form component, maybe adds a validation utility
+
+--
+
+4. **Loop** — reads the result, checks for test failures, fixes them
+
+--
+
+.info[This is the exact loop from Lecture 1.1, running on a real system you can use today. By Lecture 8, you'll have built your own version of this.]
+
+???
+[2 min] Connect back to 01-01 explicitly. Each step maps to the perceive-reason-act framework. The key question is: what's the human's job in this loop?
+
+---
+class: center, middle, inverse
+# Vibe Coding — and Why It Breaks
+
+---
+
+# What is "Vibe Coding"?
+
+> **Vibe coding**: Giving an AI agent a vague instruction, accepting whatever it produces, and hoping for the best.
+
+--
+
+The term comes from Andrej Karpathy — "fully giving in to the vibes." You see code appearing, you don't really understand it, you just run it and see if it works.
+
+--
+
+**A concrete example:**
+
+You tell a coding agent: *"Build me a login page."* It generates 200 lines of HTML, CSS, and JavaScript. You glance at it, it looks reasonable, you ship it.
+
+--
+
+Two weeks later: no CSRF protection, the password echoes in the URL, and the session token is stored in `localStorage`.
+
+???
+[2 min] Define the term with Karpathy's framing. The login page example makes the failure tangible and memorable. Let it land before moving to the "why."
+
+---
+
+# Why Vibe Coding Fails in Production
+
+**1. LLMs don't know your constraints**
+- They don't know your security requirements, performance targets, or coding conventions
+- They make reasonable-sounding choices that may be completely wrong for your context
+
+--
+
+**2. Quality compounds over time**
+- One poorly understood function becomes a fragile foundation
+- When something breaks, you can't debug code you don't understand
+
+--
+
+**3. You lose the ability to evaluate**
+- If you don't understand what the agent produced, you can't tell if it's good
+- You become dependent on the agent for things you should be able to assess yourself
+
+???
+[2 min] Three clear failure modes. Each builds on the last: bad assumptions → compounding debt → loss of judgment.
+
+---
+
+# This Is Not Just a Coding Problem
+
+This is a fundamental challenge with **every** kind of agent:
+
+- A **research agent** that produces a report you don't verify? Same problem.
+- A **customer service agent** that sends responses you never review? Same problem.
+- A **data analysis agent** that makes conclusions you can't evaluate? Same problem.
+
+.warning[**The pattern is universal:** delegating without understanding leads to brittle, unreliable results. This is why human-agent engineering matters.]
+
+???
+[1 min] Critical slide — broadens the lesson beyond coding. This is the pivot point: we're not talking about coding, we're talking about a universal principle of working with agents.
+
+---
+class: center, middle, inverse
+# Agent as Expert, or Agent as Tool?
+
+---
+
+# Two Ways to Think About AI
+
+There are really only two mindsets when working with an agent:
+
+--
+
+**Agent as Expert** — You treat the agent as the authority. You give it a problem, hope it knows the answer, and accept what comes back.
+
+--
+
+**Agent as Tool** — You are the expert. You use the agent to amplify your own knowledge and abilities. You direct it, evaluate its output, and take responsibility for the result.
+
+--
+
+.warning[Vibe coding is "agent as expert" thinking. You're hoping the AI is smarter than you. Sometimes it is — but you have no way to tell when it isn't.]
+
+???
+[2 min] This is a framing students should internalize for the entire course and beyond. Pause after revealing each mindset. The warning callout ties it back to vibe coding.
+
+---
+
+# Why "Agent as Tool" Wins
+
+When the agent is your **tool**, you stay in control:
+
+- You **know what you want** before you ask — so you can evaluate the result
+- You **understand the domain** — so you catch mistakes the agent can't see
+- You **learn from the interaction** — the agent's output teaches you, rather than replacing you
+- You **get better over time** — your expertise grows, and so does the quality of what you produce with agents
+
+--
+
+When the agent is your **expert**, you're stuck:
+
+- You can't tell good output from bad
+- You don't learn anything
+- You become *more* dependent, not less
+
+--
+
+.callout[In this course, you will learn **why** "agent as tool" is the more productive mindset — and you'll build agents that are designed to work this way.]
+
+???
+[2 min] Walk through the contrast. The callout is a direct promise to students — this course will prove this out. This mindset applies to every agent they'll encounter, not just coding agents.
+
+---
+class: center, middle, inverse
+# The Developer as Manager
+
+---
+
+# Human-Agent Engineering
+
+> **Human-agent engineering**: The discipline of effectively collaborating with AI agents — providing clear context, maintaining oversight, and ensuring quality outcomes.
+
+This is what separates productive AI use from vibe coding. Your relationship with an AI agent is more like **managing a team member** than like writing code.
+
+???
+[2 min] Introduce the formal concept. The "managing vs. writing code" reframe is the key insight here.
+
+---
+
+# The Manager Analogy
+
+Think about what a good manager does when delegating to a junior developer:
+
+--
+
+1. **Provides clear context** — "Here's the codebase, here are our conventions, here's the goal"
+
+--
+
+2. **Sets expectations** — "Handle edge cases, include tests, follow our style guide"
+
+--
+
+3. **Reviews the work** — doesn't just accept whatever comes back
+
+--
+
+4. **Iterates** — "This is good, but the error handling needs work. Try again."
+
+--
+
+5. **Knows when to take over** — recognizes when a task is too complex to delegate
+
+--
+
+.callout[A bad manager says "just handle it" and never checks the result. A good manager provides context, reviews output, and iterates. **Human-agent engineering is about being a good manager.**]
+
+???
+[2 min] Build this list incrementally. Each point maps to a specific skill students will develop. The callout is the summary students should remember.
+
+---
+
+# Why This Matters for Building Agents
+
+When you **design** an agent, you need to think about the human side:
+
+- What context does the human need to provide? → Drives your **system prompt** design
+- How does the human review output? → Drives your **approval workflow** design
+- When should the agent ask for help? → Drives your **escalation** logic
+- What's the feedback loop? → Drives your **conversation** design
+
+.info[The better you understand the human-agent relationship, the better agents you'll build. These aren't afterthoughts — they're core architectural decisions.]
+
+???
+[2 min] Connect the manager analogy directly to agent architecture. Each bullet maps to something they'll implement later in the course. This is why we're covering human-agent engineering *before* writing any agent code.
+
+---
+class: center, middle, inverse
+# "LLMs Are Only as Good as You Are"
+
+---
+
+# The Quality Equation
+
+> "LLMs are only as good as you are" — the quality of an agent's output is directly proportional to the quality of context you provide.
+
+--
+
+This might sound counterintuitive. Isn't the whole point that the AI is smart?
+
+--
+
+Yes — but the AI is smart **within the context you give it**. It can only reason about what it can see.
+
+???
+[1 min] Let this statement land. It's deliberately provocative and will reframe how students think about agent quality.
+
+---
+
+# Context Determines Quality
+
+.small[
+**Bad context → Bad result:**
+
+*"Write a function to process user data."* — Process it how? What data? What format? The agent will guess, and it will guess wrong.
+
+**Better context → Better result:**
+
+*"Write a Python function that validates an email address using regex, returns True/False, and handles None input gracefully."* — Now the agent knows the language, approach, behavior, and an edge case.
+
+**Best context → Best result:**
+
+*"Here's our existing validation module [file contents]. Add an email validation function that follows the same pattern — docstring, type hints, returns bool, raises ValueError on None. Here's how our phone validation works [code example]."* — Now the agent has style, patterns, and concrete examples.
+]
+
+.callout[The LLM's raw capability is the same in all three cases. What changes is what **you** give it to work with.]
+
+???
+[3 min] Walk through each level slowly. The progression is dramatic and makes the point concrete. The callout drives home that context — not model capability — is the variable.
+
+---
+
+# What Counts as Context for an Agent?
+
+In Lecture 1.1, step 2 of the agent loop was **context assembly** — building the prompt the LLM receives:
+
+- **System prompt** — the agent's identity, capabilities, and behavioral guidelines
+- **Conversation history** — what's been discussed, decided, attempted so far
+- **Tool results** — file contents, search results, API responses the agent has gathered
+- **User instructions** — the current goal, with whatever specificity the user provided
+
+Every one of these is an opportunity to improve — or degrade — quality.
+
+.info[Starting in Lecture 5, we'll spend significant time on **context engineering**: the art of curating the right information at the right time.]
+
+???
+[2 min] Connect back to the agent loop from 01-01. Each bullet is something students will learn to optimize. Tease context engineering (Lecture 5) to build anticipation.
+
+---
+
+# Well-Structured Code Helps Agents Too
+
+Something that surprises people: the quality of your **existing** codebase affects how well agents work with it.
+
+- **Clear naming conventions** — the agent understands intent from function and variable names
+- **Consistent patterns** — the agent can follow established conventions
+- **Good documentation** — docstrings and comments become context the agent uses to reason
+- **Modular architecture** — smaller, focused files are easier for agents to read and modify
+
+.warning[Vibe coding is self-defeating: the sloppy code it produces makes future agent interactions *worse*. Clean code is infrastructure for your AI collaborators as much as for human readers.]
+
+???
+[2 min] This is a "mind-blown" moment for many students. Clean code practices they already know have a new, concrete benefit. The warning callout reinforces the anti-vibe-coding message.
+
+---
+class: center, middle, inverse
+# The Autonomy Spectrum
+
+---
+
+# Not All Tasks Deserve the Same Autonomy
+
+The right level of human involvement varies dramatically by task:
+
+| Level | Description | Example |
+|-------|-------------|---------|
+| **Full human control** | Human does it, no agent | Setting production DB credentials |
+| **Agent suggests** | Agent proposes, human decides | Code review suggestions |
+| **Agent acts, human approves** | Agent works, human reviews | Agent writes code, human reviews PR |
+| **Agent acts, human monitors** | Agent executes, human watches | Automated test generation |
+| **Full agent autonomy** | Agent handles everything | Auto-formatting on save |
+
+???
+[2 min] Walk through each row with the concrete example. The spectrum runs from left (most human control) to right (most agent autonomy). Students should see that "agent" doesn't always mean "fully autonomous."
+
+---
+
+# Choosing the Right Level
+
+How do you decide where a task falls on this spectrum?
+
+--
+
+**Reversibility** — Can you undo it easily?
+- Formatting code? Easy to undo → high autonomy is fine
+- Deleting a production database? Not reversible → full human control
+
+--
+
+**Consequence of error** — What happens if the agent gets it wrong?
+- Wrong variable name? Minor → let the agent try
+- Security vulnerability in auth? Critical → human must review
+
+--
+
+**Agent capability** — Is this something LLMs are reliable at?
+- Generating boilerplate? Very reliable → more autonomy
+- Complex architectural decisions? Less reliable → human judgment needed
+
+???
+[2 min] Three criteria, each with a concrete contrast. These criteria will reappear when we design guardrails in Lectures 22-24.
+
+---
+
+# Autonomy in the Agents You'll Build
+
+When we build agents in this course, you'll design these autonomy levels explicitly:
+
+- Which tools can the agent call without asking? → **Automatic actions**
+- Which tools require user confirmation? → **Approval workflows**
+- When should the agent stop and ask for guidance? → **Escalation triggers**
+- What should the agent never be allowed to do? → **Permission boundaries**
+
+.callout[These aren't afterthoughts — they're **core architectural decisions**. We'll implement them in Lectures 22-24 when we cover guardrails and safety.]
+
+???
+[1 min] Connect autonomy directly to implementation. Each bullet is something they'll code. This closes the loop between abstract concept and concrete engineering.
+
+---
+
+# Key Takeaways
+
+--
+
+**1. You are the expert — the agent is your tool**
+
+Not the other way around. This mindset is more productive, more reliable, and it's what we'll build toward all course.
+
+--
+
+**2. Vibe coding fails; human-agent engineering works**
+
+Provide context, review output, iterate, know when to take over.
+
+--
+
+**3. Autonomy is a spectrum**
+
+The right level depends on reversibility, consequences, and agent capability. You'll design these levels into the agents you build.
+
+???
+Three memorable points that summarize the entire lecture. Takeaway #1 is the new framing that should stick with students beyond this course.
+
+---
+
+# Coming Up Next
+
+**Lecture 1.3: Course Philosophy and Roadmap**
+
+The principles that guide everything we'll build, and a preview of the journey from 200 lines of Python to a production-ready agent framework.
+
+???
+Brief transition. Next lecture shifts from "how do humans work with agents?" to "what are we building in this course and why?"
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

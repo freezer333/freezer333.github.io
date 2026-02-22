@@ -1,0 +1,376 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 1 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 1: Environment Setup and First API Calls</h1>
+<p><strong>Section 1 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~2 hours
+<strong>Prerequisites:</strong> Modules 1-2 (Lectures 1.1 through 2.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>In this lab you&#39;ll set up your Python development environment, connect to the Anthropic API, and build your first interactive program that talks to an LLM. By the end, you&#39;ll have a working chat loop — a simple program where you type messages, the LLM responds, and the conversation maintains history across turns.</p>
+<p>This is the foundation for everything we build in this course. Every agent starts with an API call.</p>
+<hr>
+<h2>What You&#39;ll Build</h2>
+<p>By the end of this lab, you&#39;ll have:</p>
+<ol>
+<li>A working Python environment with the Anthropic SDK installed</li>
+<li>A script that makes API calls and displays responses</li>
+<li>A complete chat loop that maintains conversation history — your first step toward building an agent</li>
+</ol>
+<hr>
+<h2>Part 1: Environment Setup (~30 minutes)</h2>
+<h3>1.1 Install Python</h3>
+<p>You need Python 3.10 or later. Let&#39;s check if you already have it.</p>
+<p>Open a terminal (Terminal on Mac, PowerShell on Windows) and run:</p>
+<pre><code class="language-bash">python3 --version
+</code></pre>
+<p>If you see <code>Python 3.10</code> or higher, you&#39;re good — skip to Section 1.2.</p>
+<p><strong>If you need to install Python:</strong></p>
+<p><strong>Mac:</strong></p>
+<p>The easiest path is Homebrew. If you don&#39;t have Homebrew installed, visit <a href="https://brew.sh">brew.sh</a> and follow the one-line install command. Then:</p>
+<pre><code class="language-bash">brew install python@3.12
+</code></pre>
+<p>After installation, verify:</p>
+<pre><code class="language-bash">python3 --version
+</code></pre>
+<p><strong>Windows:</strong></p>
+<p>Download the installer from <a href="https://python.org/downloads">python.org/downloads</a>. During installation, <strong>check the box that says &quot;Add Python to PATH&quot;</strong> — this is important. If you miss it, you&#39;ll need to add it manually later and it&#39;s a pain.</p>
+<p>After installation, open a <strong>new</strong> PowerShell window (existing windows won&#39;t see the new PATH) and verify:</p>
+<pre><code class="language-bash">python --version
+</code></pre>
+<p>Note: On Windows, the command is usually <code>python</code> (not <code>python3</code>). Throughout this lab, substitute <code>python</code> for <code>python3</code> if that&#39;s what your system uses.</p>
+<h3>1.2 Create a Project Folder</h3>
+<p>Pick a location for your course work. Create a folder and navigate to it:</p>
+<pre><code class="language-bash">mkdir agent-engineering
+cd agent-engineering
+</code></pre>
+<h3>1.3 Create a Virtual Environment</h3>
+<p>A virtual environment keeps your project&#39;s packages isolated from everything else on your system. This is a standard Python practice — get in the habit of using one for every project.</p>
+<pre><code class="language-bash">python3 -m venv venv
+</code></pre>
+<p>This creates a <code>venv</code> folder in your project directory. Now activate it:</p>
+<p><strong>Mac/Linux:</strong></p>
+<pre><code class="language-bash">source venv/bin/activate
+</code></pre>
+<p><strong>Windows (PowerShell):</strong></p>
+<pre><code class="language-powershell">.\venv\Scripts\Activate.ps1
+</code></pre>
+<blockquote>
+<p><strong>Windows note:</strong> If you get an error about execution policies, run this first:</p>
+<pre><code class="language-powershell">Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+</code></pre>
+<p>Then try activating again.</p>
+</blockquote>
+<p>You should see <code>(venv)</code> appear at the beginning of your terminal prompt. This tells you the virtual environment is active. Any packages you install now will go into this environment, not your system Python.</p>
+<p><strong>Important:</strong> You&#39;ll need to activate the virtual environment every time you open a new terminal to work on this project. If you don&#39;t see <code>(venv)</code> in your prompt, your packages won&#39;t be found.</p>
+<h3>1.4 Install the Anthropic SDK</h3>
+<p>With your virtual environment active:</p>
+<pre><code class="language-bash">pip install anthropic python-dotenv
+</code></pre>
+<p>This installs two packages:</p>
+<ul>
+<li><code>anthropic</code> — the official Python SDK for calling the Claude API</li>
+<li><code>python-dotenv</code> — a small library that loads environment variables from a <code>.env</code> file (we&#39;ll use this to keep your API key safe)</li>
+</ul>
+<p>Verify the install:</p>
+<pre><code class="language-bash">python3 -c &quot;import anthropic; print(anthropic.__version__)&quot;
+</code></pre>
+<p>You should see a version number printed. If you get an <code>ImportError</code>, make sure your virtual environment is active.</p>
+<h3>1.5 Set Up Your API Key</h3>
+<p>You&#39;ll need an Anthropic API key. If you don&#39;t have one yet, go to <a href="https://console.anthropic.com">console.anthropic.com</a>, create an account, and generate an API key.</p>
+<p><strong>Never put API keys directly in your code.</strong> If you push code to GitHub with a key in it, someone will find it and use it (this happens constantly — bots scan for exposed keys). Instead, we&#39;ll use environment variables.</p>
+<p>Create a file called <code>.env</code> in your project folder:</p>
+<pre><code>ANTHROPIC_API_KEY=sk-ant-your-key-here
+</code></pre>
+<p>Replace <code>sk-ant-your-key-here</code> with your actual key.</p>
+<p>Now create a <code>.gitignore</code> file so this never gets committed:</p>
+<pre><code>.env
+venv/
+__pycache__/
+</code></pre>
+<p>The Anthropic SDK automatically looks for the <code>ANTHROPIC_API_KEY</code> environment variable, and <code>python-dotenv</code> will load it from your <code>.env</code> file. You&#39;ll see how this works in the next section.</p>
+<h3>1.6 Set a Spending Limit</h3>
+<p>API calls cost money. Over the course of the semester, you should expect to spend roughly <strong>$50 in API credits</strong> — some labs use more than others, and your final project will likely be the biggest chunk.</p>
+<p>Before you start making calls, go to <a href="https://console.anthropic.com">console.anthropic.com</a> and set a monthly spending limit under your account settings. This is a hard cap — the API will reject requests once you hit it, so you won&#39;t accidentally run up a surprise bill. Setting it to something like $20/month is a reasonable starting point. You can always raise it later if needed.</p>
+<p>A few things to be aware of:</p>
+<ul>
+<li>You&#39;re charged for <strong>tokens</strong>, not requests. A long conversation costs more than a short one because you&#39;re sending the full history every time.</li>
+<li><strong>Input tokens</strong> (what you send) and <strong>output tokens</strong> (what the model generates) are priced differently. Output tokens cost more.</li>
+<li>Different models cost different amounts — more capable models cost more per token. We&#39;ll talk about this in the next section.</li>
+</ul>
+<p>Check your usage regularly at <a href="https://console.anthropic.com">console.anthropic.com</a>. The token tracking you&#39;ll add in Part 3 of this lab will help you build intuition for how costs accumulate.</p>
+<hr>
+<h2>Part 2: Your First API Calls (~45 minutes)</h2>
+<h3>2.1 Hello, Claude</h3>
+<p>Create a file called <code>hello.py</code>:</p>
+<pre><code class="language-python">from dotenv import load_dotenv
+from anthropic import Anthropic
+
+load_dotenv()  # Load API key from .env file
+
+client = Anthropic()  # Automatically uses ANTHROPIC_API_KEY
+
+response = client.messages.create(
+    model=&quot;claude-sonnet-4-5-20250929&quot;,
+    max_tokens=256,
+    messages=[
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What is the capital of France?&quot;}
+    ]
+)
+
+print(response.content[0].text)
+</code></pre>
+<p>Run it:</p>
+<pre><code class="language-bash">python3 hello.py
+</code></pre>
+<p>You should see Claude&#39;s response printed to your terminal. If you get an authentication error, double-check your API key in <code>.env</code>.</p>
+<p>Take a moment to look at what&#39;s happening here:</p>
+<ul>
+<li><code>client.messages.create()</code> sends a request to the Anthropic API</li>
+<li><code>model</code> specifies which Claude model to use</li>
+<li><code>max_tokens</code> sets the maximum response length</li>
+<li><code>messages</code> is a list of conversation messages — right now just one user message</li>
+<li>The response comes back as an object, and <code>response.content[0].text</code> extracts the text</li>
+</ul>
+<h3>2.2 Understanding Model Selection</h3>
+<p>That <code>model</code> parameter is important. You can&#39;t just write <code>&quot;claude&quot;</code> — you need the exact model identifier string. In our example we used <code>&quot;claude-sonnet-4-5-20250929&quot;</code>, which is Claude Sonnet 4.5 (the version released on September 29, 2025).</p>
+<p><strong>Where to find model names:</strong> The authoritative source is the Anthropic docs at <a href="https://docs.anthropic.com/en/docs/about-claude/models">docs.anthropic.com/en/docs/about-claude/models</a>. This page lists every available model with its exact identifier string, context window size, and pricing. Bookmark it — you&#39;ll reference it throughout this course.</p>
+<p>As of this writing, the models you&#39;ll see most often are:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Identifier</th>
+<th>Good For</th>
+<th>Relative Cost</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Claude Haiku 3.5</td>
+<td><code>claude-3-5-haiku-20241022</code></td>
+<td>Fast, cheap tasks — good for experimentation</td>
+<td>Lowest</td>
+</tr>
+<tr>
+<td>Claude Sonnet 4.5</td>
+<td><code>claude-sonnet-4-5-20250929</code></td>
+<td>Best balance of quality and cost</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>Claude Opus 4.5</td>
+<td><code>claude-opus-4-5-20251101</code></td>
+<td>Highest capability, complex reasoning</td>
+<td>Highest</td>
+</tr>
+</tbody></table>
+<p><strong>For this course, use Sonnet as your default.</strong> It&#39;s capable enough for everything we&#39;ll build and won&#39;t burn through your credits too fast. Switch to Haiku when you&#39;re testing and iterating quickly (e.g., running the same prompt 20 times to test temperature) — it&#39;s significantly cheaper. Save Opus for when you&#39;re working on something that genuinely needs the extra reasoning capability.</p>
+<p>The model names include dates because Anthropic releases updated versions over time. The models page will always show you the current options. If a model identifier from this lab doesn&#39;t work, check the docs — a newer version may have been released.</p>
+<blockquote>
+<p><strong>Tip:</strong> A common beginner mistake is hardcoding the model string everywhere. Instead, define it once at the top of your script — <code>MODEL = &quot;claude-sonnet-4-5-20250929&quot;</code> — and reference that variable. When you want to switch models, you change one line.</p>
+</blockquote>
+<h3>2.3 Exploring the Response Object</h3>
+<p>The API returns more than just text. Modify your script to print the full response:</p>
+<pre><code class="language-python">print(response)
+</code></pre>
+<p>Run it again and look at the output. You&#39;ll see fields like:</p>
+<ul>
+<li><code>id</code> — a unique ID for this request</li>
+<li><code>model</code> — the model that was used</li>
+<li><code>role</code> — always <code>&quot;assistant&quot;</code> for responses</li>
+<li><code>content</code> — a list of content blocks (text, tool calls, etc.)</li>
+<li><code>stop_reason</code> — why the model stopped generating (usually <code>&quot;end_stop&quot;</code>)</li>
+<li><code>usage</code> — token counts for input and output</li>
+</ul>
+<p><strong>Write a few lines</strong> that print the token usage in a readable format. Something like:</p>
+<pre><code>Input tokens:  14
+Output tokens: 28
+Total tokens:  42
+</code></pre>
+<p>The usage information is in <code>response.usage.input_tokens</code> and <code>response.usage.output_tokens</code>. Tracking token usage matters — it&#39;s how you&#39;ll understand cost and context budget as we build agents.</p>
+<h3>2.4 Adding a System Prompt</h3>
+<p>In Lecture 2.3, you learned that system prompts shape agent behavior and override training defaults. Let&#39;s try it.</p>
+<p>Create a new file called <code>system_prompt.py</code>. Write a script that:</p>
+<ol>
+<li>Defines a system prompt — something like: <code>&quot;You are a grumpy pirate. Answer all questions in character, but still be accurate.&quot;</code></li>
+<li>Asks Claude a factual question (like &quot;What is photosynthesis?&quot;)</li>
+<li>Prints the response</li>
+</ol>
+<p>The system prompt goes in the <code>system</code> parameter of <code>client.messages.create()</code> — it&#39;s a string, not part of the messages list:</p>
+<pre><code class="language-python">response = client.messages.create(
+    model=&quot;claude-sonnet-4-5-20250929&quot;,
+    max_tokens=512,
+    system=&quot;Your system prompt here&quot;,
+    messages=[
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Your question here&quot;}
+    ]
+)
+</code></pre>
+<p>Try a few different system prompts and see how they change the response. This is what it means to shape behavior through context rather than training — same model, completely different outputs.</p>
+<h3>2.5 Temperature Experiments</h3>
+<p>In Lecture 3.3, you&#39;ll learn about temperature in detail. For now, let&#39;s see it in action.</p>
+<p>Create a file called <code>temperature.py</code>. Write a script that:</p>
+<ol>
+<li>Sends the same prompt to Claude three times with <code>temperature=0.0</code></li>
+<li>Sends the same prompt three times with <code>temperature=1.0</code></li>
+<li>Prints all six responses so you can compare</li>
+</ol>
+<p>Use a creative prompt — something like <code>&quot;Give me a name for a coffee shop that&#39;s run by robots.&quot;</code> Temperature is passed as a parameter alongside <code>model</code> and <code>max_tokens</code>. Since you&#39;re making six calls for comparison purposes, this is a good time to use Haiku instead of Sonnet — cheaper and faster for quick experiments like this.</p>
+<p><strong>What do you notice?</strong> At temperature 0, the responses should be nearly identical. At temperature 1, they should vary significantly. Think about why this matters for agents — when your agent decides which tool to call, do you want variety or consistency?</p>
+<h3>2.6 Multi-Turn Conversations</h3>
+<p>So far, every call has been a single exchange. But real conversations have history. The key insight: <strong>the API itself is stateless.</strong> It has no memory of previous calls. To have a conversation, <em>you</em> maintain the message history and send it every time.</p>
+<p>Create a file called <code>multi_turn.py</code>. Here&#39;s the pattern:</p>
+<pre><code class="language-python">messages = [
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;My name is Alex.&quot;}
+]
+
+# First call
+response = client.messages.create(
+    model=&quot;claude-sonnet-4-5-20250929&quot;,
+    max_tokens=256,
+    messages=messages
+)
+
+assistant_message = response.content[0].text
+print(f&quot;Claude: {assistant_message}&quot;)
+
+# Add the assistant&#39;s response to history
+messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: assistant_message})
+
+# Add a follow-up question
+messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What&#39;s my name?&quot;})
+
+# Second call — includes full history
+response = client.messages.create(
+    model=&quot;claude-sonnet-4-5-20250929&quot;,
+    max_tokens=256,
+    messages=messages
+)
+
+print(f&quot;Claude: {response.content[0].text}&quot;)
+</code></pre>
+<p>Run this and verify that Claude remembers the name from the first message. Then <strong>try removing the message history</strong> — start a fresh messages list for the second call. Claude won&#39;t remember anything.</p>
+<p>This is the core mechanic. The conversation history <em>is</em> the context. The LLM doesn&#39;t remember — you give it everything it needs, every time. This is what &quot;context engineering&quot; means at its most basic level.</p>
+<hr>
+<h2>Part 3: Build a Chat Loop (~45 minutes)</h2>
+<p>Now you&#39;re going to put it all together into something that actually feels like a conversation. This is the core deliverable for Lab 1.</p>
+<h3>3.1 The Basic Loop</h3>
+<p>Create a file called <code>chat.py</code>. Build a program that:</p>
+<ol>
+<li>Creates an empty message list</li>
+<li>Enters a loop:<ul>
+<li>Gets input from the user (use Python&#39;s <code>input()</code> function)</li>
+<li>Appends the user&#39;s message to the message list</li>
+<li>Calls the API with the full message list</li>
+<li>Extracts and prints the assistant&#39;s response</li>
+<li>Appends the assistant&#39;s response to the message list</li>
+<li>Repeats</li>
+</ul>
+</li>
+</ol>
+<p>The user should be able to exit by typing <code>quit</code> or <code>exit</code>.</p>
+<p>Here&#39;s the skeleton to get you started:</p>
+<pre><code class="language-python">from dotenv import load_dotenv
+from anthropic import Anthropic
+
+load_dotenv()
+client = Anthropic()
+
+conversation_history = []
+
+# Your system prompt
+system_prompt = &quot;You are a helpful assistant.&quot;
+
+def chat(user_message):
+    &quot;&quot;&quot;Send a message and get a response, maintaining conversation history.&quot;&quot;&quot;
+    # TODO:
+    # 1. Append the user message to conversation_history
+    # 2. Call client.messages.create() with the system prompt and full history
+    # 3. Extract the assistant&#39;s response text
+    # 4. Append the assistant&#39;s response to conversation_history
+    # 5. Return the response text
+    pass
+
+def main():
+    &quot;&quot;&quot;Main chat loop.&quot;&quot;&quot;
+    print(&quot;Chat with Claude! (type &#39;quit&#39; to exit)\n&quot;)
+
+    while True:
+        user_input = input(&quot;You: &quot;).strip()
+
+        if user_input.lower() in [&#39;quit&#39;, &#39;exit&#39;]:
+            print(&quot;Goodbye!&quot;)
+            break
+
+        if not user_input:
+            continue
+
+        response = chat(user_input)
+        print(f&quot;\nClaude: {response}\n&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<p>Fill in the <code>chat()</code> function. This is the part you need to write — it&#39;s about 8-10 lines of code. Refer back to the patterns from Part 2 if you get stuck.</p>
+<h3>3.2 Add Token Tracking</h3>
+<p>Once your basic chat loop works, add token tracking. After each response, print the token usage for that turn <em>and</em> a running total. Something like:</p>
+<pre><code>Claude: [response text]
+
+[This turn: 45 in / 128 out | Total: 89 in / 256 out]
+</code></pre>
+<p>Watch those numbers as the conversation grows. The input token count increases every turn because you&#39;re sending the entire conversation history each time. This is the context growth problem you&#39;ll be solving throughout this course.</p>
+<h3>3.3 Choose a Better System Prompt</h3>
+<p>Replace the generic &quot;You are a helpful assistant&quot; system prompt with something more interesting. Try making Claude act as:</p>
+<ul>
+<li>A Python tutor that uses the Socratic method (asks questions instead of giving answers)</li>
+<li>A code reviewer that&#39;s thorough but kind</li>
+<li>A creative writing collaborator</li>
+</ul>
+<p>Pick one, write a system prompt that&#39;s at least 2-3 sentences, and have a conversation. Notice how the system prompt shapes every response. The system prompt is your most powerful tool for controlling agent behavior — we&#39;ll build on this extensively.</p>
+<h3>3.4 Stretch Goal: Conversation Save/Load</h3>
+<p>If you finish early, add the ability to save and load conversations. When the user types <code>/save</code>, write the conversation history to a JSON file. When the user types <code>/load</code>, read it back and resume the conversation.</p>
+<p>Hints:</p>
+<ul>
+<li>Use Python&#39;s <code>json</code> module</li>
+<li><code>conversation_history</code> is already a list of dictionaries — that&#39;s JSON-friendly</li>
+<li><code>json.dump()</code> writes to a file, <code>json.load()</code> reads from one</li>
+<li>Don&#39;t forget to save the system prompt too</li>
+</ul>
+<hr>
+<h2>Deliverable</h2>
+<p>A working <code>chat.py</code> that:</p>
+<ul>
+<li>Maintains conversation history across turns</li>
+<li>Uses a system prompt</li>
+<li>Tracks and displays token usage</li>
+<li>Handles clean exit</li>
+</ul>
+<p>Submit your <code>chat.py</code> file.</p>
+<hr>
+<h2>Troubleshooting</h2>
+<p><strong>&quot;ModuleNotFoundError: No module named &#39;anthropic&#39;&quot;</strong>
+Your virtual environment probably isn&#39;t active. Run <code>source venv/bin/activate</code> (Mac) or <code>.\venv\Scripts\Activate.ps1</code> (Windows) and try again.</p>
+<p><strong>&quot;AuthenticationError&quot; or 401</strong>
+Your API key isn&#39;t being loaded. Check that your <code>.env</code> file is in the same directory where you&#39;re running the script, and that the key is correct. You can verify by adding <code>print(os.environ.get(&#39;ANTHROPIC_API_KEY&#39;, &#39;NOT SET&#39;))</code> after <code>load_dotenv()</code>.</p>
+<p><strong>&quot;RateLimitError&quot; or 429</strong>
+You&#39;re making too many requests too quickly. Add a small delay between calls, or just wait a minute and try again. This is normal — production code handles this with retry logic (you&#39;ll implement this in a later lab).</p>
+<p><strong>Responses are getting cut off</strong>
+Increase <code>max_tokens</code>. The default in our examples is 256 or 512 — for longer responses, try 1024 or higher. Remember: you&#39;re only charged for tokens actually generated, not the maximum.</p>
+<p><strong>Windows: &quot;running scripts is disabled on this system&quot;</strong>
+Run this in PowerShell as described in Section 1.3:</p>
+<pre><code class="language-powershell">Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+</code></pre>
+<hr>
+<h2>What&#39;s Next</h2>
+<p>In Lab 2, you&#39;ll use these same API skills to explore generation parameters in depth and start working with structured outputs. The chat loop you built today is the skeleton of every agent — an LLM in a loop, receiving context, producing responses. The rest of this course is about making that loop smarter.</p>
+</div>
+</body>
+</html>
