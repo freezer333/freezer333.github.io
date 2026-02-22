@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How LLMs Actually Work — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 2.1</a></div></nav>
+<div class="page_content"><h1>How LLMs Actually Work</h1>
+<p>This lecture builds the mental model you need as an agent developer. You do not need to become a deep learning researcher to build effective agents, but you do need to understand how LLMs process input, generate output, and why certain design decisions matter when assembling context. The goal is practical understanding — enough to reason about LLM behavior and make better engineering decisions.</p>
+<h2>Neural Networks and Transformers</h2>
+<p>An LLM is a neural network — a mathematical function with billions of adjustable numbers called <em>parameters</em> or <em>weights</em>. Text goes in (converted to numbers), and a prediction comes out. During training, the weights are adjusted so predictions improve over time. That is the entire concept: data in, prediction out, weights tuned to reduce error.</p>
+<p>Everything the model &quot;knows&quot; about language, code, and reasoning is stored in those weights. There is no database, no lookup table, no separate knowledge store. Billions of numbers, learned from patterns in training data, encode the model&#39;s entire understanding of the world.</p>
+<p>Neural networks have existed for decades, but what changed with LLMs is scale — billions of parameters trained on enormous datasets. The architecture that made this scale practical is the <em>transformer</em>, introduced in 2017.</p>
+<h3>The Sequential Bottleneck</h3>
+<p>Before transformers, language models were sequential. They processed text one word at a time, left to right, passing a compressed summary forward at each step. The problem: by the time the model reached the end of a sentence, earlier words had been compressed through so many steps that distant connections were lost. In a sentence like &quot;The capital of France is ___,&quot; a sequential model might lose the connection between &quot;capital&quot; and &quot;France&quot; if they were separated by enough intervening text, potentially confusing &quot;capital&quot; with an unrelated meaning.</p>
+<h3>How Transformers Changed the Game</h3>
+<p>The transformer&#39;s key innovation is <em>attention</em> — a mechanism that lets the model look at all parts of the input simultaneously and decide which parts are relevant to each other. Instead of reading text sequentially, the transformer processes the entire input at once and builds connections between any pair of tokens, regardless of how far apart they are.</p>
+<p>Every major LLM — GPT, Claude, Llama, Gemini — is a transformer. The differences between them are in size, training data, and fine-tuning, not in fundamental architecture. The transformer design itself is not proprietary; the intellectual property lies primarily in the training data and the specific training procedures each organization uses.</p>
+<h2>Next-Token Prediction</h2>
+<p>LLMs have one fundamental operation: they predict the next token. Given a sequence of tokens, the model produces a probability distribution over what comes next. It selects one token, appends it to the sequence, and repeats — generating text one token at a time, left to right, with each new token conditioned on everything that came before it.</p>
+<p>When an LLM produces a paragraph of text, that paragraph was generated through this iterative process. Every output token requires a full pass through the model, which is why output tokens are computationally more expensive than input tokens in API pricing.</p>
+<h3>What Tokens Are</h3>
+<p>Tokens are not words. They are sub-word pieces — fragments that the model has learned are useful building blocks for representing language. Common words like &quot;the&quot; or &quot;and&quot; map to single tokens. Less common words get split into pieces: &quot;tokenization&quot; might become &quot;token&quot; + &quot;ization.&quot; Code tokenizes differently from prose — variable names, brackets, and operators each consume their own tokens.</p>
+<p>A rough rule of thumb: one token is approximately three-quarters of a word in English, though this varies with writing style and content type.</p>
+<p>For agent developers, tokens matter in two ways. First, they are the unit of cost — API providers charge per token for both input and output. Second, they fill up the context window, and that window is finite. Every tool result, every conversation message, every system prompt instruction consumes tokens. Tokens are the budget you manage throughout every agent interaction.</p>
+<h2>Attention: The Key Mechanism</h2>
+<p>If the model is just predicting the next token, how does it produce coherent paragraphs, follow instructions, or connect information from earlier in a long conversation? The answer is attention.</p>
+<h3>The Intuition</h3>
+<p>When deciding what token comes next, the model does not weigh all previous tokens equally. It <em>attends</em> to the ones most relevant to the current prediction. Consider the sequence &quot;The capital of France is ___.&quot; When predicting what fills that blank, the model attends heavily to &quot;capital&quot; and &quot;France&quot; — those tokens carry the signal. It attends less to &quot;The&quot; and &quot;of&quot; — those are structural but not informative for this particular prediction.</p>
+<p>This happens across every token in the context. Every token can attend to every other token, which is what gives transformers their power over sequential architectures.</p>
+<h3>Query, Key, and Value</h3>
+<p>Attention works through three learned components for each token:</p>
+<ul>
+<li><strong>Query (Q):</strong> Encodes what information this token needs — &quot;what am I looking for to predict what comes next?&quot;</li>
+<li><strong>Key (K):</strong> Encodes what information this token represents — &quot;here is what I am about.&quot;</li>
+<li><strong>Value (V):</strong> Carries the actual content — &quot;here is the information I contribute.&quot;</li>
+</ul>
+<p>The model compares each token&#39;s Query against every other token&#39;s Key to compute relevance scores, then pulls a weighted combination of the matching Values. In the &quot;capital of France&quot; example, the token &quot;is&quot; generates a Query seeking a factual answer. The Keys for &quot;capital&quot; (geography) and &quot;France&quot; (specific place) score high, while &quot;The&quot; and &quot;of&quot; score low. The blended Values from the high-scoring tokens shape the probability distribution, which heavily favors &quot;Paris&quot; — an association the model learned from training data.</p>
+<h3>Attention Heads and Layers</h3>
+<p>A single Query/Key/Value pass captures one type of relationship. But language has many types of relationships occurring simultaneously — factual associations, grammatical structure, word order, stylistic patterns, and more.</p>
+<p>An <em>attention head</em> is a single Q/K/V pass with its own learned weights. A frontier LLM typically has 64 to 128 attention heads per layer. The model designer chooses how many heads to include (a computation budget decision), but what each head learns to specialize in emerges from training. Researchers have found that different heads reliably learn different functions — some track syntax, others track coreference, others track factual associations — but these specializations are statistical patterns, not explicitly programmed categories.</p>
+<p>These attention heads are organized into <em>layers</em>, and a frontier LLM stacks 80 to 120 layers. Each layer&#39;s output feeds into the next:</p>
+<ul>
+<li><strong>Early layers</strong> capture basic patterns — grammar, word proximity, parts of speech.</li>
+<li><strong>Middle layers</strong> build relationships — &quot;capital&quot; relates to &quot;France&quot; as a geographic fact.</li>
+<li><strong>Later layers</strong> combine these into complex reasoning — producing &quot;Paris&quot; as the prediction.</li>
+</ul>
+<p>With 80+ layers of 100+ heads each, the model runs thousands of Q/K/V passes over the input. Each head within a layer can run in parallel, which is why LLMs run on GPUs — hardware optimized for massive parallel computation.</p>
+<h3>Why Attention Matters for Agent Development</h3>
+<p>Attention is a finite resource. The model has a fixed capacity for how much it can attend to, determined by its architecture and training. As context grows longer, the model&#39;s ability to focus on the right information degrades.</p>
+<p>Three practical consequences:</p>
+<ol>
+<li><strong>Hard token limits.</strong> Context windows have a maximum size — 128K, 200K, or more tokens depending on the model. You cannot exceed this limit.</li>
+<li><strong>Quality degrades before the limit.</strong> Even well within the token limit, more context means attention is spread across more tokens. The model has more to sort through, and relevance scoring becomes less precise.</li>
+<li><strong>The &quot;lost in the middle&quot; problem.</strong> Research has shown that LLMs attend more strongly to information at the beginning and end of the context window than to information in the middle. This is a probabilistic tendency, not a hard rule, but it has direct implications for how you structure prompts and conversation history.</li>
+</ol>
+<p>Every decision an agent developer makes — what to include in context, what to leave out, when to summarize, when to truncate — is fundamentally about managing this attention budget.</p>
+<h2>The Context Window as Architecture</h2>
+<p>When an agent makes an API call to an LLM, it sends a context window. That window contains everything the model has to work with:</p>
+<ul>
+<li><strong>System prompt</strong> — who the agent is, what tools it has, how it should behave. This is provided by the developer, not the user, and typically prefixes every API call.</li>
+<li><strong>Conversation history</strong> — every message exchanged so far in the session.</li>
+<li><strong>Tool results</strong> — file contents, search results, database queries, anything the agent has gathered through tool use.</li>
+<li><strong>Current user message</strong> — what the human is asking right now.</li>
+</ul>
+<p>The model sees all of this, reasons over all of this, and predicts its response based on all of this. Nothing else. There is no memory outside this window, no hidden state, no background knowledge beyond what is encoded in the model weights.</p>
+<h3>LLMs Are Stateless</h3>
+<p>This is a critical concept that trips up developers coming from interactive tools like ChatGPT. An LLM has exactly one operation: take text in, produce text out. Each API call is independent. The model has no memory of previous calls — no session, no stored state, no continuity between requests.</p>
+<p>If a conversation <em>feels</em> continuous, that is because the application — the agent code you write — re-sends the entire conversation history as input on every call. ChatGPT the product stores your conversation and re-submits it each time. The underlying model has no idea it has spoken to you before. The application manages state; the model does not.</p>
+<p>This is the agent engineer&#39;s job: assemble the right context — system prompt, conversation history, tool results, user message — and pass all of it on every single call. The model will not do this for you. It cannot. It is a stateless function.</p>
+<p>Some APIs offer <em>prompt caching</em>, which reuses computation for repeated prefixes across calls to reduce cost and latency. This is an infrastructure optimization. It does not change the fundamental model — every call is still a complete, independent, stateless function. Caching saves money; it does not introduce memory.</p>
+<h3>The Context Engineering Challenge</h3>
+<p>Context engineering is at the heart of agent development. The agent developer curates the information the LLM reasons over, and the quality of that curation directly determines the quality of the output.</p>
+<ul>
+<li><strong>Too much context</strong> — attention gets diluted, quality drops, costs rise. A context window stuffed with a large file leaves little attention capacity for the user&#39;s actual question.</li>
+<li><strong>Too little context</strong> — the model does not have what it needs and will hallucinate to fill gaps. Hallucinations are not lies; they are the model&#39;s best statistical guess given insufficient information.</li>
+<li><strong>Wrong context</strong> — irrelevant information leads the model astray, producing responses that are confidently incorrect.</li>
+<li><strong>Right context</strong> — the model performs remarkably well. The results can seem almost magical when the context is precisely what the model needs.</li>
+</ul>
+<p>The sweet spot — the smallest possible set of high-signal tokens — is what much of agent engineering is about learning to find. This is the agent developer&#39;s primary design space and the central constraint that shapes every architectural decision in agent systems.</p>
+<h2>Looking Ahead</h2>
+<p>This lecture covered what LLMs do: they predict the next token, using attention to focus on relevant parts of a finite context window. The next lecture examines how commercial LLMs are trained — and why their training data explains many of the behaviors you have likely already noticed when working with them.</p>
+</div>
+</body>
+</html>

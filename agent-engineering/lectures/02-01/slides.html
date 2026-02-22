@@ -477,6 +477,31 @@ Core principle: if information is not in the context window, the model cannot ac
 
 ---
 
+# LLMs Are Stateless
+
+An LLM has exactly one operation: **take text in, produce text out**.
+
+--
+
+Each API call is independent. The model has no memory of previous calls — no session, no stored state, no continuity between requests.
+
+--
+
+If a conversation *feels* continuous, it's because **your code re-sent the entire conversation history** as input every time.
+
+--
+
+.callout[**The agent engineer's job:** assemble the right context — system prompt, history, tool results, user message — and pass *all of it* on every single call.]
+
+--
+
+.info[Some APIs offer **prompt caching** — reusing computation for repeated prefixes to reduce cost and latency. This is an infrastructure optimization, not a change to the model. Every call is still a complete, independent, stateless function.]
+
+???
+Critical mental model shift. Students who've used ChatGPT assume the model "remembers" — it doesn't. The application stores and re-sends history. Prompt caching saves money but doesn't introduce state.
+
+---
+
 # The Agent Developer's Job
 
 Context engineering is at the heart of agent development. You're curating the information the LLM reasons over.

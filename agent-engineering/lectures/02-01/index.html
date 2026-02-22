@@ -10,18 +10,21 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>How LLMs Actually Work</h1>
-<p><strong>Lecture 2.1</strong></p>
-<ul>
-  <li>Neural networks and transformers (5-min flyover, refer to Course Resources for depth)</li>
-  <li>Next-token prediction: the one thing LLMs do</li>
-  <li>Tokens: sub-word pieces, the unit of cost and context budget</li>
-  <li>Attention intuitively: how LLMs focus on relevant parts of input</li>
-  <li>Context windows as finite resource; "lost in the middle" phenomenon</li>
-  <li>The context window as the agent developer's primary design space</li>
-</ul>
+<p><strong>Module 2, Lecture 2.1 | Introduction to Agentic Systems</strong></p>
+<p>This lecture builds the mental model every agent developer needs: how LLMs process input, generate output, and why certain design decisions matter. It covers neural networks and the transformer architecture at a high level, explains next-token prediction as the single fundamental operation of all LLMs, introduces attention as the mechanism that lets models focus on relevant parts of their input, and frames the context window as the agent developer&#39;s primary design space. The core takeaway: LLMs are stateless functions, and the agent engineer&#39;s job is to assemble the right context on every call.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-02-01.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://www.3blue1brown.com/topics/neural-networks">3Blue1Brown: Neural Networks</a> — Grant Sanderson&#39;s visual series on neural networks, including chapters on transformers, attention, and how LLMs store facts</li>
+<li><a href="https://jalammar.github.io/illustrated-transformer/">The Illustrated Transformer</a> — Jay Alammar&#39;s widely referenced visual walkthrough of the transformer architecture</li>
+<li><a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need (Vaswani et al., 2017)</a> — The original paper that introduced the transformer architecture</li>
+<li><a href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Andrej Karpathy&#39;s &quot;Let&#39;s build GPT: from scratch, in code, spelled out&quot;</a> — A hands-on video building a GPT from scratch in Python</li>
+<li><a href="https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)">Transformer (deep learning architecture) — Wikipedia</a> — Comprehensive reference covering transformer architecture, history, and applications</li>
 </ul>
 </div>
 </body>
