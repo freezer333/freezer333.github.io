@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How LLMs Are Trained — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 2.2</a></div></nav>
+<div class="page_content"><h1>How LLMs Are Trained</h1>
+<p>The previous lecture covered what LLMs do — predict the next token using attention over a finite context window. This lecture addresses the equally important question: how did they learn to do it? The answer turns out to be one of the most practically useful things an agent developer can understand, because the training process directly explains the specific, predictable ways LLMs behave. Once you understand how LLMs were trained, you can anticipate their strengths, weaknesses, and quirks — and design agents that account for them.</p>
+<h2>The Three-Stage Training Pipeline</h2>
+<p>Commercial LLMs are built through a three-stage process: pre-training, instruction tuning, and reinforcement learning from human feedback (RLHF). Each stage shapes the model&#39;s behavior in distinct and predictable ways.</p>
+<h2>Stage 1: Pre-Training</h2>
+<p>Pre-training is the foundation. The model reads an enormous corpus of text — a significant portion of the publicly available internet, plus books, journals, and other digital text — and learns to predict the next token. It performs this prediction billions of times across trillions of tokens. By the end, the model&#39;s weights encode the patterns, knowledge, and style of that training data.</p>
+<p>The key insight is straightforward: <strong>the model&#39;s behavior is a reflection of its training data.</strong> Not of intelligence. Not of understanding. Of patterns in the data it was trained on. Once you internalize this, many LLM behaviors that seem mysterious start making perfect sense.</p>
+<h3>Why LLM Prose Is Dramatic</h3>
+<p>People write differently on the internet than they speak in conversation. Blog posts, articles, and social media are written to grab attention — sensational, emphatic, emotionally charged. The internet rewards attention-grabbing language. When an LLM generates text, it draws on these patterns. The slightly breathless tone, the overuse of words like &quot;crucial,&quot; &quot;revolutionary,&quot; and &quot;game-changing&quot; — that is the internet&#39;s voice, absorbed during pre-training.</p>
+<p>The LLM is not excited. The training data was written by people who were trying to get clicks.</p>
+<h3>Why LLMs Are Good at Code</h3>
+<p>LLMs are remarkably capable at writing code, and the reason is that the training data for code is exceptionally well-structured. GitHub and other open-source repositories contain millions of public codebases — working code, written well enough that someone published it.</p>
+<p>But it goes deeper than the code itself. GitHub also contains issues, pull requests, commit messages, and code reviews. An issue describes a problem in natural language. A commit or pull request provides the code that fixes it. This amounts to millions of examples of a human-written prompt paired with the code that solves it — which is exactly the task we ask LLMs to perform.</p>
+<p>Code also has an inherent advantage as context for language models. Programming languages are structured and precise — a small number of tokens expressing intent with high signal density. This aligns well with how attention works: fewer tokens with higher signal produce better predictions.</p>
+<h3>Why LLMs Over-Engineer</h3>
+<p>People do not just write code — they write <em>about</em> code. Blog posts, tutorials, conference talks, and social media discussions about programming tend to showcase interesting solutions. Nobody writes a blog post about a simple for loop. They write about the clever library, the elegant design pattern, the cutting-edge framework.</p>
+<p>The result is that the training data contains disproportionately many sophisticated, complex solutions and relatively fewer examples of the boring, simple approach that would have been fine. When an LLM writes a function, it may reach for a library or pattern that is impressive but unnecessary. It is not showing off. It is reflecting the bias in what gets discussed online.</p>
+<h2>Stage 2: Instruction Tuning</h2>
+<p>A raw pre-trained model has absorbed vast knowledge but is not useful as an assistant. If you type a question, it might generate another question — because on the internet, questions are often followed by more questions, not answers.</p>
+<p>Instruction tuning is the second stage. Humans write thousands of example conversations: a question or instruction paired with a helpful, well-structured response. The model is fine-tuned on these examples to learn the pattern of receiving a request and producing a useful answer.</p>
+<p>This stage teaches the model to:</p>
+<ul>
+<li>Answer questions instead of just continuing text</li>
+<li>Follow formatting instructions (&quot;give me a list,&quot; &quot;write in JSON&quot;)</li>
+<li>Stay on topic instead of wandering</li>
+<li>Structure responses with introductions and conclusions</li>
+</ul>
+<h3>Side Effects of Instruction Tuning</h3>
+<p>The training examples used for instruction tuning tend to be thorough, well-structured, and comprehensive. The humans writing them were rewarded for being helpful. This creates two predictable side effects.</p>
+<p><strong>Verbosity.</strong> The model learns that a good response is a long response. Ask a simple yes-or-no question and you get a paragraph — because in the instruction tuning data, that is what &quot;helpful&quot; looked like.</p>
+<p><strong>Agreeableness.</strong> The instruction tuning data models cooperative, helpful behavior. The model rarely saw examples of pushing back, saying &quot;no,&quot; or telling the user they were wrong. So it develops a tendency to go along with whatever the user says, even when the user is mistaken.</p>
+<p>For agent developers, this matters because you can counteract these tendencies through system prompts. Instructions like &quot;be concise&quot; or &quot;push back if the user&#39;s approach has problems&quot; add a layer on top of instruction tuning — but you can only write effective countermeasures if you understand the defaults you are overriding.</p>
+<h2>Stage 3: Reinforcement Learning from Human Feedback (RLHF)</h2>
+<p>The third stage is RLHF. Humans are shown pairs of model responses to the same prompt and asked which one is better. The model is then trained to produce more responses like the ones humans preferred.</p>
+<p>This is where the model learns style and judgment. It already knows how to follow instructions from stage 2. RLHF teaches it to do so in the way that humans find most satisfying. But human preferences introduce their own biases, and these produce specific behavioral patterns that agent developers encounter constantly.</p>
+<h3>Sycophancy</h3>
+<p>Human evaluators tend to prefer responses that agree with them. They rate agreeable answers higher than ones that push back. The model learns that agreement is rewarded. This creates the sycophancy problem — the model tells you what you want to hear, even if you are wrong.</p>
+<p>For agents, this is particularly dangerous. If an agent is supposed to review code and flag problems, but it has been trained to be agreeable, it may praise bad code instead of criticizing it. Agent developers need to work against this in system prompts by explicitly instructing the model to provide honest assessments.</p>
+<h3>Hedging</h3>
+<p>Human evaluators penalize responses that turn out to be wrong. The model learns to hedge — &quot;it depends,&quot; &quot;there are several approaches,&quot; &quot;this may vary.&quot; This is often appropriate, but it can make agents indecisive when you need them to commit to a specific action or recommendation.</p>
+<h3>The Confident Error</h3>
+<p>Sometimes RLHF produces the opposite effect from hedging. A well-structured, confident response that happens to be factually wrong can rate higher with human evaluators than a hesitant response that is correct — because humans tend to conflate confidence with accuracy. The model learns this pattern too.</p>
+<p>The consequence: when an LLM hallucinates, it does so with conviction. It is not deliberately lying. It is making a bad prediction (generating a token that does not reflect reality), but it has also learned that confident delivery is preferred. The combination of a wrong prediction and a confident tone produces the hallucinations that are factually incorrect yet stated with authority.</p>
+<h2>The Training Data Detective Framework</h2>
+<p>The practical takeaway from understanding the training pipeline is a framework for reasoning about LLM behavior:</p>
+<p><strong>When an LLM does something surprising — good or bad — ask: what was in the training data that would produce this behavior?</strong></p>
+<p>This framework applies broadly:</p>
+<ul>
+<li><strong>LLMs translate well between programming languages</strong> — because GitHub contains many implementations of similar projects in different languages, plus discussions about porting code.</li>
+<li><strong>LLMs struggle with recent information</strong> — because the training data has a cutoff date. The model has never seen information published after that date.</li>
+<li><strong>LLMs are good at cover letters and marketing copy</strong> — because there are enormous amounts of this content online, with many examples of polished versions.</li>
+<li><strong>LLMs sometimes produce code with subtle security issues</strong> — because most code tutorials and blog posts focus on functionality, not security. The insecure pattern is more common in the training data than the secure one.</li>
+<li><strong>LLMs prefer popular libraries over niche ones</strong> — because popular libraries appear far more frequently in the training data. The more common a pattern is on the internet, the better the LLM will be at reproducing it.</li>
+</ul>
+<h2>Why This Matters for Agent Development</h2>
+<p>Understanding the training pipeline is not trivia — it is a practical engineering skill that applies every time you write a system prompt, design a tool, or decide how much to trust your agent&#39;s output.</p>
+<p>As an agent developer, this mental model lets you:</p>
+<ul>
+<li><strong>Predict</strong> where an LLM will excel and where it will struggle — before you build. If the task is well-represented in the training data (common code patterns, standard writing tasks), the model will likely perform well. If it is niche, recent, or requires knowledge that was sparse in the training data, expect problems.</li>
+<li><strong>Design context</strong> that compensates for training biases. If the model defaults to verbose responses, instruct it to be concise. If it defaults to popular frameworks, provide examples using the specific tools you need. If it lacks information about a niche library, put that information in the context — there is no other way the model will know about it.</li>
+<li><strong>Set appropriate autonomy.</strong> Give more autonomy for tasks where the training data was strong and the model is reliable. Reduce autonomy and add human oversight for tasks where training data was sparse or biased.</li>
+<li><strong>Debug intelligently.</strong> When your agent misbehaves — generates bizarre tool calls, makes confusing decisions, produces overconfident nonsense — you can reason about why based on what the training data likely contained, rather than treating the model as an inscrutable black box.</li>
+</ul>
+<h2>Looking Ahead</h2>
+<p>This lecture covered how LLMs are trained and why the training process explains their behavior. The next lecture examines what bridges the gap between a language model and an agent: tool calling, system prompts, and the agent loop that turns next-token prediction into real-world action.</p>
+</div>
+</body>
+</html>

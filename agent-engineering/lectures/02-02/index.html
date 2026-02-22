@@ -10,17 +10,20 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>How LLMs Are Trained</h1>
-<p><strong>Lecture 2.2</strong></p>
-<ul>
-  <li>Three-stage pipeline: pre-training, instruction tuning, RLHF</li>
-  <li>Training data explains behavior: dramatic prose (internet writing), great code (GitHub issues→commits), over-engineering (blog culture)</li>
-  <li>Instruction tuning side effects: verbosity, agreeableness</li>
-  <li>RLHF side effects: sycophancy, hedging, confident errors</li>
-  <li>The "training data detective" framework: predict LLM behavior from training data</li>
-</ul>
+<p><strong>Module 2, Lecture 2.2 | Introduction to Agentic Systems</strong></p>
+<p>This lecture explains the three-stage training pipeline behind commercial LLMs — pre-training, instruction tuning, and RLHF — and shows how each stage produces specific, predictable behaviors. Pre-training on internet text explains dramatic prose and over-engineered code. Instruction tuning introduces verbosity and agreeableness. RLHF creates sycophancy, hedging, and confident errors. The lecture introduces a &quot;training data detective&quot; framework: when an LLM does something surprising, ask what was in the training data that would produce that behavior. This is a practical engineering skill for predicting LLM strengths and weaknesses, designing effective context, and debugging agent behavior.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-02-02.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://arxiv.org/abs/2203.02155">Training language models to follow instructions with human feedback (Ouyang et al., 2022)</a> — The InstructGPT paper that established the three-stage SFT → reward model → RLHF pipeline</li>
+<li><a href="https://huggingface.co/blog/rlhf">Illustrating Reinforcement Learning from Human Feedback (RLHF)</a> — Hugging Face&#39;s visual explainer of the RLHF process, covering reward model training and PPO optimization</li>
+<li><a href="https://magazine.sebastianraschka.com/p/llm-training-rlhf-and-its-alternatives">LLM Training: RLHF and Its Alternatives</a> — Sebastian Raschka&#39;s overview of RLHF, DPO, and other post-training alignment techniques</li>
+<li><a href="https://openai.com/index/instruction-following/">Aligning language models to follow instructions (OpenAI Blog)</a> — OpenAI&#39;s blog post announcing InstructGPT, written for a general audience</li>
 </ul>
 </div>
 </body>
