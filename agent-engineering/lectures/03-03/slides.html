@@ -222,37 +222,6 @@ Low temperature for reliability. Reasonable max_tokens. System prompt and conver
 ???
 [2 min] The highlighted lines show what's new in this lecture. The closing callout is critical: context engineering > parameter tuning.
 
----
-
-# Live Demo: `generation_config.py`
-
-A complete, well-configured agent call that analyzes code:
-
-.small[
-```python
-AGENT_CONFIG = {
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 4096,
-    "temperature": 0,
-}
-SYSTEM_PROMPT = """You are a code analysis assistant. When asked about
-code, explain clearly and concisely. If you identify a bug, state
-the line, the problem, and the fix."""
-
-response = client.messages.create(
-    **AGENT_CONFIG, system=SYSTEM_PROMPT,
-    messages=[{"role": "user",
-        "content": "What happens if I call average([])?\n\n"
-                   "```python\ndef average(numbers):\n"
-                   "    total = 0\n    for n in numbers:\n"
-                   "        total += n\n    return total / len(numbers)\n```"
-    }]
-)
-```
-]
-
-???
-[2 min] Run generation_config.py. The model reliably identifies the ZeroDivisionError. Run it twice to show temperature=0 gives the same analysis both times. Point out the config dict pattern — this is how you'll structure agent configurations.
 
 ---
 

@@ -10,20 +10,20 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Controlling Generation</h1>
-<p><strong>Lecture 3.3</strong></p>
-<ul>
-  <li>Temperature: controlling randomness (0.0 = deterministic, 1.0 = creative)</li>
-  <li>Top-k and top-p (nucleus) sampling explained intuitively</li>
-  <li>When to use which settings: coding tasks vs. creative tasks vs. agent decisions</li>
-  <li>Max tokens: controlling output length</li>
-  <li>Stop sequences: telling the model when to stop</li>
-  <li>The implications for agent reliability: why agents need low temperature</li>
-</ul>
+<p><strong>Module 3, Lecture 3.3 | Working with LLMs in Practice</strong></p>
+<p>This lecture covers the parameters that control how an LLM generates its response — temperature, top-k, top-p, and max tokens. Temperature is the most important lever for agent development: low values produce reliable, deterministic behavior; high values introduce creative variation. The lecture explains how each parameter works, demonstrates their effects with concrete examples and runnable scripts, and provides practical defaults for agent work. The key takeaway is one of proportion: generation parameters are worth understanding and setting correctly, but the real work of agent engineering happens in the context.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-03-03.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="generation_config.py">generation_config.py</a> (Python demo)</li>
-  <li><a href="temperature_demo.py">temperature_demo.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://www.promptingguide.ai/introduction/settings">LLM Settings — Prompt Engineering Guide</a> — Comprehensive reference covering temperature, top-p, and max tokens with clear explanations of how each parameter affects generation behavior.</li>
+<li><a href="https://letsdatascience.com/llm-sampling-parameters-explained/">LLM Sampling Parameters Explained — Let&#39;s Data Science</a> — Detailed walkthrough of temperature, top-k, and top-p sampling with probability distribution visualizations showing how each parameter reshapes token selection.</li>
+<li><a href="https://www.phdata.io/blog/how-to-tune-llm-parameters/">How to Tune LLM Parameters for Optimal Performance — phData</a> — Practical guide to tuning generation parameters with use-case-specific recommendations and guidance on combining temperature with top-p and top-k.</li>
+<li><a href="https://codefinity.com/blog/Understanding-Temperature-Top-k-and-Top-p-Sampling-in-Large-Language-Models">Understanding Temperature, Top-k, and Top-p Sampling — Codefinity</a> — Beginner-friendly explanation of sampling methods with intuitive analogies and visual examples of how probability distributions change at different parameter values.</li>
 </ul>
 </div>
 </body>

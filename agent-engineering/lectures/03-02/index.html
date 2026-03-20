@@ -10,25 +10,23 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>The Model Landscape</h1>
-<p><strong>Lecture 3.2</strong></p>
-<ul>
-  <li>Providers, brands, and models: the three-layer hierarchy (Anthropic → Claude → Sonnet)</li>
-  <li>Model tiers across providers: fast/cheap, balanced, frontier — the consistent pattern</li>
-  <li>The tradeoffs: capability, speed (latency), cost, context window size</li>
-  <li>Frontier models: the most capable models available, and why "frontier" is a moving target</li>
-  <li>Frontier hardware: hundreds of billions of parameters, GPU clusters, why these are cloud-only</li>
-  <li>Billing: per-token pricing, input vs. output costs, ballpark estimates for common tasks</li>
-  <li>Local models (Ollama, open-source): free inference, privacy, hardware requirements, quality gap</li>
-  <li>Local hardware reality: ~1GB per billion parameters, what runs on a laptop vs. gaming GPU vs. multi-GPU</li>
-  <li>Practical guidance: Sonnet as default, Haiku for iteration, Opus for hard problems</li>
-</ul>
+<p><strong>Module 3, Lecture 3.2 | Working with LLMs in Practice</strong></p>
+<p>This lecture unpacks the model parameter from your first API call. It covers the three-layer hierarchy of providers, brands, and models, the consistent three-tier pattern across providers (fast/cheap, balanced, frontier), and the four axes of model selection: capability, speed, cost, and context window. It explains frontier model infrastructure, per-token billing mechanics with ballpark cost estimates, and the hardware realities of running models locally. A live demo compares Haiku, Sonnet, and Opus on the same prompt to make the tradeoffs concrete.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
 <video class="lecture-video" controls preload="metadata">
   <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-03-02.mp4" type="video/mp4">
 </video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="model_comparison.py">model_comparison.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://docs.anthropic.com/en/docs/about-claude/models/overview">Claude Models Overview — Anthropic Docs</a> — The complete list of available Claude models, their API IDs, context window sizes, and capabilities. The authoritative reference for current model names and versions.</li>
+<li><a href="https://docs.anthropic.com/en/docs/about-claude/pricing">Anthropic Pricing</a> — Per-token costs for each Claude tier (Haiku, Sonnet, Opus) and context window sizes. The first place to look when estimating the cost of an agent task.</li>
+<li><a href="https://artificialanalysis.ai/leaderboards/models">Artificial Analysis LLM Leaderboard</a> — An independent leaderboard comparing 300+ models across quality, speed, price, and context window. Useful for understanding the tradeoff landscape across providers.</li>
+<li><a href="https://arena.ai/leaderboard">Chatbot Arena Leaderboard</a> — Crowdsourced leaderboard based on blind human preference comparisons between models. The closest thing to a real-world quality ranking, updated regularly.</li>
+<li><a href="https://www.datacamp.com/tutorial/llm-benchmarks">LLM Benchmarks Explained — DataCamp</a> — A guide to the major benchmarks (MMLU, GPQA, HumanEval, GSM8K) and what they actually measure. Essential reading for interpreting model comparisons critically.</li>
+<li><a href="https://localllm.in/blog/quantization-explained">The Complete Guide to LLM Quantization — LocalLLM</a> — How reducing weight precision (FP16 to INT8/INT4) shrinks model memory requirements with modest quality tradeoffs. Covers GPTQ, AWQ, and GGUF methods.</li>
+<li><a href="https://ollama.com">Ollama</a> — Tool for running open-source LLMs locally. The easiest on-ramp for local model experimentation mentioned in the lecture.</li>
 </ul>
 </div>
 </body>

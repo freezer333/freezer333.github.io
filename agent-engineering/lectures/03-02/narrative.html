@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Model Landscape — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 3.2</a></div></nav>
+<div class="page_content"><h1>The Model Landscape</h1>
+<p>In Lecture 3.1, you made your first API call and passed a <code>model</code> parameter — something like <code>claude-sonnet-4-6</code>. This lecture explains what that string actually means, where it comes from, how to choose between models, and what the cost and performance tradeoffs look like in practice.</p>
+<h2>Providers, Brands, and Models</h2>
+<p>There are three layers to specifying which model you use, and conflating them is a common source of confusion.</p>
+<p><strong>Provider</strong> is the company that builds and hosts the models: Anthropic, OpenAI, Google, Meta, and others. Your choice of provider affects which SDK and API you use. Many providers expose compatible API layers — for example, the OpenAI SDK can call Anthropic models through compatible endpoints — but this is not universal. The Anthropic SDK used in this course does not directly call Google models.</p>
+<p><strong>Brand</strong> is the product name. Claude is Anthropic&#39;s brand. GPT (or ChatGPT) is OpenAI&#39;s. Gemini is Google&#39;s. When someone says &quot;I used ChatGPT,&quot; they are referring to the brand, not a specific model. A brand encompasses an entire family of models at different capability tiers.</p>
+<p><strong>Model</strong> is the specific version you call through the API. <code>claude-sonnet-4-6</code> is a model — it identifies the Sonnet tier at a specific version. <code>gpt-5</code> is a model. The brand is marketing; the model is what runs your tokens.</p>
+<h3>Model Tiers</h3>
+<p>Every major provider offers a family of models at different capability tiers. The pattern is consistent across providers:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Anthropic (Claude)</th>
+<th>OpenAI</th>
+<th>Google (Gemini)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Fastest / Cheapest</strong></td>
+<td>Haiku 4.5</td>
+<td>GPT-5 mini</td>
+<td>Gemini 3 Flash</td>
+</tr>
+<tr>
+<td><strong>Balanced</strong></td>
+<td>Sonnet 4.6</td>
+<td>GPT-5</td>
+<td>Gemini 3 Pro</td>
+</tr>
+<tr>
+<td><strong>Most Capable</strong></td>
+<td>Opus 4.6</td>
+<td>GPT-5.2 Pro</td>
+<td>Gemini 3 Deep Think</td>
+</tr>
+</tbody></table>
+<p>The specific model names in this table will change — they were current as of early 2026. The three-tier pattern will not. Every provider offers this fundamental tradeoff: you trade capability for speed and cost.</p>
+<p>Each tier is a fundamentally different model — different size, different architecture decisions, different training. Haiku is not a dumbed-down version of Opus. They are separate models optimized for different points on the tradeoff curve. The biggest difference between tiers is model size, which determines how much information the model retains and applies when generating a response.</p>
+<h2>The Tradeoffs</h2>
+<p>When choosing a model tier, you are making decisions along four axes.</p>
+<p><strong>Capability</strong> refers to how well the model handles complex reasoning, nuanced instructions, and difficult tasks. Larger models generally produce better output on hard problems. For simple tasks — a classification, a short factual answer — the difference between tiers is often negligible. The gap widens as tasks become more subtle: explaining a concept to a specific audience, following layered constraints, or reasoning through multi-step problems.</p>
+<p><strong>Speed (latency)</strong> is the time to first token and tokens per second. Smaller models respond faster. For agents that run in loops making many sequential calls, latency compounds — a model that is 2x slower means the agent takes 2x longer on a 10-step task. Haiku can return a response in a fraction of the time Sonnet takes, which matters when your agent is making dozens of calls per task.</p>
+<p><strong>Cost</strong> is priced per token, with input and output billed separately. Output tokens cost more than input tokens, typically 3-5x more, because each output token represents one forward pass through the model. The most capable models can be 10-30x more expensive per token than the cheapest tier.</p>
+<p><strong>Context window</strong> is the maximum number of tokens the model can process in a single call. This varies by model, not just by tier — always check the documentation for current limits.</p>
+<h2>Frontier Models</h2>
+<p>A <strong>frontier model</strong> is the most capable model currently available — the one pushing the boundary of what AI can do. Training a frontier model at a premier provider costs $100 million to $1 billion or more in compute. It takes months of algorithms running on clusters of thousands of GPUs, processing massive curated datasets. A model with 400 billion parameters requires roughly 800 GB just to hold the weights in memory — far beyond any single GPU. These models run on clusters of dozens to hundreds of high-end GPUs (NVIDIA H100s at roughly $30,000 each) networked together.</p>
+<p>This is why frontier models are offered as cloud APIs. Nobody is running these on a laptop. You are renting access to massive infrastructure, and the per-token pricing reflects the cost of building and hosting that infrastructure.</p>
+<p>Frontier is a moving target. What is frontier today will be mid-tier in a year. The models considered &quot;balanced&quot; today outperform what was frontier two years ago. The practical implication: build your agents so that swapping models is easy. If you define the model as a variable, switching is a one-line change.</p>
+<h2>Billing: How You Pay</h2>
+<p>Most providers charge per token, and the typical billing model works as follows: you credit your account with a balance, and API calls draw against that balance at a per-token rate.</p>
+<ul>
+<li><strong>Input tokens</strong> — what you send to the model (system prompt, conversation history, tool results). Charged at one rate.</li>
+<li><strong>Output tokens</strong> — what the model generates. Charged at a higher rate, because each output token requires a full forward pass through the model.</li>
+<li><strong>No charge for thinking time</strong> — you pay only for tokens in and tokens out. There is generally no way to pay more for faster response times, though some providers offer premium tiers with less contention on their infrastructure.</li>
+</ul>
+<h3>Ballpark Costs</h3>
+<p>Using Claude Sonnet as a reference point:</p>
+<ul>
+<li>A 20-message conversation costs roughly <strong>$0.01 to $0.05</strong>.</li>
+<li>An agent running a multi-step task with several tool calls might cost <strong>$0.10 to $0.50</strong>, depending on how much context it accumulates.</li>
+<li>A casual chat loop session costs <strong>a few cents</strong>.</li>
+</ul>
+<p>These numbers shift as models and pricing change — check the provider&#39;s pricing page for current rates. At the scale of coursework and personal experimentation, API costs are modest. At the scale of a production application with thousands of users having extended conversations throughout the day, costs escalate quickly. A few pennies per user per session becomes hundreds of dollars per day.</p>
+<p>This is one reason the API returns usage information with every response — so you can track and budget your token consumption.</p>
+<h3>Set a Spending Limit</h3>
+<p>Set a spending limit on your API account before you start experimenting. Infinite loops happen — every programmer writes one eventually. A hard budget cap ensures a bug costs you $20, not $200. For Anthropic, you credit your account in advance, and once the balance is exhausted, API calls return error messages. Start with a small balance, gauge your actual usage, and add more as needed. You can re-credit your account instantly, so running out is a minor inconvenience, not a crisis.</p>
+<h2>Hardware and Local Models</h2>
+<h3>What It Takes to Run Frontier Models</h3>
+<p>Understanding the hardware behind frontier models explains both why API pricing exists and why running models locally has real constraints.</p>
+<p>Frontier models have hundreds of billions of parameters. Each parameter is typically stored as a 16-bit floating-point number, so a 400-billion-parameter model requires roughly 800 GB just for the weights. That memory must be GPU-accessible — on most architectures this means GPU VRAM, not system RAM (Apple Silicon&#39;s unified memory is an exception). A single high-end GPU like the NVIDIA H100 has 80 GB of VRAM, so a frontier model needs dozens of GPUs networked together just for inference, let alone training.</p>
+<h3>Running Models Locally</h3>
+<p>Not every model is frontier-sized. Open-source models come in a range of sizes, and many can run on consumer hardware.</p>
+<p>Tools like <strong>Ollama</strong> make it straightforward to download and run open-source models (Llama, Mistral, Phi, and others) on your own machine. No API key, no per-token billing, complete privacy.</p>
+<p>The rule of thumb for memory requirements is simple: approximately <strong>1 GB of memory per billion parameters</strong> at standard 16-bit precision. Quantization — storing weights at lower precision (INT8 or INT4 instead of FP16) — can cut that roughly in half, with a modest quality tradeoff.</p>
+<table>
+<thead>
+<tr>
+<th>Model Size</th>
+<th>Memory Needed</th>
+<th>What Can Run It</th>
+<th>Quality Level</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>1-3B parameters</strong></td>
+<td>2-4 GB</td>
+<td>Any modern laptop (CPU)</td>
+<td>Simple tasks, fast, limited reasoning</td>
+</tr>
+<tr>
+<td><strong>7-8B parameters</strong></td>
+<td>4-8 GB (quantized)</td>
+<td>Laptop with decent GPU or 16GB RAM</td>
+<td>Good for many tasks, solid quality</td>
+</tr>
+<tr>
+<td><strong>13-14B parameters</strong></td>
+<td>8-14 GB (quantized)</td>
+<td>Gaming GPU (RTX 3080/4070+)</td>
+<td>Strong general capability</td>
+</tr>
+<tr>
+<td><strong>30-70B parameters</strong></td>
+<td>16-40 GB (quantized)</td>
+<td>High-end GPU (RTX 4090, 24GB VRAM)</td>
+<td>Approaching commercial model quality</td>
+</tr>
+<tr>
+<td><strong>70B+ parameters</strong></td>
+<td>40+ GB</td>
+<td>Multi-GPU setup or cloud instance</td>
+<td>Near-frontier on some benchmarks</td>
+</tr>
+</tbody></table>
+<p>Speed matters as much as whether the model fits in memory. A 7B model on a decent laptop might generate 20-30 tokens per second — perfectly usable for interactive work. A 70B model on the same hardware might manage 2-3 tokens per second — painfully slow.</p>
+<h3>Local Model Tradeoffs</h3>
+<p><strong>Advantages:</strong></p>
+<ul>
+<li><strong>No cost per token</strong> — once you download the model, inference is free.</li>
+<li><strong>Privacy</strong> — your data never leaves your machine. Every prompt you send to a cloud API is transmitted to the provider, logged, and potentially used according to their terms of service.</li>
+<li><strong>No rate limits</strong> — run as many requests as your hardware can handle.</li>
+</ul>
+<p><strong>Disadvantages:</strong></p>
+<ul>
+<li><strong>Hardware requirements</strong> — meaningful GPU or memory is needed for anything beyond small models.</li>
+<li><strong>Model quality</strong> — the best open-source models are good but generally trail frontier commercial models on complex reasoning tasks. Open-weight models tend to lag roughly six months behind frontier capabilities.</li>
+<li><strong>Speed</strong> — on consumer hardware, larger models are slow. Cloud APIs run on optimized infrastructure that is significantly faster.</li>
+<li><strong>You manage everything</strong> — updates, configuration, quantization tradeoffs, and hardware maintenance.</li>
+</ul>
+<p>For this course, the Anthropic API provides a consistent, high-quality baseline regardless of what hardware you own. Beyond the course, local models are a real option — especially for agents that process sensitive data or need to run at high volume without per-token costs. The Anthropic SDK and most frameworks abstract the model behind an API interface, so if you build your agent cleanly, switching from a cloud model to a local one is often just changing the client configuration.</p>
+<h2>Comparing Models in Practice</h2>
+<p>The code listing <code>model_comparison.py</code> demonstrates the tradeoffs concretely. It sends the same prompt to Haiku, Sonnet, and Opus and prints the response, timing, and token usage for each:</p>
+<pre><code class="language-python">PROMPT = &quot;Explain what a REST API is in 2-3 sentences.&quot;
+MODELS = [
+    (&quot;claude-haiku-4-5-20251001&quot;, &quot;Haiku (fast/cheap)&quot;),
+    (&quot;claude-sonnet-4-6&quot;, &quot;Sonnet (balanced)&quot;),
+    (&quot;claude-opus-4-6&quot;, &quot;Opus (frontier)&quot;),
+]
+
+for model_id, label in MODELS:
+    start = time.time()
+    response = client.messages.create(
+        model=model_id, max_tokens=256,
+        messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: PROMPT}]
+    )
+    elapsed = time.time() - start
+    print(f&quot;{label}: {elapsed:.2f}s&quot;)
+    print(f&quot;  {response.content[0].text}&quot;)
+</code></pre>
+<p>For a simple prompt like &quot;explain what a REST API is,&quot; all three tiers produce reasonable answers. Haiku is significantly faster — often completing in a fraction of the time Sonnet takes. The quality difference on simple tasks is minimal.</p>
+<p>The gap widens with harder prompts. Change the task to &quot;explain REST APIs in two to three paragraphs, targeting a novice programmer who has done some JavaScript&quot; and the differences become visible. Sonnet and Opus produce responses that are more sensitive to the target audience, use more appropriate framing, and provide more nuanced explanations. Haiku still produces a correct answer, but with less adaptation to the subtleties of the prompt.</p>
+<p>This relationship is important for agent development. User prompts are rarely the sophisticated part — they tend to be brief and underspecified. It is the system prompt and tool descriptions that add context and complexity. As an agent developer, you are the one adding the color that determines whether a more capable model actually produces meaningfully better output. Experimenting with model tiers on your specific prompts and system instructions is essential.</p>
+<p>The complete script is in <code>model_comparison.py</code>.</p>
+<h2>Model Selection: Practical Guidance</h2>
+<ul>
+<li>Use <strong>Sonnet</strong> (or equivalent balanced-tier model) as your default. It offers strong quality at reasonable cost and speed.</li>
+<li>Use <strong>Haiku</strong> (or equivalent fast-tier model) when iterating quickly, when the task is simple (classification, short factual answers), or when latency matters.</li>
+<li>Use <strong>Opus</strong> (or equivalent frontier model) when you genuinely need the extra capability — complex reasoning, large context, highly nuanced responses.</li>
+<li>Define the model as a variable in your code — make switching a one-line change.</li>
+<li>Check the provider&#39;s documentation for current models and pricing. Names and versions change frequently. The complete list of Anthropic models and their IDs is at <a href="https://docs.anthropic.com/en/docs/about-claude/models/overview">docs.anthropic.com/en/docs/about-claude/models/overview</a>.</li>
+</ul>
+<p>Unless you are building a production application with significant user volume, it is almost always more cost-effective to use a cloud API than to procure and manage your own hardware. Start with the API, and consider local models when your use case demands privacy, high volume, or zero marginal cost.</p>
+</div>
+</body>
+</html>
