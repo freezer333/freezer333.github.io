@@ -19,7 +19,7 @@ count: false
 In Lecture 3.1, you passed a `model` parameter that looked like this:
 
 ```python
-model="claude-sonnet-4-5-20250929"
+model="claude-sonnet-4-6"
 ```
 
 --
@@ -32,56 +32,29 @@ And how do you choose?
 [1 min] Quick opening that connects directly to what they just did in Lecture 3.1. This is a shorter lecture (~12 min) — keep the pace up.
 
 ---
-class: center, middle, inverse
-# Providers, Brands, and Models
-
----
 
 # Three Layers
 
-There's a hierarchy that trips up beginners:
-
---
-
 **Provider** — the company that builds and hosts the models. Anthropic, OpenAI, Google, Meta.
 
---
+**Brand** — the product name. Claude, ChatGPT/GPT, Gemini, Llama.
 
-**Brand** — the product name. Claude, ChatGPT/GPT, Gemini, Llama. When someone says "I used ChatGPT," they're talking about the brand, not a specific model.
+**Model** — the specific version you call through the API. `claude-sonnet-4-6` is a model. `gpt-4o` is a model.
 
---
+As of February 2026:
 
-**Model** — the specific version you call through the API. `claude-sonnet-4-5-20250929` is a model. `gpt-4o` is a model.
-
-.callout[The brand is marketing. The model is what runs your tokens.]
-
-???
-[2 min] Make the hierarchy explicit. Students conflate "Claude" (brand) with a specific model all the time. The callout quote is worth emphasizing.
-
----
-
-# Inside a Brand — Model Tiers
-
-Every major provider offers a family of models at different capability tiers. As of February 2026:
-
-| Tier | Anthropic (Claude) | OpenAI | Google (Gemini) |
+.small[
+| Tier | Anthropic (Claude) | OpenAI (ChatGPT) | Google (Gemini) |
 |---|---|---|---|
 | **Fastest / Cheapest** | Haiku 4.5 | GPT-5 mini | Gemini 3 Flash |
 | **Balanced** | Sonnet 4.6 | GPT-5 | Gemini 3 Pro |
 | **Most Capable** | Opus 4.6 | GPT-5.2 Pro | Gemini 3 Deep Think |
-
---
-
-These names **will** change — the **pattern** won't. Every provider offers this tradeoff: you trade capability for speed and cost.
+]
 
 .info[Each tier is a fundamentally different model — different size, different architecture, different training. Haiku isn't a dumbed-down Opus. They're separate models optimized for different points on the tradeoff curve.]
 
 ???
-[2 min] The table will go stale — acknowledge this explicitly. The point is the consistent three-tier pattern across providers, not the specific model names.
-
----
-class: center, middle, inverse
-# The Tradeoffs
+[3 min] Make the hierarchy explicit — provider, brand, model. The table will go stale, acknowledge this. The point is the consistent three-tier pattern across providers, not the specific model names.
 
 ---
 
@@ -114,20 +87,24 @@ Maximum tokens the model can process in one call. Varies by model, not just by t
 
 # Frontier Models
 
+.split-left[
 > A **frontier model** is the most capable model currently available — pushing the boundary of what AI can do.
 
---
+Training a frontier model costs **$100M–$1B+** in compute, takes **months** on clusters of thousands of GPUs, and requires massive curated datasets. This investment is why frontier access is sold as a cloud API.
 
-Today that means models like Claude Opus, GPT-4.5, and Gemini Ultra.
-
---
-
-But **frontier is a moving target**. What's frontier today will be mid-tier in a year. The models we consider "balanced" today outperform what was frontier two years ago.
+**Frontier is a moving target.** What's frontier today will be mid-tier in a year. The models we consider "balanced" today outperform what was frontier two years ago.
 
 .callout[Build your agents so that swapping models is easy — it's a one-line change if you've done it right.]
+]
+
+.split-right[
+<img src="resources.png" style="max-width:90%;"/>
+]
+
+<div class="clear"></div>
 
 ???
-[1 min] The "moving target" framing helps students avoid anchoring on specific model names. The callout is practical advice they should follow from day one.
+[2 min] The training cost grounds the abstraction — students should understand the scale of investment behind each API call. The "moving target" framing helps them avoid anchoring on specific model names.
 
 ---
 
@@ -196,42 +173,22 @@ That's far beyond any single GPU. These run on clusters — dozens to hundreds o
 
 # Running Models Locally
 
-Not every model is frontier-sized. Open-source models come in a range of sizes, and many *can* run on consumer hardware.
-
-**Tools like Ollama** make it straightforward to download and run open-source models (Llama, Mistral, Phi) on your own machine. No API key, no per-token billing, complete privacy.
-
---
-
-The rule of thumb: **~1 GB of memory per billion parameters** (at 16-bit precision).
-
-Quantization — storing weights at lower precision — cuts that roughly in half, with a modest quality trade-off.
-
-???
-[1 min] Quick intro before the hardware table. Ollama is the tool they're most likely to use if they try local models.
-
----
-
-# Local Model Hardware Requirements
+Tools like **Ollama** let you run open-source models (Llama, Mistral, Phi) on your own machine. No API key, no per-token billing, complete privacy. Rule of thumb: **~1 GB of memory per billion parameters**. Quantization (lower precision weights) cuts that roughly in half.
 
 .small[
-| Model Size | Memory Needed | What Can Run It | Quality Level |
-|---|---|---|---|
-| **1-3B** | 2-4 GB | Any modern laptop (CPU) | Simple tasks, limited reasoning |
-| **7-8B** | 4-8 GB (quantized) | Laptop with decent GPU or 16GB RAM | Good for many tasks |
-| **13-14B** | 8-14 GB (quantized) | Gaming GPU (RTX 3080/4070+) | Strong general capability |
-| **30-70B** | 16-40 GB (quantized) | High-end GPU (RTX 4090, 24GB) | Approaching commercial quality |
-| **70B+** | 40+ GB | Multi-GPU or cloud instance | Near-frontier on some tasks |
+| Model Size | Memory Needed | What Can Run It |
+|---|---|---|
+| **1-3B** | 2-4 GB | Any modern laptop (CPU) |
+| **7-8B** | 4-8 GB (quantized) | Laptop with decent GPU or 16GB RAM |
+| **13-14B** | 8-14 GB (quantized) | Gaming GPU (RTX 3080/4070+) |
+| **30-70B** | 16-40 GB (quantized) | High-end GPU (RTX 4090, 24GB) |
+| **70B+** | 40+ GB | Multi-GPU or cloud instance |
 ]
 
---
-
-**Speed matters too:**
-
-- 7B model on a decent laptop: **20-30 tokens/sec** — perfectly usable
-- 70B model on the same hardware: **2-3 tokens/sec** — painfully slow
+**Speed:** 7B on a laptop → **20-30 tokens/sec** (usable). 70B on the same hardware → **2-3 tokens/sec** (painfully slow).
 
 ???
-[2 min] The table gives students a concrete sense of what they could actually run. Most students have laptops in the 7-8B range.
+[2 min] Combined slide. Ollama is the easiest on-ramp. The table gives students a concrete sense of what they could run. Most students have laptops in the 7-8B range.
 
 ---
 
@@ -242,6 +199,8 @@ Quantization — storing weights at lower precision — cuts that roughly in hal
 - **No cost per token** — inference is free after download
 - **Privacy** — data never leaves your machine
 - **No rate limits** — run as many requests as your hardware handles
+
+.info[For this course, we use the Anthropic API for a consistent, high-quality baseline. But local models are a real option for agents that process sensitive data or run at high volume.]
 ]
 
 .split-right[
@@ -254,27 +213,25 @@ Quantization — storing weights at lower precision — cuts that roughly in hal
 
 <div class="clear"></div>
 
-.info[For this course, we use the Anthropic API for a consistent, high-quality baseline. But local models are a real option for agents that process sensitive data or run at high volume.]
-
 ???
 [1 min] Quick pros/cons. The info box explains the course decision without dismissing local models.
 
 ---
 
-# Model Selection — The Short Version
+# Model Selection
 
-You don't need to agonize over model selection:
-
---
-
+.split-left[
 - Use **Sonnet** (balanced tier) as your default
 - Use **Haiku** (fast tier) for quick iterations or simple tasks
 - Use **Opus** (frontier tier) when you genuinely need the extra capability
+]
 
---
-
+.split-right[
 - Define the model as a variable — make switching easy
 - Check the docs for current models and pricing — names and versions change
+]
+
+<div class="clear"></div>
 
 ???
 Practical guidance students can follow immediately. This is the slide to remember.
@@ -296,7 +253,8 @@ class: center, middle, inverse
 PROMPT = "Explain what a REST API is in 2-3 sentences."
 MODELS = [
     ("claude-haiku-4-5-20251001", "Haiku (fast/cheap)"),
-    ("claude-sonnet-4-5-20250929", "Sonnet (balanced)"),
+    ("claude-sonnet-4-6", "Sonnet (balanced)"),
+    ("claude-opus-4-6", "Opus (frontier)"),
 ]
 
 for model_id, label in MODELS:

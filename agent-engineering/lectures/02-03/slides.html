@@ -13,18 +13,30 @@ count: false
 # From Language Models to Agents
 
 ---
+class: center, middle
 
-# What Bridges the Gap from LLM to Agent?
+# LLM and Agent Aren't the Same Thing
+
+<div style="display: flex; align-items: center; justify-content: center; gap: 1em;">
+    <img src="llm.png" style="max-height: 350px;"/>
+    <span style="font-size: 3em; font-weight: bold;">≠</span>
+    <img src="agent.png" style="max-height: 350px;"/>
+</div>
+
+???
+Visual contrast to set up the lecture's central question. The rest of the lecture explains what bridges this gap.
+
+---
+
+# LLM Is Connected to Action by Code
 
 A language model by itself is just a very sophisticated **text generator**.
 
 --
 
-It can write impressively about fixing code — but it can't actually **open a file**.
-
-It can describe a web search — but it can't actually **make one**.
-
-It can plan a series of actions — but it can't **execute any of them**.
+- It can write impressively about fixing code — but it can't actually **open a file**
+- It can describe a web search — but it can't actually **make one**
+- It can plan a series of actions — but it can't **execute any of them**
 
 --
 
@@ -70,26 +82,26 @@ These limitations establish what we need to bridge.
 
 # But It Can Do One Very Important Thing
 
+.split-left[
 An LLM *can*:
-
---
 
 **Reason** about what action should be taken
 
---
-
 **Express** that action in a structured format
-
---
 
 **Incorporate** the results into its ongoing reasoning
 
---
-
 .callout[If the LLM can say "I need to read this file" in a structured way, and your code can execute that read and return the contents, and the LLM can reason about those contents — **you have an agent.**]
+]
+
+.split-right[
+.info[LLMs are specifically trained to follow tool-calling instructions. Providers invest significant effort into fine-tuning models to produce correctly structured tool requests. It's not 100% — but in newer models, it is very reliable.]
+]
+
+<div class="clear"></div>
 
 ???
-This is the bridge. The LLM provides reasoning; your code provides capabilities. Together: an agent.
+This is the bridge. The LLM provides reasoning; your code provides capabilities. Together: an agent. The info box reinforces that tool calling isn't a hack — it's a first-class capability that model providers actively optimize for.
 
 ---
 class: center, middle, inverse
@@ -110,18 +122,29 @@ Tool calling is a simple protocol:
 
 --
 
-**2. The model decides to use a tool**
+**2. The model decides to use a tool** — instead of regular text, it returns structured JSON:
 
-Instead of regular text, it responds with a structured request: *"I want to use read_file with filename = main.py."*
+```json
+{
+  "tool": "read_file",
+  "arguments": { "filename": "main.py" }
+}
+```
 
 --
 
-**3. Your code executes the tool**
+**3. Your code executes the tool** and returns the result:
 
-The LLM doesn't execute anything. Your code receives the request, runs the operation, and gets the result.
+```json
+{
+  "result": "import sys\n\ndef main():\n    print('hello')\n..."
+}
+```
+
+The LLM never executes anything. Your code receives the request, runs the operation, and feeds the result back.
 
 ???
-Walk through this step by step. The protocol is the key mechanism.
+Walk through this step by step. The protocol is the key mechanism. The JSON examples make it concrete — this is what students will actually see when they start building.
 
 ---
 
@@ -150,17 +173,19 @@ Emphasize: the model never executes anything. Your code does. This is the fundam
 
 Recognize this? It's the **perception-reasoning-action loop** from Lecture 1.1, just more concrete:
 
---
+.split-left[
+<img src="llm-tool-loop.png" style="max-width:95%;"/>
+]
+
+.split-right[
+<div style="padding-top:1.5em;"></div>
 
 - **Perceive** = tool results entering the context window
-
---
-
 - **Reason** = the LLM predicting the next tokens, deciding what to do
-
---
-
 - **Act** = the LLM requesting a tool call, your code executing it
+]
+
+<div class="clear"></div>
 
 --
 
@@ -178,43 +203,59 @@ class: center, middle, inverse
 
 # Who Is This Agent?
 
+.split-left[
 Tool calling gives the model **capabilities**. But how does it know *when* to use which tool? How does it know how to behave?
-
---
 
 The **system prompt** — a message at the very beginning of the context that establishes the agent's identity, capabilities, and behavioral guidelines.
 
+.callout[Defining the role the agent emulates provides indirect direction. The LLM is a next-token predictor: tell it what to predict, and it will follow.]
+]
+
+.split-right[
+<img src="system-prompt.png" style="max-width:90%;"/>
+]
+
+<div class="clear"></div>
+
 ???
-Transition from "how agents act" to "how you shape their behavior."
+Transition from "how agents act" to "how you shape their behavior." The callout reinforces that role descriptions aren't just flavor text — they steer the model's behavior because they change the distribution of likely next tokens.
 
 ---
 
 # What Goes in a System Prompt
 
-**Identity and role:**
+.split-left[
+- **Identity and role**
+- **Available tools and when to use them**
+- **Behavioral guidelines**
+- **Constraints**
+]
 
-"You are a coding assistant that helps developers understand and modify their codebase."
+.split-right[
+```text
+You are a coding assistant that helps
+developers understand and modify their
+codebase.
 
---
+Use read_file to examine code before
+suggesting changes.
 
-**Available tools and when to use them:**
+Be concise. When you're unsure, say so
+rather than guessing.
 
-"Use read_file to examine code before suggesting changes. Always read relevant files before editing."
+Never delete files without explicit user
+confirmation.
+```
+]
 
---
+<div class="clear"></div>
 
-**Behavioral guidelines:**
-
-"Be concise. When you're unsure, say so rather than guessing."
-
---
-
-**Constraints:**
-
-"Never delete files without explicit user confirmation."
+<div style="text-align:center">
+    <img src="system-prompt-building.png" style="max-height:180px;"/>
+</div>
 
 ???
-Each component maps to a design decision students will make when building agents.
+Each component maps to a design decision students will make when building agents. The example on the right shows all four categories in a single system prompt.
 
 ---
 
@@ -262,49 +303,19 @@ This is the synthesis. All five concepts from 02-01 through 02-03 in one place.
 
 ---
 
-# Module 2 Summary
+# Module 2 Complete
 
 With this foundation, you understand:
 
---
-
 - What your agent's brain is actually doing when it "thinks"
-
---
-
 - Why it behaves the way it does .dim[(training data and RLHF)]
-
---
-
 - How it takes action in the world .dim[(tool calling, executed by your code)]
-
---
-
 - How you shape its behavior .dim[(system prompts and context)]
 
---
-
-.info[Next module, we go deeper into context windows, tokenization, and the practical mechanics of LLM APIs. Then prompt and context engineering. And then — **we build.**]
+.info[Next: context windows, tokenization, and the practical mechanics of LLM APIs. Then prompt and context engineering — and then we build.]
 
 ???
-The theoretical foundation is complete.
-
----
-
-# Module 2 Complete
-
-That's the big picture. You now have a complete mental model of what agents are, how the LLM at their core works, and how the pieces fit together.
-
---
-
-Next: the practical details — tokenization, context windows, how generation actually works at the API level.
-
---
-
-Then prompt and context engineering, followed by hands-on building.
-
-???
-The foundation is set for what comes next.
+The theoretical foundation is complete. Everything from here is practical application.
 
     </textarea>
     <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>From Language Models to Agents — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 2.3</a></div></nav>
+<div class="page_content"><h1>From Language Models to Agents</h1>
+<p>Lectures 2.1 and 2.2 established what large language models are and how they acquire their capabilities. An LLM is a next-token predictor trained on internet text, refined through instruction tuning and RLHF. It can produce remarkably coherent prose, reason about complex problems, and generate working code — but it remains, fundamentally, a text generator. It cannot open a file, send an email, or look up today&#39;s weather. This lecture addresses the gap between a language model and an agent, and explains what bridges it.</p>
+<h2>What LLMs Cannot Do</h2>
+<p>An LLM, operating on its own, has several hard limitations:</p>
+<ul>
+<li><strong>No access to current information.</strong> The model is frozen at its training cutoff. If it was trained on data through January 2026, it knows nothing about events in February. There is no convenient mechanism to update the model&#39;s knowledge after training.</li>
+<li><strong>No interaction with the outside world.</strong> An LLM is a mathematical model — a neural network that transforms input tokens into output tokens. It cannot send an email, read a file from disk, query a database, or make a network request. This is counterintuitive if you have already used agents that appear to do all of these things, but the key distinction is that the agent is not the LLM. The agent is the surrounding infrastructure.</li>
+<li><strong>Unreliable math.</strong> LLMs perform arithmetic by prediction, not computation. The model may get simple calculations right because it has seen similar examples in training, but it is fundamentally unreliable for anything requiring precise numerical computation.</li>
+<li><strong>No self-verification.</strong> An LLM cannot look something up to check whether what it just generated is accurate. It has no access to external sources during generation. This is why you cannot simply instruct a model &quot;don&#39;t hallucinate&quot; — hallucination is not a deliberate choice but a consequence of the model&#39;s inability to verify its own outputs.</li>
+<li><strong>No memory between conversations.</strong> Once a conversation ends, the context is gone. The LLM is a one-pass system. It does not retain anything about prior interactions, the user, or the current session. Any appearance of memory is provided by the agent code that manages conversation history.</li>
+</ul>
+<h2>The One Thing LLMs Can Do Well</h2>
+<p>Despite these limitations, an LLM has one capability that makes it extraordinarily useful: it can reason about what action should be taken, express that action in a structured format, and incorporate the results of that action into its ongoing reasoning.</p>
+<p>This is the foundation of the entire agent architecture. If the LLM can say &quot;I need to read this file&quot; in a parseable format, and your code can execute that read and return the contents, and the LLM can then reason about those contents — you have an agent. The LLM provides the reasoning. Your code provides the capabilities. Together, they form the agent loop.</p>
+<h2>Tool Calling</h2>
+<p>The mechanism that bridges text prediction to real-world action is <strong>tool calling</strong> — a protocol that lets the model express structured requests for actions and receive the results as context.</p>
+<h3>How It Works</h3>
+<p>Tool calling follows a five-step flow:</p>
+<p><strong>1. Describe available tools.</strong> When you make an API call, you tell the model what tools exist. Each tool has a name, a description, and a schema for its parameters. For example: &quot;read_file takes a filename and returns the contents of that file.&quot;</p>
+<p><strong>2. The model decides to use a tool.</strong> Instead of responding with regular text, the model produces a structured output — typically JSON — encoding a tool call request. For instance:</p>
+<pre><code class="language-json">{
+  &quot;tool&quot;: &quot;read_file&quot;,
+  &quot;arguments&quot;: { &quot;filename&quot;: &quot;main.py&quot; }
+}
+</code></pre>
+<p>This is not free-form text. The model has been specifically trained to produce correctly structured tool requests when it determines that a tool is needed to fulfill the user&#39;s request.</p>
+<p><strong>3. Your code executes the tool.</strong> The LLM never executes anything. Your agent code receives the tool call, validates it, runs the actual operation (reading the file, in this case), and captures the result.</p>
+<p><strong>4. Feed the result back.</strong> You add the tool result to the conversation as a new message and call the API again. Now the model has the file contents in its context and can reason about them.</p>
+<p><strong>5. The model continues.</strong> It might respond to the user with a final answer, or it might request another tool call. Perhaps the first file wasn&#39;t the right one, or the model learned something that prompted it to read a second file. The loop continues until the model has everything it needs and produces a text response rather than another tool request.</p>
+<h3>Tool Calls Are Just Tokens</h3>
+<p>Tool requests are not a special capability distinct from normal text generation. They are simply text tokens that happen to be in a structured format (JSON). The model has been fine-tuned to produce output in this format when tools are available, but the underlying mechanism is the same next-token prediction from Lecture 2.1. There is nothing fundamentally different about a tool call response and a regular text response — one is parseable as a structured request, the other is natural language.</p>
+<h3>This Is the Agent Loop</h3>
+<p>The tool-calling flow maps directly to the perception-reasoning-action loop introduced in Lecture 1.1:</p>
+<p><img src="llm-tool-loop.png" alt="The LLM tool-calling loop"></p>
+<ul>
+<li><strong>Perceive</strong> — tool results entering the context window</li>
+<li><strong>Reason</strong> — the LLM predicting the next tokens, deciding what to do</li>
+<li><strong>Act</strong> — the LLM requesting a tool call, your code executing it</li>
+</ul>
+<p>The entire multi-step behavior of an agent — reading files, searching the web, editing code, running tests — emerges from this simple loop. The model never does anything more than predict the next token. But because it can request actions and receive results, that prediction becomes remarkably powerful.</p>
+<h2>System Prompts</h2>
+<p>Tool calling gives the model capabilities. The <strong>system prompt</strong> shapes how and when those capabilities are used.</p>
+<p>A system prompt is a message placed at the very beginning of the context that establishes the agent&#39;s identity, behavioral guidelines, available tools, and constraints. Every time the agent invokes the LLM, the system prompt is included as part of the input context.</p>
+<h3>What Goes in a System Prompt</h3>
+<p>A well-designed system prompt addresses four areas:</p>
+<p><strong>Identity and role.</strong> Telling the model &quot;You are a coding assistant that helps developers understand and modify their codebase&quot; is not a gimmick. It cues the model to respond the way software developers respond in its training data, rather than the way a project manager or a creative writer might. The role description steers the distribution of likely next tokens.</p>
+<p><strong>Available tools and usage guidance.</strong> The system prompt describes each tool and provides guidance on when to use it. For example: &quot;Use read_file to examine code before suggesting changes. Always read relevant files before editing.&quot; This shapes the model&#39;s tool-use decisions.</p>
+<p><strong>Behavioral guidelines.</strong> Instructions like &quot;Be concise. When you&#39;re unsure, say so rather than guessing&quot; counteract default training behaviors. As discussed in Lecture 2.2, instruction tuning tends to reward thoroughness (producing verbose responses) and RLHF tends to reward agreeableness (producing sycophantic responses). The system prompt is the primary lever for overriding these defaults.</p>
+<p><strong>Constraints.</strong> Rules such as &quot;Never delete files without explicit user confirmation&quot; establish safety boundaries. However, an important caveat: you cannot fully trust the LLM to follow constraints. The model may still request a file deletion despite being told not to. Your agent code is responsible for actually executing (or refusing to execute) tool calls — the system prompt influences the model&#39;s behavior, but the agent code enforces the rules.</p>
+<h3>System Prompts as Context, Not Weight Changes</h3>
+<p>The system prompt does not modify the model&#39;s parameters. It modifies the context — and context is what the model reasons over. This distinction matters because it explains both the power and the limitations of system prompts. They are highly effective at steering behavior, more effective than many developers initially expect, but they cannot guarantee compliance in the way that code-level restrictions can.</p>
+<p>The system prompt is part of the context window, which means it competes for space with conversation history and tool results. There is a design tradeoff between detailed system instructions (which consume tokens) and leaving room for the actual conversation and tool outputs.</p>
+<h2>The Complete Picture</h2>
+<p>Assembling everything from Lectures 2.1 through 2.3:</p>
+<p><strong>The LLM</strong> is a next-token predictor trained on internet text, instruction examples, and human preferences. It is remarkably capable within its training distribution and predictably flawed outside it.</p>
+<p><strong>The context window</strong> is the finite space where the LLM does all its reasoning. System prompt, conversation history, tool results — everything the model knows comes through this window. The size of the context window is bounded by the model&#39;s attention capacity: the ability to attend to all tokens in the input simultaneously.</p>
+<p><strong>Tool calling</strong> is the protocol that bridges text prediction to real-world interaction. The model requests actions in structured format; your code executes them and feeds the results back.</p>
+<p><strong>The system prompt</strong> is the primary lever for shaping agent behavior, compensating for training biases, and establishing identity and constraints.</p>
+<p><strong>The agent loop</strong> is the orchestration layer — your code — that sends context to the model, parses responses, executes tool calls when requested, returns results, and repeats. The model never touches the outside world directly. The agent mediates every interaction.</p>
+<p>With this foundation, the theoretical groundwork for the course is complete. The next module moves into practical territory: working with the LLM API directly, understanding tokenization and generation parameters, and beginning to write the code that will eventually become a working agent.</p>
+</div>
+</body>
+</html>

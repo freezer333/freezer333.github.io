@@ -168,6 +168,7 @@ blockquote {
 /* Utility classes */
 .small { font-size: 0.85em; }
 .smaller { font-size: 0.75em; }
+.small-code .remark-code { font-size: 0.75em; }
 .dim { color: var(--text-light); }
 .accent { color: var(--accent); }
 

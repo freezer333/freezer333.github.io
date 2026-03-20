@@ -10,21 +10,21 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Working with the API</h1>
-<p><strong>Lecture 3.1</strong></p>
-<ul>
-  <li>Anatomy of an API call: messages, model, parameters, response</li>
-  <li>Message roles: system, user, assistant — and how they shape behavior</li>
-  <li>Streaming vs. non-streaming responses</li>
-  <li>Token counting: tracking input/output usage and cost</li>
-  <li>Error handling: rate limits, timeouts, malformed responses</li>
-  <li>Practical patterns: retry logic, exponential backoff</li>
-</ul>
+<p><strong>Module 3, Lecture 3.1 | Working with LLMs in Practice</strong></p>
+<p>This lecture transitions from theory to practice — the hands-on mechanics of working with LLMs through their APIs. It covers the anatomy of an API call (model, system prompt, messages, response), message roles and how they shape behavior, conversation history as context management, streaming responses, and error handling with exponential backoff. Three live coding demos walk through a first API call, a multi-turn conversation with growing token counts, and a production retry pattern.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-03-01.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="conversation.py">conversation.py</a> (Python demo)</li>
-  <li><a href="hello_api.py">hello_api.py</a> (Python demo)</li>
-  <li><a href="retry_pattern.py">retry_pattern.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://pages.ramapo.edu/~sfrees/courses/cmps130/">CMPS 130: Python Programming</a> — If you&#39;re new to Python or need a refresher, this course covers the fundamentals you&#39;ll need: variables, functions, loops, dictionaries, and working with libraries.</li>
+<li><a href="https://docs.anthropic.com/en/api/messages">Messages API Reference — Anthropic Docs</a> — The official reference for Anthropic&#39;s Messages API: request format, response structure, parameters, and streaming. The primary API you&#39;ll use throughout the course.</li>
+<li><a href="https://docs.anthropic.com/en/api/getting-started">Getting Started with the API — Anthropic Docs</a> — Anthropic&#39;s quickstart guide covering API key setup, SDK installation, and making your first API call in Python.</li>
+<li><a href="https://platform.openai.com/docs/guides/chat-completions">Chat Completions API — OpenAI Docs</a> — OpenAI&#39;s equivalent guide for their Chat Completions endpoint. Worth reading alongside the Anthropic docs to see how the same message-role-response pattern appears across providers.</li>
+<li><a href="https://github.com/anthropics/anthropic-cookbook">Anthropic Cookbook</a> — Anthropic&#39;s official collection of code examples and patterns, including multi-turn conversations, error handling, and streaming implementations.</li>
 </ul>
 </div>
 </body>

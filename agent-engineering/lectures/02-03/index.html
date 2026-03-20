@@ -10,17 +10,21 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>From Language Models to Agents</h1>
-<p><strong>Lecture 2.3</strong></p>
-<ul>
-  <li>What LLMs can't do: no current info, no world interaction, unreliable math, no self-verification, no memory</li>
-  <li>Tool calling: the protocol that bridges text prediction to real-world action</li>
-  <li>The 5-step flow: describe tools → model requests → code executes → result returns → model continues</li>
-  <li>System prompts: shaping agent identity, overriding training biases</li>
-  <li>The complete picture: LLM + context + tools + system prompt + agent loop</li>
-</ul>
+<p><strong>Module 2, Lecture 2.3 | Introduction to Agentic Systems</strong></p>
+<p>An LLM is a powerful text generator, but it cannot read files, send emails, query databases, or access current information on its own. This lecture explains what bridges the gap from language model to agent: tool calling — the protocol that lets a model request structured actions and incorporate the results into its reasoning. We walk through the five-step tool-calling flow, connect it back to the perception-reasoning-action loop from Lecture 1.1, and then examine how system prompts shape agent identity, override training biases, and establish behavioral constraints. The lecture concludes by assembling the complete mental model: LLM + context window + tool calling + system prompt + agent loop.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-02-03.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use">Tool use with Claude — Anthropic Docs</a> — Anthropic&#39;s official documentation on how tool calling works in the Claude API: defining tools with JSON schemas, handling tool_use responses, and building the tool execution loop.</li>
+<li><a href="https://platform.openai.com/docs/guides/function-calling">Function calling — OpenAI Docs</a> — OpenAI&#39;s equivalent guide. Comparing both providers&#39; approaches illustrates how the same underlying pattern is implemented across the industry.</li>
+<li><a href="https://www.promptingguide.ai/applications/function_calling">Function Calling with LLMs — Prompt Engineering Guide</a> — An overview of function calling concepts, patterns, and practical examples.</li>
+<li><a href="https://martinfowler.com/articles/function-call-LLM.html">Function calling using LLMs — martinfowler.com</a> — An analysis of the function calling pattern from a software architecture perspective, covering a practical agent example, security considerations, and the Model Context Protocol.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/system-prompts">Prompt engineering best practices — Anthropic Docs</a> — Anthropic&#39;s comprehensive guide to prompt engineering, including guidance on roles, system prompts, and structuring instructions for Claude.</li>
 </ul>
 </div>
 </body>

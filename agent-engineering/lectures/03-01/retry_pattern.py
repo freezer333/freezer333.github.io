@@ -17,7 +17,7 @@ def call_with_retry(messages, system="", max_retries=5):
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 system=system,
                 messages=messages

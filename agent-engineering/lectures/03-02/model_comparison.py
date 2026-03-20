@@ -14,7 +14,8 @@ client = anthropic.Anthropic()
 PROMPT = "Explain what a REST API is in 2-3 sentences."
 MODELS = [
     ("claude-haiku-4-5-20251001", "Haiku (fast/cheap)"),
-    ("claude-sonnet-4-5-20250929", "Sonnet (balanced)"),
+    ("claude-sonnet-4-6", "Sonnet (balanced)"),
+    ("claude-opus-4-6", "Opus (frontier)"),
 ]
 
 print(f'Prompt: "{PROMPT}"\n')
@@ -38,7 +39,8 @@ for model_id, label in MODELS:
 
 print("\n" + "=" * 60)
 print("\nNotice:")
-print("  - Haiku is faster and uses fewer output tokens (more concise)")
-print("  - Sonnet takes longer but may give a richer answer")
-print("  - Both handle this simple task well — for harder tasks, the gap widens")
+print("  - Haiku is fastest and cheapest — good for simple tasks and high volume")
+print("  - Sonnet balances quality and speed — the default for most agent work")
+print("  - Opus is the most capable but slowest and most expensive")
+print("  - All three handle this simple task well — for harder tasks, the gap widens")
 print("  - The model parameter is just a string — switching is trivial")

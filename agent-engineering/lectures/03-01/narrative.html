@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working with the API — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 3.1</a></div></nav>
+<div class="page_content"><h1>Working with the API</h1>
+<p>Module 2 established the conceptual foundation: what LLMs are, how they&#39;re trained, and what bridges the gap from language model to agent. This lecture makes the transition from theory to practice. It covers the mechanics of working with an LLM through its API — what you send, what you get back, how conversations are maintained, and what to do when things go wrong.</p>
+<h2>Where Is the LLM?</h2>
+<p>Before making an API call, a practical question: where does the model run?</p>
+<p><strong>Local models.</strong> Open-weight models (DeepSeek, Qwen, Mistral, and others) can be downloaded and run on your own hardware using tools like Ollama. This gives you full control — no API keys, no usage fees, no data leaving your machine. The tradeoff is capability: local models are limited by your hardware, and the most capable frontier models are too large to run on consumer machines. Local inference is a good fit for privacy-sensitive work, offline use, and experimentation with fine-tuning.</p>
+<p><strong>Provider-hosted models.</strong> The dominant approach for building agents today. Providers like Anthropic, OpenAI, and Google host models on their infrastructure. You send requests over HTTPS and pay per token. This gives you access to the most capable models available — Opus, GPT-4, Gemini — with no local hardware requirements. Cost scales with usage rather than upfront investment.</p>
+<p>This course uses the Anthropic API in Python, but the choice of provider and language is not fundamental. The concepts — messages, roles, tool calling, streaming — transfer directly to any provider&#39;s API. OpenAI, Google, Cohere, and Mistral all expose the same structural patterns. Higher-level libraries like LangChain wrap multiple providers behind a common interface. The principle is: learn one API well, and the patterns apply everywhere.</p>
+<h2>Anatomy of an API Call</h2>
+<p>An LLM API call has a clear structure. Here is a basic call using the Anthropic Python SDK:</p>
+<pre><code class="language-python">response = client.messages.create(
+    model=&quot;claude-sonnet-4-6&quot;,
+    max_tokens=1024,
+    system=&quot;You are a helpful coding assistant.&quot;,
+    messages=[
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What does the map() function do in Python?&quot;}
+    ]
+)
+</code></pre>
+<p>Each parameter serves a specific purpose:</p>
+<p><strong><code>model</code></strong> specifies which LLM to use. Different models have different capabilities, context window sizes, speeds, and costs. The model identifier (here, <code>claude-sonnet-4-6</code>) refers to a specific version of a specific model tier from a specific provider.</p>
+<p><strong><code>max_tokens</code></strong> sets the output budget — the maximum number of tokens the model can generate in its response. Set it too low and the response gets truncated. Set it too high and you pay for capacity you don&#39;t use.</p>
+<p><strong><code>system</code></strong> is the system prompt discussed in Lecture 2.3. It establishes identity, tools, and behavioral guidelines. Some APIs (like Anthropic&#39;s) accept the system prompt as a separate parameter; others include it as the first message in the messages array. The effect is the same.</p>
+<p><strong><code>messages</code></strong> is the conversation history — an array of messages with roles and content. This array is the context window in practice. Everything the model knows about the current conversation comes through this array.</p>
+<p>The complete script is in <code>hello_api.py</code>.</p>
+<h3>The Response Object</h3>
+<p>The API returns a structured response with three important fields:</p>
+<pre><code class="language-python">response.content      # The model&#39;s text response (or tool use request)
+response.stop_reason  # Why it stopped: &quot;end_turn&quot;, &quot;max_tokens&quot;, &quot;tool_use&quot;
+response.usage        # Token counts: input_tokens, output_tokens
+</code></pre>
+<p><strong><code>content</code></strong> contains the model&#39;s output. In most cases, this is text. When tools are available, it may instead contain a structured tool call request.</p>
+<p><strong><code>stop_reason</code></strong> tells your code how to handle the response. <code>end_turn</code> means the model finished naturally — this is the final response to pass to the user. <code>tool_use</code> means the model is requesting a tool call — this is the signal to execute the tool and continue the agent loop. <code>max_tokens</code> means the response was cut off before the model finished — you may need to increase the budget or handle the truncation.</p>
+<p><strong><code>usage</code></strong> reports token consumption: how many input tokens were sent and how many output tokens were generated. This is essential for cost tracking and for detecting when you&#39;re approaching context window limits.</p>
+<h3>Message Roles</h3>
+<p>Every message in the conversation has a role that shapes how the model interprets its content:</p>
+<p><strong><code>system</code></strong> messages are instructions that frame everything. The model treats them as foundational operating guidelines. Typically set once and not changed during a conversation.</p>
+<p><strong><code>user</code></strong> messages come from the human — or from your agent&#39;s orchestration code. The model interprets these as requests, questions, or instructions to act on. Importantly, &quot;user&quot; messages are not always from a human: when your agent feeds tool results back to the model, those are sent as user messages too.</p>
+<p><strong><code>assistant</code></strong> messages are the model&#39;s own previous responses. Including these in the messages array shows the model what it said before, maintaining conversational continuity.</p>
+<h2>Conversation History as Context</h2>
+<p>Every API call to an LLM is stateless. The model has no memory of previous calls. When you send a request, the model sees only what is in the messages array — nothing else. This means that maintaining a conversation requires your code to manage the messages array, appending each new user message and each assistant response.</p>
+<p>Consider a simple multi-turn exchange:</p>
+<pre><code class="language-python">messages = [
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What&#39;s the capital of France?&quot;},
+    {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;The capital of France is Paris.&quot;},
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What&#39;s its population?&quot;}
+]
+</code></pre>
+<p>The model can resolve &quot;its&quot; to &quot;Paris&quot; because the prior exchange is in context. Remove the first two messages and the model has no idea what &quot;its&quot; refers to.</p>
+<p>For a simple chat, this is straightforward. For agents, it gets interesting fast. Agent conversations grow with every tool call and every tool result:</p>
+<pre><code class="language-python">messages = [
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Fix the bug in main.py&quot;},
+    {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;[tool_use: read_file(&#39;main.py&#39;)]&quot;},
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;[tool_result: contents of main.py...]&quot;},
+    {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;I see the issue. [tool_use: edit_file(...)]&quot;},
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;[tool_result: file edited successfully]&quot;},
+    {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;I&#39;ve fixed the off-by-one error...&quot;}
+]
+</code></pre>
+<p>A single user request might generate 10, 20, or 50 messages before the agent finishes. Every message adds to the context. The entire history is re-sent with every API call, so input token counts grow with every turn. This is why context management — covered in depth later in the course — is a central concern of agent development.</p>
+<p>The <code>conversation.py</code> script demonstrates this directly: a three-turn conversation where you can watch the input token count climb from 32 to 50 to 93 as the context accumulates.</p>
+<h2>Streaming Responses</h2>
+<p>By default, you send a request and wait for the complete response. But LLMs generate tokens one at a time, and you can receive them as they are generated — this is streaming.</p>
+<p>Streaming matters for three reasons:</p>
+<ul>
+<li><strong>User experience.</strong> Text appears in real time instead of a blank screen followed by a wall of text.</li>
+<li><strong>Time to first token.</strong> The first token arrives in milliseconds, even if the full response takes seconds to generate.</li>
+<li><strong>Agent decisions.</strong> You can detect tool calls as they begin, rather than waiting for the entire response.</li>
+</ul>
+<p>For agent loops where a human is not watching the output, streaming is optional — waiting for the complete response and parsing it is often simpler. For user-facing applications, streaming is almost always the right choice.</p>
+<h2>Error Handling</h2>
+<p>API calls fail. They fail more often than most developers expect, especially under load. The common failure modes:</p>
+<p><strong>Rate limits (HTTP 429).</strong> You have sent too many requests in a given time window. Providers throttle usage to manage server load. The solution is to wait and retry.</p>
+<p><strong>Overloaded (HTTP 529).</strong> The service is temporarily at capacity. Same treatment as rate limits — back off and retry.</p>
+<p><strong>Timeouts.</strong> The model is taking too long, typically due to complex prompts or very large contexts. Set reasonable timeouts and retry if appropriate.</p>
+<p><strong>Malformed responses.</strong> The model&#39;s output is not in the format you expected — text when you expected a tool call, or invalid JSON. Validate responses before acting on them.</p>
+<p>The standard pattern for handling transient errors is exponential backoff: wait longer after each successive failure.</p>
+<pre><code class="language-python">def call_with_retry(messages, system=&quot;&quot;, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            response = client.messages.create(
+                model=&quot;claude-sonnet-4-6&quot;,
+                max_tokens=1024, system=system, messages=messages
+            )
+            return response
+        except anthropic.RateLimitError:
+            wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s, 16s
+            time.sleep(wait_time)
+        except anthropic.APIStatusError as e:
+            if e.status_code == 529:
+                wait_time = 2 ** attempt
+                time.sleep(wait_time)
+            else:
+                raise
+    raise Exception(f&quot;Max retries ({max_retries}) exceeded&quot;)
+</code></pre>
+<p>This pattern — retry on transient errors, fail fast on permanent errors — belongs in every production agent. The complete implementation is in <code>retry_pattern.py</code>.</p>
+<h2>Key Takeaways</h2>
+<p>Three things to carry forward from this lecture:</p>
+<ol>
+<li><p><strong>The API call has a clear anatomy.</strong> Model, system prompt, and messages go in. Content, stop reason, and usage come out. This structure is consistent across providers.</p>
+</li>
+<li><p><strong>The messages array is the context window.</strong> You manage it yourself — appending user messages, assistant responses, and tool results. Every API call is stateless; your code is responsible for maintaining conversational continuity.</p>
+</li>
+<li><p><strong>Build error handling from day one.</strong> Retries with exponential backoff, response validation, and graceful failure handling are not optional for production agents.</p>
+</li>
+</ol>
+</div>
+</body>
+</html>

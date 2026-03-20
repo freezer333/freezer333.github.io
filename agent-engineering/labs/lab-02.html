@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 2 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 2: API Exploration and Context Experiments</h1>
+<p><strong>Section 2 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~2-3 hours
+<strong>Prerequisites:</strong> Lab 1 + Modules 3-4 (Lectures 3.1 through 4.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>In Lab 1, you set up your environment and built a chat loop. In this lab, you&#39;ll use those skills to run experiments — systematically testing how LLMs behave under different conditions and observing context dynamics firsthand.</p>
+<p>This is an observation lab. You&#39;ll write code, but the deliverable is a <strong>lab report</strong> documenting what you found. The goal is to build calibrated intuition about what LLMs can do, where they break, and how context affects quality.</p>
+<p><strong>Model choice:</strong> You may use any frontier model from Anthropic, OpenAI, or Google for this lab. We recommend Claude Haiku or Sonnet for cost efficiency — you&#39;ll be making many API calls. Whichever model(s) you use, <strong>document them clearly</strong> in your report. If you compare models, that&#39;s worth noting too.</p>
+<hr>
+<h2>What You&#39;ll Produce</h2>
+<p>A lab report (Markdown file) documenting:</p>
+<ol>
+<li>Your generation parameter experiments and observations</li>
+<li>Capability boundaries and failure modes you discovered</li>
+<li>Context growth data and recall test results</li>
+<li>Your prompts, your methodology, and your specific findings</li>
+</ol>
+<p><strong>Important:</strong> Your report must include the actual prompts you used and the specific results you observed. Generic summaries like &quot;quality decreased&quot; aren&#39;t sufficient — show the data.</p>
+<hr>
+<h2>Part 1: Generation Parameters (~30 minutes)</h2>
+<h3>1.1 Temperature Effects</h3>
+<p>Write a script that sends the <strong>same prompt</strong> to the API multiple times at different temperature values: 0.0, 0.3, 0.7, and 1.0. Run each temperature <strong>3 times</strong> (12 calls total).</p>
+<p>Use a prompt that&#39;s sensitive to variation — something creative where there&#39;s no single correct answer. For example, you might ask the model to name a startup or describe an imaginary animal. <strong>Do not use these examples</strong> — come up with your own.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>The prompt you used</li>
+<li>At what temperature do responses start diverging?</li>
+<li>At what temperature do responses become incoherent or unusable (if they do)?</li>
+<li>A table or list showing the responses at each temperature</li>
+</ul>
+<h3>1.2 Temperature and Code</h3>
+<p>Repeat the experiment with a <strong>coding prompt</strong> — ask the model to write a specific function or solve a programming problem.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>Does temperature affect code quality differently than creative tasks?</li>
+<li>At what temperature does the code start containing errors?</li>
+<li>What does this imply for agents that need to make reliable tool calls?</li>
+</ul>
+<h3>1.3 Top-p Sampling</h3>
+<p>Hold temperature at 1.0 and vary top-p: 0.1, 0.5, 0.9. Run each 3 times with the same creative prompt from 1.1.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>How does top-p interact with temperature?</li>
+<li>At low top-p (0.1) with high temperature (1.0), what happens?</li>
+</ul>
+<h3>1.4 Stop Sequences</h3>
+<p>Send a prompt that asks the model to produce a numbered list (at least 10 items). Add a stop sequence that cuts it off mid-list — for example, stopping at item 5.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>The stop sequence you used</li>
+<li>What the truncated output looks like</li>
+<li>When stop sequences might be useful in an agent context</li>
+</ul>
+<blockquote>
+<p><strong>Cost tip:</strong> Use Haiku for this section — you&#39;re making many calls for comparison, and model quality isn&#39;t the point. Switch to Sonnet or a frontier model for Parts 2 and 3 where quality matters.</p>
+</blockquote>
+<hr>
+<h2>Part 2: Capability Testing and Failure Modes (~30 minutes)</h2>
+<h3>2.1 Capability Probes</h3>
+<p>Test the model on tasks that stress different abilities. For each category below, design <strong>your own test prompts</strong> and document the results.</p>
+<p><strong>Reasoning:</strong> Give the model a multi-step logic puzzle or deduction problem. Example direction: &quot;something that requires 3+ steps of inference.&quot; Try making it progressively harder. Where does it break?</p>
+<p><strong>Arithmetic:</strong> Test with small numbers, then increase. At what scale does the model start making errors? Try both multiplication and division.</p>
+<p><strong>Code generation:</strong> Ask for a well-known algorithm, then something more obscure or domain-specific. Compare the quality.</p>
+<p><strong>Knowledge boundaries:</strong> Ask about events or facts from different time periods. Can you find the model&#39;s knowledge cutoff? Ask about something obscure but verifiable — does the model admit uncertainty or fabricate?</p>
+<h3>2.2 Inducing Failures</h3>
+<p>Deliberately try to make the model fail. These failure modes trace directly back to training (Lecture 2.2 — RLHF side effects, internet training data patterns).</p>
+<p><strong>Hallucination:</strong> Ask about something that sounds plausible but doesn&#39;t exist — a fake research paper, a made-up Python library, a fictional historical event. Does the model generate confident-sounding nonsense, or does it flag uncertainty? Example direction: &quot;ask about a specific paper by a real author on a topic they didn&#39;t write about.&quot; <strong>Do not use this example</strong> — design your own.</p>
+<p><strong>Sycophancy:</strong> State something factually wrong with confidence and see if the model agrees or pushes back. Try varying how assertively you state the wrong thing.</p>
+<p><strong>Conflicting instructions:</strong> Put one instruction in the system prompt and a contradicting instruction in the user message. Which one wins? Try several variations.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>The specific prompts you used for each failure mode</li>
+<li>The model&#39;s responses (quoted or paraphrased)</li>
+<li>Your assessment: how reliable is the model, and what does this mean for building agents that need to act autonomously?</li>
+</ul>
+<hr>
+<h2>Part 3: Context Experiments (~45-60 minutes)</h2>
+<p>This is the core of the lab. You&#39;ll observe the concepts from Module 4 firsthand.</p>
+<h3>3.1 Context Growth Observation</h3>
+<p>Start from your Lab 1 chat loop (or write a new one). Add <strong>cumulative token tracking</strong> — after each turn, print:</p>
+<ul>
+<li>Input tokens for this turn</li>
+<li>Output tokens for this turn</li>
+<li>Cumulative input tokens across the session</li>
+</ul>
+<p>Have a 20+ turn conversation on a consistent topic. Record the input token count at turns 1, 5, 10, 15, and 20.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>A table of turn number vs. input token count</li>
+<li>The growth pattern — is it linear? Faster than linear?</li>
+<li>Why input tokens grow even though you&#39;re only typing short messages each turn</li>
+</ul>
+<h3>3.2 Recall Testing</h3>
+<p>This experiment tests whether the model can retrieve specific facts as context grows.</p>
+<p><strong>Setup:</strong> In your first message, tell the model 5 specific facts. Make them distinct and unambiguous — a name, a number, a color, a city, and a date. For example: &quot;My cat&#39;s name is Marble, I own 7 guitars, my favorite color is teal, I grew up in Lisbon, and I graduated on June 3rd, 2019.&quot; <strong>Use your own facts, not these.</strong></p>
+<p><strong>Procedure:</strong></p>
+<ol>
+<li>After stating the facts, continue the conversation on <strong>unrelated topics</strong> for 10 turns</li>
+<li>Quiz the model on all 5 facts. Record which it gets right.</li>
+<li>Continue for another 20 unrelated turns (30 total)</li>
+<li>Quiz again. Record results.</li>
+<li>Continue for another 20 turns (50 total)</li>
+<li>Quiz one more time. Record results.</li>
+</ol>
+<p>To save time, use the context padding script below to automate the unrelated turns.</p>
+<p><strong><code>context_padder.py</code>:</strong></p>
+<pre><code class="language-python">&quot;&quot;&quot;
+Pads a conversation with N unrelated exchanges to test context recall.
+Sends generic questions on random topics to grow the conversation
+without introducing information related to your test facts.
+&quot;&quot;&quot;
+
+import random
+from dotenv import load_dotenv
+from anthropic import Anthropic
+
+load_dotenv()
+client = Anthropic()
+
+PADDING_PROMPTS = [
+    &quot;What&#39;s the difference between a stack and a queue?&quot;,
+    &quot;Explain how a combustion engine works in simple terms.&quot;,
+    &quot;What are three interesting facts about octopuses?&quot;,
+    &quot;How does a binary search algorithm work?&quot;,
+    &quot;What causes thunder?&quot;,
+    &quot;Describe how a refrigerator keeps food cold.&quot;,
+    &quot;What&#39;s the tallest building in the world and how tall is it?&quot;,
+    &quot;Explain the water cycle in a few sentences.&quot;,
+    &quot;How does email actually get delivered?&quot;,
+    &quot;What&#39;s the difference between HTTP and HTTPS?&quot;,
+    &quot;How do noise-canceling headphones work?&quot;,
+    &quot;What causes the tides?&quot;,
+    &quot;How does a microwave heat food?&quot;,
+    &quot;What&#39;s the difference between RAM and a hard drive?&quot;,
+    &quot;How do airplanes stay in the air?&quot;,
+    &quot;What causes a rainbow?&quot;,
+    &quot;How does GPS know where you are?&quot;,
+    &quot;What&#39;s the difference between a virus and a bacterium?&quot;,
+    &quot;How does a touchscreen detect your finger?&quot;,
+    &quot;What causes earthquakes?&quot;,
+]
+
+
+def pad_conversation(messages, model, system_prompt, num_turns=10):
+    &quot;&quot;&quot;
+    Add num_turns of unrelated exchanges to the conversation.
+    Returns the updated messages list and token counts per turn.
+    &quot;&quot;&quot;
+    prompts = random.sample(PADDING_PROMPTS, min(num_turns, len(PADDING_PROMPTS)))
+    if num_turns &gt; len(PADDING_PROMPTS):
+        # Repeat if we need more turns than available prompts
+        prompts = prompts * (num_turns // len(prompts) + 1)
+        prompts = prompts[:num_turns]
+
+    token_log = []
+
+    for i, prompt in enumerate(prompts, 1):
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt})
+        response = client.messages.create(
+            model=model,
+            max_tokens=256,
+            system=system_prompt,
+            messages=messages,
+        )
+        assistant_text = response.content[0].text
+        messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: assistant_text})
+
+        token_log.append({
+            &quot;turn&quot;: i,
+            &quot;input_tokens&quot;: response.usage.input_tokens,
+            &quot;output_tokens&quot;: response.usage.output_tokens,
+        })
+        print(f&quot;  Padding turn {i}/{num_turns} — &quot;
+              f&quot;input: {response.usage.input_tokens}, &quot;
+              f&quot;output: {response.usage.output_tokens}&quot;)
+
+    return messages, token_log
+</code></pre>
+<p>Use this by importing <code>pad_conversation</code> into your experiment script. Pass in your existing messages list, and it will add unrelated exchanges while tracking tokens.</p>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>Your 5 test facts</li>
+<li>Recall accuracy at each checkpoint (after 10, 30, and 50 turns)</li>
+<li>Which facts were forgotten first (beginning of the message? middle?)</li>
+<li>Input token count at each checkpoint</li>
+</ul>
+<h3>3.3 Compaction Experiment</h3>
+<p>Now test whether compaction (from Lecture 4.2) preserves recall while reducing token count.</p>
+<p><strong>Procedure:</strong></p>
+<ol>
+<li>Build up a conversation to 40+ turns using the padding script (seed it with your 5 facts first)</li>
+<li>Record the input token count and quiz the model on your 5 facts</li>
+<li>Implement compaction: send the full conversation to the model with a prompt instructing it to summarize — preserving key facts, decisions, and current goals while discarding raw exchanges</li>
+<li>Replace the conversation history with the summary (as a single user message + an assistant acknowledgment)</li>
+<li>Record the new input token count</li>
+<li>Quiz the model on the same 5 facts from the compacted state</li>
+<li>Continue the conversation for 10 more turns, then quiz again</li>
+</ol>
+<p><strong>Record in your report:</strong></p>
+<ul>
+<li>Input tokens before compaction vs. after</li>
+<li>The compression ratio (before / after)</li>
+<li>Recall accuracy before compaction, immediately after, and 10 turns later</li>
+<li>The summary the model produced (include it in your report)</li>
+<li>Your assessment: what was preserved? What was lost?</li>
+</ul>
+<hr>
+<h2>Deliverable</h2>
+<p>A lab report in Markdown format (<code>lab-02-report.md</code>) containing:</p>
+<ol>
+<li><strong>Generation Parameters</strong> — temperature/top-p observations with a table of results, conclusion about when to use low vs. high temperature for agents</li>
+<li><strong>Capability Boundaries</strong> — what the model can and can&#39;t do, with your specific test prompts and results</li>
+<li><strong>Failure Modes</strong> — hallucination, sycophancy, and conflict examples with quoted responses</li>
+<li><strong>Context Experiments</strong> — token growth data, recall test results at each checkpoint, compaction before/after analysis</li>
+<li><strong>Key Takeaways</strong> — 3-5 lessons you&#39;d apply when building an agent, grounded in what you observed</li>
+</ol>
+<p>Include all prompts you used, all models you tested, and specific observations — not just conclusions.</p>
+<p>Submit your <code>lab-02-report.md</code> along with any scripts you wrote.</p>
+<hr>
+<h2>Troubleshooting</h2>
+<p><strong>API calls are slow with long conversations</strong>
+This is expected — longer context means more processing time. If Part 3 feels slow, switch to Haiku for the padding turns. The model choice matters most for the quiz turns where you&#39;re testing recall quality.</p>
+<p><strong>Token counts seem wrong or missing</strong>
+Make sure you&#39;re reading <code>response.usage.input_tokens</code> and <code>response.usage.output_tokens</code>. Some SDK versions may structure this differently — check the API reference for your provider if you&#39;re not using Anthropic.</p>
+<p><strong>Compaction summary is too short / loses important facts</strong>
+Your summarization prompt matters. Be specific about what to preserve. If the summary drops your test facts, revise the prompt to explicitly instruct preservation of &quot;all specific facts, names, numbers, and dates mentioned by the user.&quot;</p>
+<p><strong>Rate limit errors during padding</strong>
+You&#39;re making many calls in a loop. Add a small delay (<code>import time; time.sleep(0.5)</code>) between calls if you hit rate limits. Haiku has higher rate limits than Sonnet/Opus.</p>
+<p><strong>Using a non-Anthropic model</strong>
+The experiments work with any frontier model. The SDK calls will differ — consult your provider&#39;s documentation. The concepts (token counting, context growth, recall degradation) are universal.</p>
+</div>
+</body>
+</html>

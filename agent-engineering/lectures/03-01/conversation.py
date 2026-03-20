@@ -18,7 +18,7 @@ def chat(user_message):
     messages.append({"role": "user", "content": user_message})
 
     response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         system="You are a concise assistant. Keep answers to 1-2 sentences.",
         messages=messages

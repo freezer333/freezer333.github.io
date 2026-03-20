@@ -16,28 +16,71 @@ count: false
 
 # From Theory to Practice
 
-Module 2 gave you the mental model — what LLMs are, how they're trained, and what bridges the gap from language model to agent.
+Module 2 gave you the mental model. This lecture makes it concrete — the mechanics of working with LLMs through their APIs.
 
-This lecture covers the hands-on mechanics of working with LLMs through their APIs. By the end, you'll understand every piece of an API call — what you send, what you get back, and what can go wrong.
-
-.info[Agents are built on top of API calls. You'll interact with these concepts in every project.]
+- **Describe** the anatomy of an API call — what you send, what you get back
+- **Explain** system, user, and assistant message roles
+- **Understand** streaming vs. non-streaming responses
+- **Implement** error handling patterns (retries, rate limits, timeouts)
 
 ???
-Module 3 shifts from conceptual to practical. Focus on code structure and concrete examples.
+Module 3 shifts from conceptual to practical. These objectives take students from "I understand agents" to "I can make an LLM do something."
 
 ---
 
-# Learning Objectives
+# Where Is the LLM? Option 1: Local Models
 
-By the end of this lecture, you will be able to:
+.split-left[
+Run models directly on your own hardware. Open-weight models you download and serve yourself.
 
-1. **Describe** the anatomy of an LLM API call — messages, model, parameters, response
-2. **Explain** the role of system, user, and assistant messages
-3. **Understand** streaming vs. non-streaming responses
-4. **Implement** basic error handling patterns (retries, rate limits, timeouts)
+- **Full control** — no API keys, no usage fees, no data leaving your machine
+- **Limited by your hardware** — smaller models, slower inference
+- **Good for experimentation** — privacy-sensitive work, offline use, fine-tuning
+
+<div style="display: flex; align-items: center; gap: 1.5em; margin-top: 1em;">
+    <img src="ollama.png" style="height:50px;"/>
+    <img src="qwen.png" style="height:50px;"/>
+    <img src="mistral.png" style="height:50px;"/>
+    <img src="deepseek.png" style="height:50px;"/>
+</div>
+]
+
+.split-right[
+<img src="local-llm.png" style="max-width:90%;"/>
+]
+
+<div class="clear"></div>
 
 ???
-These four objectives take students from "I understand agents conceptually" to "I can make an LLM do something."
+Brief orientation — students should know local models exist and when they make sense. Ollama is the easiest on-ramp. We won't use local models much in this course, but students should understand the option.
+
+---
+
+# Where Is the LLM? Option 2: Provider-Hosted Models
+
+.split-left[
+Models hosted by providers like Anthropic, OpenAI, and Google. You send requests over HTTPS and pay per token.
+
+- **Most capable models available** — Opus, GPT-4, Gemini
+- **No hardware requirements** — runs on the provider's infrastructure
+- **Pay-per-use** — cost scales with usage, not upfront investment
+- **This is how most agents are built today**
+]
+
+.split-right[
+<img src="remote-llm.png" style="max-width:90%; margin-bottom:0.5em;"/>
+<div style="display: flex; align-items: center; justify-content: center; gap: 1em;">
+    <img src="claude.png" style="height:70px;"/>
+    <img src="openai.png" style="height:70px;"/>
+    <img src="gemini.png" style="height:70px;"/>
+    <img src="grok.png" style="height:70px;"/>
+</div>
+]
+
+<div class="clear"></div>
+
+???
+This is the model we'll use throughout the course. The API call pattern students learn next applies to all hosted providers — the specifics differ but the structure is the same.
 
 ---
 class: center, middle, inverse
@@ -45,62 +88,66 @@ class: center, middle, inverse
 
 ---
 
-# What You Send, What You Get Back
+# API Example
 
+.split-left[
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-5-20250929",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     system="You are a helpful coding assistant.",
     messages=[
-        {"role": "user", "content": "What does map() do in Python?"}
+        {"role": "user",
+         "content": "What does map() do?"}
     ]
 )
 ```
+]
+
+.split-right[
+**`model`** — Which model. Different capabilities, context sizes, speeds, costs.
+
+**`max_tokens`** — Output budget. Too low = cut off. Too high = waste money.
+
+**`system`** — Identity, tools, behavioral guidelines. Foundational context.
+
+**`messages`** — Conversation history. An array of role/content pairs. This is the context window in practice.
+]
+
+<div class="clear"></div>
 
 ???
-[2 min] Show actual code structure but keep it readable. Students don't need to memorize the API — they need the mental model of what flows in and out. We'll run this live in a moment.
-
----
-
-# Breaking Down the Call
-
-**`model`** — Which model to use. Different models have different capabilities, context sizes, speeds, and costs.
-
---
-
-**`max_tokens`** — The maximum number of tokens the model can generate. Your output budget. Too low and the response gets cut off. Too high and you waste money.
-
---
-
-**`system`** — The system message. Establishes identity, tools, and behavioral guidelines. The model treats it as foundational context.
-
---
-
-**`messages`** — The conversation history. An array of messages with roles and content. This is the context window in practice.
-
-???
-[2 min] Walk through each parameter. The key connection: messages = context window. Students will manage this array in every agent they build.
+[2 min] Walk through each parameter alongside the code. The key connection: messages = context window. Students will manage this array in every agent they build.
 
 ---
 
 # Message Roles
 
-Every message has a role that shapes how the model interprets it:
+.split-left[
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user",
+         "content": "What does map() do?"}
+    ]
+)
+```
+]
 
---
+.split-right[
+**`system`** — Instructions that frame everything. Set once, rarely changed.
 
-**`system`** — Instructions that frame everything. Operating guidelines. Set once, rarely changed.
+**`user`** — Messages from the human or your orchestration code. Requests, questions, instructions.
 
---
+**`assistant`** — The model's own previous responses. Maintains conversational continuity.
 
-**`user`** — Messages from the human (or from your orchestration code). The model treats these as requests, questions, or instructions to act on.
+.info[The messages array **is** the context window. You manage it yourself — appending user messages, assistant responses, and tool results.]
+]
 
---
-
-**`assistant`** — The model's own previous responses. Including these maintains conversational continuity.
-
-.info[The conversation is the messages array. When you build an agent, you'll manage this array yourself — appending user messages, assistant responses, and tool results. The array **is** the context window.]
+<div class="clear"></div>
 
 ???
 [2 min] Emphasize that "user" role isn't always a human — agent orchestration code also sends "user" messages (tool results). This will make more sense when they see tool calling.
@@ -133,6 +180,43 @@ response.usage        # Token counts: input_tokens, output_tokens
 [2 min] The stop_reason → agent loop connection is the key insight. tool_use is the mechanism that makes the agent loop work — students will see this in detail in Module 4.
 
 ---
+
+# Wait... What API Is This?
+
+.split-left[
+There are many LLM APIs — Anthropic, OpenAI, Google Vertex, Cohere, Mistral — and SDKs in many languages: Python, JavaScript, Java, Go. Higher-level libraries like LangChain wrap multiple providers.
+
+We're using the **Anthropic API in Python**. This isn't a statement that it's the best — it's a practical choice. The concepts (messages, roles, tool calling, streaming) transfer directly to any provider.
+
+.callout[Learn one API well. The patterns are the same everywhere.]
+
+.info[You'll need an Anthropic API key to follow along. Lab 1 walks you through creating an account, generating a key, and configuring your environment.]
+]
+
+.split-right[
+<div style="display: flex; flex-direction: column; align-items: center; gap: 0.8em; padding-top: 1em;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 1.5em;">
+        <img src="anthropic.png" style="height:90px;"/>
+        <img src="openai.png" style="height:90px;"/>
+        <img src="gemini.png" style="height:90px;"/>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 1.5em;">
+        <img src="langchain.png" style="height:90px;"/>
+        <img src="open-router.png" style="height:90px;"/>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 1.5em;">
+        <img src="python.png" style="height:90px;"/>
+        <img src="javascript.png" style="height:90px;"/>
+    </div>
+</div>
+]
+
+<div class="clear"></div>
+
+???
+Acknowledge the ecosystem breadth. Students may wonder why we picked Anthropic — the answer is it doesn't matter much. The structural patterns are universal. We had to pick one.
+
+---
 class: center, middle, inverse
 # Live Coding
 ## `hello_api.py`
@@ -144,14 +228,14 @@ class: center, middle, inverse
 
 # Live Demo: Your First API Call
 
-.small[
+.small-code[
 ```python
 import anthropic
 
 client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY from environment
 
 response = client.messages.create(
-*   model="claude-sonnet-4-5-20250929",
+*   model="claude-sonnet-4-6",
 *   max_tokens=1024,
 *   system="You are a helpful coding assistant.",
     messages=[
@@ -240,14 +324,14 @@ class: center, middle, inverse
 
 # Live Demo: Multi-Turn Conversation
 
-.small[
+.small-code[
 ```python
 messages = []
 
 def chat(user_message):
     messages.append({"role": "user", "content": user_message})
     response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
 *       system="You are a concise assistant. Keep answers to 1-2 sentences.",
 *       messages=messages
@@ -275,17 +359,21 @@ class: center, middle, inverse
 
 By default, you send a request and wait for the complete response. But LLMs generate tokens one at a time — you can receive them as they're generated.
 
---
-
+.split-left[
 Why streaming matters:
 
 - **User experience** — text appears in real time instead of a blank screen
 - **Time to first token** — first token in milliseconds, even if the full response takes seconds
 - **Agent decisions** — detect tool calls as they start, rather than waiting for the full response
 
---
+.info[For agents, streaming is optional. For user-facing applications, it's almost always the right choice.]
+]
 
-.info[For agents, streaming is optional — you can wait for the complete response. But for user-facing applications, streaming is almost always the right choice.]
+.split-right[
+<img src="llm-latency.png" style="max-width:90%;"/>
+]
+
+<div class="clear"></div>
 
 ???
 [2 min] Keep it conceptual. Students don't need to implement streaming yet. They need to know it exists and why it matters.
@@ -351,13 +439,13 @@ raise Exception("Max retries exceeded")
 
 The complete retry function with proper error handling:
 
-.small[
+.small-code[
 ```python
 def call_with_retry(messages, system="", max_retries=5):
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=1024, system=system, messages=messages
             )
             return response
@@ -408,6 +496,8 @@ These three points are the practical foundation. Everything from here builds on 
 ---
 
 # Coming Up Next
+
+.info[**New to Python?** This course assumes basic Python proficiency. If you need a refresher, work through [CMPS 130: Python Programming](https://pages.ramapo.edu/~sfrees/courses/cmps130/) — it covers everything you'll need.]
 
 **Lecture 3.2: The Model Landscape**
 
