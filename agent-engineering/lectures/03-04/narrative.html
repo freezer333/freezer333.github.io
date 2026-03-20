@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-Context Learning and the Limits of Prompting — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 3.4</a></div></nav>
+<div class="page_content"><h1>In-Context Learning and the Limits of Prompting</h1>
+<p>Lecture 3.1 covered the mechanics of API calls. Lecture 3.2 surveyed the model landscape. Lecture 3.3 addressed generation parameters. This lecture turns to a more fundamental question: how do you teach an LLM to behave the way you want? The answer is in-context learning — and understanding its limits leads directly to the concept that defines the rest of this course: context engineering.</p>
+<h2>In-Context Learning</h2>
+<p>In-context learning is the ability to teach an LLM a new pattern by showing it examples in the prompt. The model&#39;s weights do not change. There is no retraining or fine-tuning. The model sees the examples in its context and applies the pattern to new inputs.</p>
+<p>This is one of the most practical capabilities available to agent developers. You can customize model behavior instantly, without a machine learning pipeline, simply by providing good examples.</p>
+<h3>Zero-Shot Prompting</h3>
+<p>Zero-shot prompting means giving the model an instruction with no examples:</p>
+<pre><code>Classify the sentiment of this review as positive, negative, or neutral:
+
+&quot;The food was decent but the service was painfully slow.&quot;
+</code></pre>
+<p>The model relies entirely on its training data to interpret the task and produce a response. For straightforward tasks like sentiment classification, modern frontier models handle this well. But two problems arise. First, the model may format its answer unpredictably — returning a full sentence like &quot;The sentiment is negative&quot; instead of a single label. Second, for tasks that require more nuance or domain-specific judgment, zero-shot accuracy degrades because the model has nothing to calibrate against except its pre-training.</p>
+<h3>Few-Shot Prompting</h3>
+<p>Few-shot prompting adds examples before the task:</p>
+<pre><code>Classify the sentiment of each review:
+
+Review: &quot;Absolutely loved it, best meal I&#39;ve had in years!&quot;
+Sentiment: positive
+
+Review: &quot;It was fine. Nothing special.&quot;
+Sentiment: neutral
+
+Review: &quot;The food was decent but the service was painfully slow.&quot;
+Sentiment:
+</code></pre>
+<p>The model learns two things from these examples: what the correct classification looks like, and how to format the response. With the examples above, the model will almost certainly respond with a single word — matching the pattern it was shown. No training required.</p>
+<p><img src="zero-few.png" alt="Zero-shot vs. few-shot comparison"></p>
+<p>The <code>zero_vs_few_shot.py</code> script demonstrates this directly. It classifies the same set of reviews using both approaches and prints the results side by side. Zero-shot responses may vary in format — full sentences, explanations, inconsistent labels. Few-shot responses are consistently single words matching the demonstrated pattern.</p>
+<h3>Why This Matters for Agents</h3>
+<p>For agents, output format matters as much as correctness. Agent code must parse LLM responses — extracting tool names, arguments, decisions. If the output format is unpredictable, parsing breaks. Few-shot prompting solves this by teaching the model your exact format through examples.</p>
+<p>Beyond format consistency, in-context learning enables several practical capabilities:</p>
+<ul>
+<li><strong>Teaching tool usage</strong> by showing example tool calls in the system prompt</li>
+<li><strong>Establishing coding style</strong> by including example code</li>
+<li><strong>Defining output formats</strong> by demonstrating them</li>
+<li><strong>Correcting specific behaviors</strong> by showing the right approach alongside the wrong one</li>
+</ul>
+<p>The trade-off is token cost. Every example consumes tokens, and those tokens are present in every API call. Three examples at 50 tokens each adds 150 tokens permanently to the system prompt. For agents running in long loops with many API calls, this cost compounds. The practical guidance is to find the minimum number of examples that produces reliable behavior — typically two to five — and stop there.</p>
+<h2>When Prompting Hits Its Limits</h2>
+<p>In-context learning and careful prompting can accomplish a great deal, but there are hard limits that agent developers inevitably encounter.</p>
+<h3>Context Rot</h3>
+<p>As context grows, the model&#39;s ability to attend to relevant information degrades. In a simple chat, this might mean the model forgets something from 30 messages ago. For an agent running in a loop, the problem is more severe.</p>
+<p>Consider what happens during a typical agent task:</p>
+<ul>
+<li>The agent reads a file — 500 tokens added to context</li>
+<li>The agent reads another file — 500 more tokens</li>
+<li>The agent edits a file — both the old content and new content are in context</li>
+<li>The agent reads the file again to verify — another 500 tokens</li>
+<li>After 10 tool calls, there may be 5,000+ tokens of tool results that are no longer relevant</li>
+</ul>
+<p>The context fills with historical information that was useful at the time but is now noise. The model must attend to all of it, and its attention is spread thinner with each addition. Quality does not degrade gradually — at some point, the model starts making mistakes it would not have made with a clean context.</p>
+<p>This is especially dangerous when combined with an inflated system prompt. If few-shot examples push the system prompt to thousands of tokens, and tool results add thousands more, the model can hit the point of diminishing returns quickly. Beyond roughly 80% of the context window, output quality typically begins to deteriorate.</p>
+<h3>Conflicting Instructions</h3>
+<p>As system prompts grow longer and more detailed, instructions can subtly contradict each other. &quot;Be concise&quot; and &quot;always explain your reasoning&quot; pull in opposite directions. The model does not resolve contradictions — it statistically averages them, producing inconsistent behavior that is difficult to debug.</p>
+<h3>The Single-Context Constraint</h3>
+<p>Everything must fit in one context window. You cannot split a task across multiple contexts and have the model maintain coherence. Multi-agent systems work around this limitation, but that is a later topic.</p>
+<h2>From Prompt Engineering to Context Engineering</h2>
+<p>The field has shifted from &quot;prompt engineering&quot; — how to write a better prompt — to &quot;context engineering.&quot; The distinction matters.</p>
+<p><img src="prompt-vs-context.png" alt="Prompt engineering is a subset of context engineering"></p>
+<p><strong>Prompt engineering</strong> asks: &quot;How do I write a better prompt?&quot;</p>
+<p><strong>Context engineering</strong> asks: &quot;How do I curate the entire context state — system prompt, conversation history, tool results, external data — so the model has exactly what it needs and nothing it doesn&#39;t?&quot;</p>
+<p>Prompt engineering is a subset of context engineering. The system prompt is one piece of the context. But for agents, the system prompt might be 5% of the total context. The other 95% is conversation history, tool results, and accumulated data — and that is where output quality lives or dies.</p>
+<h3>The Context Engineering Mindset</h3>
+<p>Thinking in terms of context engineering changes the questions you ask:</p>
+<ul>
+<li>Not &quot;how do I phrase this instruction?&quot; but &quot;what information does the model need right now?&quot;</li>
+<li>Not &quot;how do I make the prompt longer?&quot; but &quot;how do I keep the context small and high-signal?&quot;</li>
+<li>Not &quot;why didn&#39;t the model follow my instruction?&quot; but &quot;what else is in the context that&#39;s competing for attention?&quot;</li>
+</ul>
+<p>It also means managing the full lifecycle of information in the context:</p>
+<ul>
+<li><strong>What enters</strong> — tool results, messages, examples</li>
+<li><strong>What stays</strong> — which messages to preserve, which to drop</li>
+<li><strong>What leaves</strong> — summarization, truncation, compaction</li>
+<li><strong>What gets priority</strong> — beginning and end of context receive more attention than the middle</li>
+</ul>
+<p>Context curation is a programmatic task. You can remove stale information, prioritize placement, inject relevant data based on the current query, and use smaller models (like Haiku) to summarize old messages or select between system prompt variants. This metaprogramming — using LLMs to manage the context of other LLM calls — is a core pattern in agent development.</p>
+<h3>The Central Discipline</h3>
+<p>Context engineering — curating the smallest possible set of high-signal tokens — is the central discipline of agent development. Everything built from this point forward in the course — context management strategies, RAG, memory systems, skills, multi-agent architectures — is a context engineering technique. Each addresses a different aspect of the same problem: ensuring the model has exactly the information it needs to make its next decision, and nothing more.</p>
+<h2>Module 3 in Review</h2>
+<p>This module moved from theory to practice:</p>
+<ul>
+<li><strong>Lecture 3.1</strong> — anatomy of an API call, message roles, conversation history, error handling</li>
+<li><strong>Lecture 3.2</strong> — the model landscape, tiers, costs, local models</li>
+<li><strong>Lecture 3.3</strong> — temperature, sampling parameters, output control</li>
+<li><strong>Lecture 3.4</strong> — in-context learning, context rot, context engineering</li>
+</ul>
+<p>The next module goes deeper into context windows — measuring them, managing them, and designing tools that keep them small.</p>
+</div>
+</body>
+</html>

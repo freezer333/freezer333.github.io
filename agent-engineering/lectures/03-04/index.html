@@ -10,20 +10,21 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>In-Context Learning and the Limits of Prompting</h1>
-<p><strong>Lecture 3.4</strong></p>
-<ul>
-  <li>In-context learning: the model "learns" from examples in the prompt without weight updates</li>
-  <li>Zero-shot vs. few-shot prompting with concrete examples</li>
-  <li>When in-context learning works vs. when it fails</li>
-  <li>The context rot problem: quality degrades as conversations grow</li>
-  <li>The agent-specific challenge: loops generate unbounded context</li>
-  <li>The shift from "prompt engineering" to "context engineering"</li>
-  <li>Context engineering defined: curating the entire context state, not just the prompt</li>
-</ul>
+<p><strong>Module 3, Lecture 3.4 | Working with LLMs in Practice</strong></p>
+<p>This lecture covers in-context learning — how LLMs &quot;learn&quot; new patterns from examples in the prompt without any weight updates. It compares zero-shot and few-shot prompting, demonstrating how examples improve both accuracy and output format consistency. The lecture then addresses the limits of prompting: context rot as conversations and tool results accumulate, conflicting instructions, and the single-context constraint. These limits motivate the shift from &quot;prompt engineering&quot; to &quot;context engineering&quot; — curating the entire context state so the model has exactly what it needs and nothing it doesn&#39;t. This reframe defines the rest of the course.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-03-04.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="zero_vs_few_shot.py">zero_vs_few_shot.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://arxiv.org/abs/2005.14165">Language Models are Few-Shot Learners (Brown et al., 2020)</a> — The GPT-3 paper that demonstrated in-context learning at scale. Showed that a sufficiently large model can learn new tasks from just a few examples in the prompt, without any weight updates. The foundational reference for understanding zero-shot, one-shot, and few-shot prompting.</li>
+<li><a href="https://lilianweng.github.io/posts/2023-03-15-prompt-engineering/">Prompt Engineering — Lilian Weng</a> — A thorough survey of prompting techniques from an OpenAI researcher, covering in-context learning, chain-of-thought, and their variations. Rigorous and well-cited.</li>
+<li><a href="https://x.com/karpathy/status/1937902205765607626">Andrej Karpathy on Context Engineering</a> — Karpathy&#39;s widely referenced post arguing for &quot;context engineering&quot; over &quot;prompt engineering,&quot; explaining that industrial-strength LLM applications require filling the context window with the right information.</li>
+<li><a href="https://blog.langchain.com/context-engineering-for-agents/">Context Engineering for Agents — LangChain Blog</a> — An overview of the four core strategies for managing agent context: writing, selecting, compressing, and isolating context. Directly relevant to the shift from prompt engineering to context engineering.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview">Prompt Engineering Overview — Anthropic Docs</a> — Anthropic&#39;s official guide to prompting Claude effectively, organized from broadly effective techniques to specialized strategies. Includes concrete examples and best practices.</li>
 </ul>
 </div>
 </body>
