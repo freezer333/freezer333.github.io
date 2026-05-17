@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Prompting Principles and Techniques — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Prompting Principles and Techniques
+
+???
+~20 minutes. This is the bridge lecture between understanding LLMs (Modules 2–4) and building agents. Students who've been frustrated by inconsistent model behavior will find this immediately useful. Frame it that way upfront.
+
+---
+
+# What We Know About Models
+
+You have the mental model. Now put it to work.
+
+- Models are **next-token predictors** — they continue patterns
+- Trained on internet text — they have **statistical priors**
+- Shaped by RLHF — they have **behavioral biases**
+
+Prompting is not magic words or tricks.
+
+.callout[Prompting is applying what you know about how models work to ask for what you actually want.]
+
+???
+Quick framing slide — 30 seconds. The whole lecture builds on the mental model from Modules 2–4. Students who've seen verbosity, sycophancy, hedging — this lecture tells them how to address those patterns directly.
+
+---
+
+# Say Exactly What You Want
+
+Vague prompts produce vague results.
+
+A vague prompt establishes a vague pattern. The model fills it with the most common completion from training — which may not match your intent.
+
+.split-left[
+**Vague**
+
+"Summarize this article."
+
+→ Unclear length, focus, format.
+→ Model picks whatever was most common in training data.
+]
+
+.split-right[
+**Specific**
+
+"Write a three-sentence summary of this article, focusing on the main technical claims and their limitations."
+
+→ Length, focus, and structure are all constrained.
+]
+
+<div class="clear"></div>
+
+.callout[Format constraints are especially important for agents — agents parse responses programmatically and need consistent output.]
+
+???
+This is the highest-leverage principle. Spend 60-90 seconds. The two-column comparison makes the contrast visceral. Emphasize the programmatic parsing point for agents — inconsistent format breaks code.
+
+Image prompt for `prompt-specificity.png`: "Two funnel diagrams side by side. Left funnel labeled 'Vague prompt: summarize this' fans out wide at the bottom showing many possible outputs. Right funnel labeled 'Specific prompt: three-sentence summary, technical claims' narrows to a single focused output. Clean, flat vector style, minimal color palette."
+
+---
+
+# Positive Outperforms Negative
+
+"Do X" reliably outperforms "don't do Y".
+
+The model has seen far more examples of doing things than not doing them. Negative instructions require holding a constraint in mind during generation.
+
+.split-left[
+**Weaker (negative)**
+
+"Don't give me a list."
+
+"Don't be verbose."
+
+"Don't use jargon."
+]
+
+.split-right[
+**Stronger (positive)**
+
+"Write your response as a single paragraph."
+
+"Keep your response under 100 words."
+
+"Use plain language for a non-technical reader."
+]
+
+<div class="clear"></div>
+
+.info[Positive instructions define what the output looks like. Negative instructions define what to avoid — leaving the valid output space larger.]
+
+???
+60 seconds. The key insight: negative instructions leave the output space large and underdetermined. Positive instructions narrow it. This directly connects to the "completions" framing from Module 2.
+
+---
+
+# Constraints That Work
+
+Four constraint types that reliably improve compliance:
+
+| Type | Example |
+|---|---|
+| **Format** | "Respond with JSON matching this schema: `{...}`" |
+| **Length** | "In exactly three sentences." / "Under 200 words." |
+| **Style** | "Formal academic tone." / "Plain language, no jargon." |
+| **Scope** | "Only use information from the provided text. Do not speculate." |
+
+Constraints work by making the completion task more deterministic — the model has a smaller valid output space to sample from.
+
+???
+60 seconds. Keep it as a reference table. Students will use all four types in Lab 3. Don't over-explain — let the examples speak.
+
+---
+
+# Four Prompt Anti-Patterns
+
+**1. Conflicting guidance**
+"Be concise but thorough" — the model picks one, inconsistently. Choose one goal per instruction.
+
+**2. Instruction overload**
+A system prompt with 40 rules is worse than one with 10. Critical instructions buried in a long list will be violated more often than the same instructions standing alone.
+
+**3. Buried key information**
+LLMs attend most strongly to content at the start and end of the context. Critical instructions in paragraph 8 of a system prompt will be missed more often.
+
+**4. Assuming shared context**
+What you know is not automatically known to the model. Decisions made earlier in a conversation attenuate — restate what needs to stay active.
+
+???
+90 seconds. These are the most common failure modes students will encounter. Anti-pattern 3 connects directly to "lost in the middle" from Lecture 3.4. Anti-pattern 4 is especially important for agents — long conversations bury earlier context.
+
+---
+
+# Counteracting Training Biases
+
+RLHF (Reinforcement Learning from Human Feedback) shapes how models respond — not just what they know. These behavioral biases are real. Prompt design is the first line of defense.
+
+| Bias | Counter-instruction |
+|---|---|
+| **Verbosity** | "Keep your response under 150 words. Do not add explanation beyond what was asked." |
+| **Sycophancy** | "Do not agree with me if I am wrong. Correct me directly." |
+| **Over-engineering** | "Implement the simplest solution that works. No extra abstractions." |
+| **Hedging** | "State your answer directly. Do not qualify unless the uncertainty is material." |
+
+.callout[These counter-instructions work because they explicitly override statistical priors baked in by training.]
+
+???
+60 seconds. This is the payoff of the Module 2 content — students now see how to apply that knowledge. The table is the main content; let it land.
+
+---
+
+# XML Tags for Clear Delineation
+
+When a prompt contains multiple content types, XML tags prevent the model from confusing one for another.
+
+.split-left[
+```
+<instructions>
+You are a code reviewer. Identify bugs and style violations.
+</instructions>
+
+<code>
+def get_user(id):
+    return db.query("SELECT * FROM users WHERE id=" + id)
+</code>
+```
+
+Without tags: the model must infer which part is instruction and which is content.
+
+With tags: the boundary is explicit.
+]
+
+.split-right[
+.center[<img src="../../images/xml-structure.png" style="height:300px;">]
+]
+
+<div class="clear"></div>
+
+???
+60 seconds. The code example is a real bug (SQL injection). Don't dwell on the bug itself — it's just illustrative. The key point: as prompts get more complex, explicit structure becomes load-bearing.
+
+Note: Anthropic's training specifically reinforces XML-tagged structure. The principle generalizes to other models too.
+
+---
+
+# Markdown Signals Structure
+
+Headers, bullet lists, and code blocks are not just visual formatting — they signal structure the model was trained to recognize.
+
+- **Headers (`#`, `##`)** — indicate section boundaries; help the model scope which instructions apply where
+- **Bullet lists** — imply each item is independent and equally weighted; good for requirements lists
+- **Code blocks** — signal literal text that should not be interpreted or paraphrased
+
+.callout[A system prompt written as organized markdown sections is more reliably followed than the same content written as prose paragraphs.]
+
+???
+45 seconds. Quick but important. Students will apply this immediately in Lab 3 when writing their system prompt. The key insight: markdown is semantic, not just cosmetic.
+
+---
+
+# Chain-of-Thought: How It Works
+
+The model is an autoregressive next-token predictor — it can only condition on tokens that already exist in context.
+
+Instructing the model to reason step by step causes it to first output a plan — and that plan becomes part of the context that the remaining tokens are generated from.
+
+.center[<img src="../../images/cot-mechanism.png" style="height:240px; margin-top:0.5em;">]
+
+.callout[CoT doesn't make the model smarter — it gives the model its own reasoning as context, so each step can build correctly on the last.]
+
+???
+60 seconds. The image tells the story. Without CoT, the answer has to emerge in one shot with no intermediate context. With CoT, each reasoning step is a real token in context — every subsequent step is conditioned on what came before. The model is reading its own plan as it generates the answer.
+
+Image prompt for `cot-mechanism.png`: "Two side-by-side diagrams. Left labeled 'Without CoT': a prompt box on the left, a single arrow pointing directly to a small answer box on the right, labeled 'answer produced in one shot'. Right labeled 'With CoT': a prompt box on the left, a series of three chained reasoning boxes (Step 1 → Step 2 → Step 3) connected by arrows, leading to a final answer box. Each reasoning box is slightly larger than the answer box. Clean flat vector style, minimal color, labels in sans-serif."
+
+---
+
+# Chain-of-Thought: When It Helps
+
+Canonical form: *"Let's think step by step."* or *"Think through this carefully before answering."*
+
+**Use CoT when:**
+- Multi-step reasoning — math, logic puzzles, planning
+- Intermediate steps catch errors before they compound
+- The reasoning process is itself the output you want
+
+**Skip CoT when:**
+- Simple retrieval or classification — the answer is direct
+- High-frequency agent tool calls — reasoning on every call inflates context
+- Format conversion or other mechanical tasks
+
+.info[Extended thinking models (like Claude's extended thinking mode) apply the same principle — they just hide the reasoning tokens from the output rather than including them in-line.]
+
+???
+60 seconds. This is a practical engineering decision. The "when" and "when not" framing is more useful than selling CoT as a general technique. Mention extended thinking briefly — it's the same mechanism with a UX difference. Transition directly into the token cost slide.
+
+---
+
+# Chain-of-Thought: Token Cost
+
+CoT adds tokens. In agents, this compounds.
+
+| Scenario | Token overhead |
+|---|---|
+| 50 tool calls per session × 50 tokens CoT each | 2,500 tokens added to context |
+| 10 sessions per day | 25,000 tokens per day |
+| 30 days | 750,000 tokens per month |
+
+.warning[Use CoT for tasks where intermediate reasoning visibly reduces errors. Skip it for tasks where the model performs well without it.]
+
+The cost is real. The benefit is real. Measure before committing.
+
+???
+45 seconds. Numbers are illustrative, not exact — adjust if students push back. The key point: CoT is not free and in agents the cost accumulates across turns. This directly extends the context management mindset from Module 4.
+
+---
+
+# Prompt Templates and Version Control
+
+A prompt template is a reusable structure with placeholders for variable content.
+
+.split-left[
+```python
+REVIEW_TEMPLATE = """
+<instructions>
+Review the following code for bugs,
+style violations, and security issues.
+Return a JSON array of findings:
+[{type, severity, line, description}]
+</instructions>
+
+<code>
+{code}
+</code>
+"""
+```
+]
+
+.split-right[
+Templates make prompts:
+- **Consistent** across runs
+- **Reviewable** — diffable like any file
+- **Testable** — input/output behavior can be checked
+
+.callout[Treat prompts as code. Store in version control. Commit improvements. Revert regressions.]
+]
+
+<div class="clear"></div>
+
+???
+60 seconds. The template example is directly applicable to the coding agent they'll build. The "prompts as code" principle is the key takeaway — it's an engineering discipline, not a creative exercise.
+
+---
+
+# Key Takeaways
+
+1. **Clarity and specificity** — vague prompts produce vague results; constrain format, length, style, and scope
+
+2. **Positive over negative** — define what the output looks like, not what to avoid
+
+3. **Anti-patterns to avoid** — conflicting guidance, instruction overload, buried key info, assumed context
+
+4. **Structure helps** — XML tags delineate content types; markdown headers signal scope
+
+5. **CoT is a tradeoff** — use for complex multi-step tasks; skip for simple or high-frequency calls
+
+6. **Prompts are code** — version control, test, iterate
+
+???
+30 seconds. Read through the list; emphasize #6 as the framing for everything that follows in the module.
+
+---
+
+# Next: System Prompt Architecture
+
+These principles apply everywhere. System prompts have their own structural requirements.
+
+- What goes in a system prompt — and in what order
+- How token budget shapes what you include
+- Why native tool use outperforms text parsing
+- How to design tool descriptions the model will follow
+
+.info[Lab 3 — The Booking Agent — applies everything from this lecture. You'll write a system prompt for a scheduling agent, diagnose failures, and measure the effect on both accuracy and token usage.]
+
+???
+30 seconds. Brief forward pointer to 5.2 and the lab. Don't over-explain Lab 3 here — just name it. Students should feel like they now have concrete techniques to apply.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+
+</html>

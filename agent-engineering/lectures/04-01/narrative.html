@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Measuring and Managing Context — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 4.1</a></div></nav>
+<div class="page_content"><h1>Lecture 4.1: Measuring and Managing Context</h1>
+<p><strong>Module 4, Lecture 4.1 | Section 2: Working with LLMs in Practice</strong></p>
+<hr>
+<h2>Overview</h2>
+<p>Context engineering — curating the smallest possible set of high-signal tokens — is the principle introduced in Lecture 3.4. This lecture is about its prerequisite: measurement. You cannot manage context you cannot see. The goal here is to make context growth visible: how to count tokens as they accumulate, where they come from, and when the quantity starts to hurt quality.</p>
+<hr>
+<h2>Token Counting with the API</h2>
+<p>Every major LLM API reports token usage per call. In the Anthropic SDK, each response object includes a <code>usage</code> field:</p>
+<pre><code class="language-python">response = client.messages.create(
+    model=&quot;claude-sonnet-4-6&quot;,
+    max_tokens=1024,
+    messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Explain recursion in two sentences.&quot;}]
+)
+
+print(f&quot;Input:  {response.usage.input_tokens} tokens&quot;)
+print(f&quot;Output: {response.usage.output_tokens} tokens&quot;)
+</code></pre>
+<ul>
+<li><strong>Input tokens</strong> — everything sent to the model: system prompt, conversation history, tool results, and the current user message.</li>
+<li><strong>Output tokens</strong> — everything the model generated in response: reasoning, tool call invocations, and the final reply.</li>
+</ul>
+<p>These are reported per call. Across a multi-turn session, you accumulate them yourself.</p>
+<h3>Why Input and Output Tokens Cost Differently</h3>
+<p>Output tokens cost roughly three to five times more than input tokens, and the reason is architectural. Input tokens are processed in parallel — the entire input is known upfront and can be passed through the model in a single forward pass. Output tokens are generated sequentially: each token requires a full forward pass through the model because each token depends on all preceding tokens (the autoregressive generation mechanism from Lecture 2.1).</p>
+<p>Sequential processing means more GPU compute per token. That cost is reflected in the price. The practical implication: keeping output concise is an effective cost-reduction strategy, not just an aesthetic preference.</p>
+<hr>
+<h2>How Context Grows During an Agent Task</h2>
+<p>Individual API calls use surprisingly few tokens. The accumulation happens across turns. Consider a simple user request: &quot;Fix the bug in parser.py.&quot; That sentence is maybe ten tokens. But here is what actually flows through the context window over a realistic agent session:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Event</th>
+<th>Approximate Tokens</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>System prompt (always present)</td>
+<td>~500</td>
+</tr>
+<tr>
+<td>2</td>
+<td>User message</td>
+<td>~10</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Agent reads <code>parser.py</code></td>
+<td>~800</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Agent reads the test file</td>
+<td>~600</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Agent proposes edit</td>
+<td>~200</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Tool confirms edit</td>
+<td>~50</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Agent re-reads <code>parser.py</code> to verify</td>
+<td>~800</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Agent runs tests</td>
+<td>~400</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Tests fail; agent reads error output</td>
+<td>~300</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Agent makes another edit, re-reads, re-runs</td>
+<td>~1,500</td>
+</tr>
+</tbody></table>
+<p><strong>Running total: ~5,160 tokens from a single user request.</strong></p>
+<p><img src="context-window-full.png" alt="Context window filling up"></p>
+<p>Notice step 7: the agent reads the same file twice, and both copies stay in context. The model does not remember that it already read the file — every tool result is re-sent on every subsequent call. That is the fundamental reason context grows so fast.</p>
+<h3>Where the Tokens Come From</h3>
+<p>In a typical agent session, the token breakdown is roughly:</p>
+<ul>
+<li><strong>System prompt</strong>: 5–10%</li>
+<li><strong>User messages</strong>: 2–5%</li>
+<li><strong>Assistant responses</strong>: 15–25%</li>
+<li><strong>Tool results</strong>: 50–70%</li>
+</ul>
+<p><img src="tool-tokens.png" alt="Token breakdown by source"></p>
+<p>Tool results dominate. Every file read, command output, and search result is appended to the context and re-sent on every future call. This is why token-efficient tool design (covered in Lecture 4.3) has such a large impact — it is the biggest lever available.</p>
+<h3>Observing This in Code</h3>
+<p>The script <code>context_growth.py</code> simulates a five-turn coding assistant session and tracks token accumulation per step:</p>
+<pre><code class="language-python"># After each API call, track cumulative tokens
+cumulative_input += response.usage.input_tokens
+cumulative_output += response.usage.output_tokens
+
+print(f&quot;Step {i:&lt;3} in={response.usage.input_tokens:&gt;6} &quot;
+      f&quot;out={response.usage.output_tokens:&gt;6} &quot;
+      f&quot;cum_in={cumulative_input:&gt;8}&quot;)
+</code></pre>
+<p>Running this produces output like:</p>
+<pre><code>Step   1   in=   137   out=  313   cum_in=      137
+Step   2   in=   461   out=  224   cum_in=      598
+Step   3   in=   703   out=  187   cum_in=     1301
+Step   4   in=   912   out=  209   cum_in=     2213
+Step   5   in=  1142   out=  271   cum_in=     3355
+</code></pre>
+<p>The input token count on each call is the full conversation re-sent. Output from previous steps becomes input for all subsequent steps. After five turns of a simple coding conversation, cumulative input tokens approach 4,000 — and that is without any file reading.</p>
+<p>The complete script is in <code>context_growth.py</code>.</p>
+<hr>
+<h2>Quality Degrades Before the Hard Limit</h2>
+<p>Context windows are advertised as ceilings — 128K, 200K, even 1M tokens for recent models. These are hard limits. Once your context exceeds the model&#39;s maximum, the API rejects the request. But the practical limit is lower.</p>
+<p>Quality degrades well before the hard limit is reached. More context means the model&#39;s attention must cover more tokens, and the coverage becomes thinner. The degradation is not gradual — it tends to hold steady for a while and then drop sharply once the context becomes dense enough that the model struggles to maintain coherence.</p>
+<p><img src="quality-drop.png" alt="Quality degradation with context length"></p>
+<p>The &quot;Lost in the Middle&quot; paper (Liu et al., 2023) established a specific pattern: models attend more to the beginning and end of long contexts, with weaker recall for information in the middle. Content in the middle of a long conversation is less likely to influence output, regardless of its relevance. In practice, you may notice an agent that starts a session with high precision gradually becoming less precise as the conversation grows — ignoring earlier instructions, losing track of constraints, giving less targeted answers.</p>
+<p>The threshold where quality noticeably degrades is typically around 60–70% of the model&#39;s maximum context — not 90% or 95%. The context window is a ceiling, not a target.</p>
+<hr>
+<h2>Setting a Context Budget</h2>
+<p>A context budget is a threshold: when the current context size reaches X% of the model&#39;s limit, take action. The common default is 80%.</p>
+<pre><code class="language-python">MAX_CONTEXT = 200_000  # model&#39;s limit
+BUDGET = int(MAX_CONTEXT * 0.80)  # 160,000 tokens
+
+if response.usage.input_tokens &gt; BUDGET:
+    # Time to manage context — strategies in Lecture 4.2
+    print(f&quot;Context budget exceeded: {response.usage.input_tokens}/{BUDGET}&quot;)
+</code></pre>
+<p>The 80% threshold is chosen deliberately: it leaves enough headroom for the model to operate on the current context — to summarize it, compact it, or take some other action. If you wait until the hard limit, there is nothing you can do. If you act at 80%, you still have 20% available for remediation.</p>
+<p>The specific strategies — sliding windows, selective preservation, compaction — are covered in Lecture 4.2. What matters here is establishing the habit of checking.</p>
+<h3>Why Not Just Use the Biggest Available Window?</h3>
+<p>Three reasons to keep context small rather than expanding to the largest available window:</p>
+<ul>
+<li><strong>Cost</strong> — Input tokens are re-sent on every call. In a session that runs to 800K tokens of context, you pay for all 800K tokens on every subsequent call.</li>
+<li><strong>Quality</strong> — A 50K-token context often produces better results than a 150K-token context for the same task, because attention is more focused.</li>
+<li><strong>Latency</strong> — More input tokens means longer time to first output token.</li>
+</ul>
+<p>The goal is the smallest context that contains everything the model needs — not the largest context the model will accept.</p>
+<hr>
+<h2>Instrument From the Start</h2>
+<p>Token tracking should be built into an agent from the beginning, not added after performance problems appear. The minimum viable instrumentation is a print statement after every API call:</p>
+<pre><code class="language-python">print(f&quot;[tokens] in={response.usage.input_tokens} &quot;
+      f&quot;out={response.usage.output_tokens} &quot;
+      f&quot;total={response.usage.input_tokens + response.usage.output_tokens}&quot;)
+</code></pre>
+<p>What to track:</p>
+<ul>
+<li>Input and output tokens per call</li>
+<li>Cumulative input tokens across the session (this is your context growth curve)</li>
+<li>When you cross your budget threshold</li>
+</ul>
+<p>This is a print statement at this stage. As the course progresses and we build a full agent framework, this becomes a proper <code>TokenTracker</code> class with history, alerting, and budget enforcement. The underlying data — <code>response.usage.input_tokens</code> — is the same. What changes is how it is structured and acted upon.</p>
+<p>The key principle: token consumption is never a mystery. The API always reports exactly what was used. Context size is something you have complete visibility into — and therefore something you can manage.</p>
+<hr>
+<h2>Key Takeaways</h2>
+<ol>
+<li><strong>Every API call reports token usage</strong> — input and output, per call. Track both.</li>
+<li><strong>Tool results dominate context growth</strong> — 50–70% of tokens in a typical agent session.</li>
+<li><strong>Quality degrades before the hard limit</strong> — set a budget (80% is a reasonable default) and act before the window fills.</li>
+<li><strong>Measure from the start</strong> — you cannot manage context you cannot see.</li>
+</ol>
+</div>
+</body>
+</html>

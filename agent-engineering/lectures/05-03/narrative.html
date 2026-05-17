@@ -1,0 +1,380 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building the Coding Agent System Prompt — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 5.3</a></div></nav>
+<div class="page_content"><h1>Building the Coding Agent System Prompt</h1>
+<p><strong>Module 5, Lecture 5.3 | Section 3: Prompt and Context Engineering</strong></p>
+<hr>
+<p>This is the lecture where everything comes together. Modules 2 through 4 built the conceptual foundation: LLMs as next-token predictors, context windows as a shared resource, tool calling as a protocol, system prompts as engineering artifacts. Lecture 5.1 covered prompting principles. Lecture 5.2 covered system prompt architecture. This lecture builds the actual system prompt and runs the first real agent.</p>
+<p>By the end, there is working code — a Python program that takes user input, calls the Anthropic API, executes real filesystem tools, and produces real output. <a href="code-agent-v0.py"><code>code-agent-v0.py</code></a> and <a href="code-agent-v1.py"><code>code-agent-v1.py</code></a> are the full implementations.</p>
+<hr>
+<h2>The Three Starter Tools</h2>
+<p>A coding agent that can read, explore, and modify files needs exactly three tools to get started:</p>
+<p><strong><code>list_files(path)</code></strong> — Returns a directory listing with file names and types. The agent uses this to discover what exists before reading anything. This is the first step in the Discover → Read → Modify pattern.</p>
+<p><strong><code>read_file(filename)</code></strong> — Returns the complete contents of a file. Simple and direct — and deliberately naive. As discussed in Lecture 4.3, returning an entire file&#39;s contents can be expensive in tokens: a 500-line file costs roughly 2,000 tokens per read. This design is kept intentionally simple for now. Lab 4 replaces it with a <code>search_file</code> + <code>read_lines</code> pattern that costs approximately 130 tokens for the same task.</p>
+<p><strong><code>edit_file(path, old_str, new_str)</code></strong> — Creates or modifies files using string replacement. If <code>old_str</code> is empty, the file is created with <code>new_str</code> as contents. Otherwise, the first occurrence of <code>old_str</code> is replaced with <code>new_str</code>. The agent must read a file before editing it — it needs the exact text to provide as <code>old_str</code>. This is the same approach Claude Code uses for its own edit tool.</p>
+<p>These three tools form a minimal but complete interface. The agent cannot run code, cannot search the web, cannot talk to any API. That scope restriction is intentional: the goal is to build the simplest thing that works before adding complexity.</p>
+<p>One important note about constraints: the tools themselves are the actual enforcement mechanism. If there is no delete tool, the agent cannot delete files — regardless of what any instruction says. The constraints in the system prompt tell the model what the rules are; the absence of a tool makes it physically impossible to violate them. This distinction matters as agents grow more capable.</p>
+<hr>
+<h2>The System Prompt</h2>
+<p>The system prompt follows the four-section architecture from Lecture 5.2: identity, tools, behavioral guidelines, constraints. Each section has a specific job.</p>
+<h3>Identity</h3>
+<pre><code>You are a coding assistant. Your job is to help users read,
+understand, and modify code files in their project directory.
+</code></pre>
+<p>Two sentences. No filler. The scope is explicit — code files, project directory — which primes the model to generate source code and stay within that domain.</p>
+<h3>Available Tools</h3>
+<pre><code class="language-markdown">## Available Tools
+
+**list_files(path)**: List the files and directories at a given path.
+Use this to understand the project structure before looking for
+specific files. Returns file names and types.
+
+**read_file(filename)**: Read the complete contents of a file. Use
+this to understand existing code before making changes. Always read
+a file before editing it.
+
+**edit_file(path, old_str, new_str)**: Create or edit a file.
+- To create: set old_str to empty string, new_str to file contents.
+- To edit: set old_str to exact text to replace, new_str to replacement.
+You must read the file first to know what text to use for old_str.
+</code></pre>
+<p>The last sentence of <code>edit_file</code>&#39;s description — &quot;You must read the file first&quot; — is behavioral guidance placed exactly where the model needs it: in context when it is deciding whether to call this tool. This is more effective than a separate rule buried elsewhere in the prompt.</p>
+<h3>Behavioral Guidelines</h3>
+<pre><code class="language-markdown">## How to Work
+
+- Read before editing. Never modify a file you haven&#39;t read in this session.
+- Be concise. Respond with what the user needs — not explanations of your
+  process unless the user asks.
+- When in doubt, ask. If a request is ambiguous, ask one clarifying question
+  before acting.
+- Report what you did. After completing a task, briefly confirm what was done.
+  Example: &quot;Added the multiply function to math_utils.py on line 12.&quot;
+</code></pre>
+<p>Each guideline addresses a specific failure mode: blind edits, verbose process narration, acting on ambiguous requests, and silent success or failure.</p>
+<h3>Constraints</h3>
+<pre><code class="language-markdown">## Constraints
+
+- Only access files within the current project directory. Do not
+  attempt to read or modify files outside the project.
+- Never delete files. If the user asks you to delete something,
+  explain that you cannot and suggest alternatives.
+- Do not execute code. You can read and write files, but not run them.
+</code></pre>
+<p>Constraints are non-negotiable. Guidelines express preferences and can flex under task pressure. Constraints cannot. The placement at the end of the system prompt follows the attention pattern from Lecture 5.2 — the model re-attends to the end of its context before generating a response, so constraints placed here are active in memory when decisions are made.</p>
+<h3>Few-Shot Example</h3>
+<p>One well-chosen example demonstrates the complete read → inspect → edit sequence:</p>
+<p>The example:</p>
+<pre><code>User: Add a docstring to the add function in math_utils.py.
+
+Assistant:
+[calls read_file(&quot;math_utils.py&quot;)]
+[locates the add function at line 4]
+[calls edit_file(&quot;math_utils.py&quot;,
+    &quot;def add(a, b):&quot;,
+    &quot;def add(a, b):\n    \&quot;\&quot;\&quot;Return the sum of a and b.\&quot;\&quot;\&quot;&quot;
+)]
+Done — added a one-line docstring to the add function on line 4.
+</code></pre>
+<p>This example teaches three things simultaneously: read first, make a minimal surgical edit rather than rewriting the whole file, and confirm briefly what was done. One example like this is worth ten abstract rules.</p>
+<hr>
+<h2>The Tool Schema</h2>
+<p>Beyond the system prompt, the tools must be registered with the Anthropic API as structured JSON schemas. This is what the API uses to guarantee that tool calls come back as structured objects rather than text to parse:</p>
+<pre><code class="language-python">TOOLS = [
+    {
+        &quot;name&quot;: &quot;list_files&quot;,
+        &quot;description&quot;: &quot;List the files and directories at a given path. ...&quot;,
+        &quot;input_schema&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: {
+                &quot;path&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;description&quot;: &quot;Directory path to list. Use &#39;.&#39; for the current directory.&quot;
+                }
+            },
+            &quot;required&quot;: [&quot;path&quot;]
+        }
+    },
+    # read_file and edit_file follow the same pattern
+]
+</code></pre>
+<p>Each tool entry has a <code>name</code>, a <code>description</code> (the prompt to the model), and an <code>input_schema</code> that defines the expected arguments as a JSON Schema object. The <code>required</code> field ensures the model must provide those arguments — they cannot be omitted.</p>
+<p>When the model decides to call a tool, the API returns a <code>tool_use</code> content block with the tool name and typed, validated arguments. No regex. No string parsing. The full tool schema is appended to every API call by the SDK, which is why every word in a tool description carries a recurring token cost.</p>
+<hr>
+<h2>code-agent-v0.py: Observing Tool Use</h2>
+<p><a href="code-agent-v0.py"><code>code-agent-v0.py</code></a> is not an agent. It is a diagnostic. Its purpose is to make the API response structure completely visible before adding the complexity of a loop.</p>
+<p>The program defines the full system prompt, the tool schemas, and three stub functions that do nothing except print what they received. It then takes a single user prompt, calls the API once, and displays the result:</p>
+<pre><code class="language-python">for block in response.content:
+    if block.type == &quot;tool_use&quot;:
+        print(f&quot;\n[TOOL CALL] → {block.name}&quot;)
+        print(f&quot;  Arguments: {block.input}&quot;)
+        if block.name == &quot;list_files&quot;:
+            list_files(**block.input)
+        elif block.name == &quot;read_file&quot;:
+            read_file(**block.input)
+        elif block.name == &quot;edit_file&quot;:
+            edit_file(**block.input)
+    elif block.type == &quot;text&quot;:
+        print(f&quot;\n[REPLY TO USER]\n{block.text}&quot;)
+</code></pre>
+<p>The critical observation: when you ask &quot;Create hello.py with a hello world function,&quot; <code>response.stop_reason</code> is <code>&quot;tool_use&quot;</code> and <code>response.content</code> contains a <code>tool_use</code> block. The model is not typing a reply — it is issuing a structured instruction to call <code>edit_file</code>. When you ask &quot;What does edit_file do?&quot;, <code>stop_reason</code> is <code>&quot;end_turn&quot;</code> and <code>response.content</code> contains a <code>text</code> block. Two completely different response structures from the same API endpoint.</p>
+<p>What v0 does <em>not</em> do: it calls the stub but never sends the result back to the model. The conversation stops after one API call. This omission is intentional. It lets you see &quot;the model asked for this tool call&quot; cleanly, before the loop makes that harder to observe. The stub prints, proving dispatch worked — but the agent never gets an answer back. That is what v1 fixes.</p>
+<p>Running v0 also exposes an immediate failure: when asked to write a JavaScript hello world and put it in <code>hello.js</code>, the model&#39;s first action is to call <code>edit_file</code> directly — without first calling <code>list_files</code> or <code>read_file</code>. It violated the read-first rule on its first attempt. This is a real observation from running the code, and it illustrates exactly why the system prompt needs testing before being wired into a running agent.</p>
+<hr>
+<h2>code-agent-v1.py: The Agent Loop</h2>
+<p><a href="code-agent-v1.py"><code>code-agent-v1.py</code></a> is the first working agent in the course. Same system prompt, same tool schemas — but real tool implementations and a real loop.</p>
+<h3>The Core Architectural Insight</h3>
+<p>Before looking at any code, understand what a working agent actually does at the level of control flow. A model does not &quot;run&quot; continuously. It processes one context and produces one response. That&#39;s it. The model itself has no loop, no memory across calls, no ongoing process. The agent loop is the code around the model that simulates continuity — that gives the impression of an ongoing, capable assistant.</p>
+<p>The loop does two things:</p>
+<ol>
+<li>It manages the conversation with the user — accumulating messages, prompting for input, surfacing the final reply.</li>
+<li>It manages the model&#39;s &quot;thinking time&quot; — giving the model a chance to call tools, observe results, and decide what to do next before committing to a final answer.</li>
+</ol>
+<p>These are not the same concern. They operate at different timescales and with different exit conditions. That is why there are two loops.</p>
+<h3>Why a Single Loop Fails</h3>
+<p>A single loop — ask the user, call the API, print the reply, repeat — cannot handle tool use correctly. Consider what happens when the model calls a tool:</p>
+<ul>
+<li>The model&#39;s response is not a text reply. It is a structured request: &quot;call <code>read_file</code> with this argument.&quot;</li>
+<li>The agent code must execute that tool.</li>
+<li>The agent must send the result back to the model.</li>
+<li>The model must look at the result and decide whether to call another tool or produce its final answer.</li>
+</ul>
+<p>All of this happens <em>within a single user request</em>. From the user&#39;s perspective, they asked one question and are waiting for one answer. The back-and-forth between model and tools is internal — completely invisible to the user. A single outer loop would have no way to express this: it would need to exit and re-enter the loop body multiple times for the same user message.</p>
+<p>The two-loop architecture makes the distinction explicit in code. The outer loop belongs to the user. The inner loop belongs to one model turn.</p>
+<h3>The Outer Loop</h3>
+<pre><code class="language-python">while True:
+    user_input = input(&quot;You: &quot;).strip()
+    if not user_input:
+        print(&quot;Goodbye.&quot;)
+        break
+
+    messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_input})
+
+    # --- inner loop runs here ---
+
+    # back to outer loop: prompt for next user message
+</code></pre>
+<p>The outer loop is simple. It asks for input, appends it to the message history, delegates all agent work to the inner loop, then comes back to ask for the next input. One iteration of the outer loop is one complete exchange from the user&#39;s perspective. The user types something; eventually, the agent responds; the prompt reappears.</p>
+<p>The user is entirely unaware of what happens in the inner loop. They do not know how many tools the model called, how many API requests were made, or how many times the messages array grew. From their perspective, it is exactly like typing to a chat interface.</p>
+<h3>The Inner Loop</h3>
+<pre><code class="language-python">while True:
+    response = client.messages.create(
+        model=&quot;claude-sonnet-4-6&quot;,
+        max_tokens=4096,
+        system=SYSTEM_PROMPT,
+        tools=TOOLS,
+        messages=messages
+    )
+
+    # Append the full assistant response to history
+    messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: response.content})
+
+    if response.stop_reason == &quot;tool_use&quot;:
+        tool_results = []
+        for block in response.content:
+            if block.type == &quot;tool_use&quot;:
+                result = dispatch_tool(block.name, block.input)
+                tool_results.append({
+                    &quot;type&quot;: &quot;tool_result&quot;,
+                    &quot;tool_use_id&quot;: block.id,
+                    &quot;content&quot;: result
+                })
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: tool_results})
+        # loop again — the model gets another turn
+
+    else:  # stop_reason == &quot;end_turn&quot;
+        for block in response.content:
+            if block.type == &quot;text&quot;:
+                print(f&quot;\nAssistant: {block.text}\n&quot;)
+        break  # return to outer loop
+</code></pre>
+<p>The inner loop is where the agent actually thinks. It is driven entirely by one value: <code>stop_reason</code>. Understand <code>stop_reason</code> and you understand the loop.</p>
+<p><strong><code>stop_reason == &quot;tool_use&quot;</code>: the model is not done.</strong></p>
+<p>The model has produced a response, but that response is not a reply to the user — it is a request to the agent code. The model decided it needs information from the outside world before it can answer. It has specified exactly which tool to call and exactly what arguments to pass. The agent&#39;s job is to execute that tool, package the result, and hand it back to the model.</p>
+<p>Then the loop iterates. The model gets another API call. It sees its own tool request and the result that came back. From that updated context, it decides again: call another tool, or produce a final answer?</p>
+<p><strong><code>stop_reason == &quot;end_turn&quot;</code>: the model is done.</strong></p>
+<p>The model has produced its final text response. There are no more tool requests. The inner loop exits, the reply is surfaced to the user, and control returns to the outer loop.</p>
+<p>This <code>stop_reason</code> check is the beating heart of the agent. Every agent loop built on the Anthropic API uses this exact structure, regardless of how many tools it has, how complex its system prompt is, or how long the conversation runs.</p>
+<h3>Step-by-Step: One Full Inner Loop Iteration</h3>
+<p>Walk through every step for the prompt &quot;Create hello.py with a hello world function&quot;:</p>
+<p><strong>Step 1: Call the API.</strong> The entire <code>messages</code> array is sent — system prompt, all previous conversation, all tool calls, all tool results, and the current user message. Every API call carries the full accumulated context. The model sees everything that has happened in this session.</p>
+<p><strong>Step 2: The model decides.</strong> Given the system prompt, the tool schemas, and the user&#39;s request, the model determines that <code>edit_file</code> should be called with <code>old_str=&quot;&quot;</code> (create) and appropriate file contents. It returns a response with <code>stop_reason = &quot;tool_use&quot;</code> and a <code>tool_use</code> content block.</p>
+<p><strong>Step 3: Append the assistant&#39;s response to <code>messages</code>.</strong> This step is non-obvious and critical. <code>response.content</code> is a list of content blocks — it may contain <code>tool_use</code> blocks, a <code>text</code> block, or both. The entire list is appended to messages as the assistant turn. Not just the tool calls. Not just any text. The complete content array. This matters because the model must see its own tool request in the message history when it evaluates the results on the next iteration.</p>
+<p><strong>Step 4: Check <code>stop_reason</code>.</strong> It&#39;s <code>&quot;tool_use&quot;</code>. The inner loop does not exit.</p>
+<p><strong>Step 5: Execute every requested tool.</strong> A single API response can contain multiple <code>tool_use</code> blocks — the model can request more than one tool per turn when the requests are independent. The code iterates over all content blocks, executes each tool via <code>dispatch_tool</code>, and collects the results. Each result is packaged as a <code>tool_result</code> object that references the original request by <code>tool_use_id</code>. This tie-back is how the model knows which result corresponds to which request when it evaluates them.</p>
+<p><strong>Step 6: Append tool results as a user turn.</strong> The <code>tool_result</code> objects are appended to <code>messages</code> with <code>role: &quot;user&quot;</code>. Not <code>&quot;assistant&quot;</code>. This surprises most students. Tool results come from the agent code — from the real world outside the model. They re-enter the conversation from the user side, exactly the way any external information does. The model did not produce them; the code did. Marking them as user-role is the protocol the API requires to represent &quot;this is information arriving from outside.&quot;</p>
+<p><strong>Step 7: Loop again.</strong> The inner loop calls the API a second time with the now-longer messages array. The model sees its own tool request at [1] and the result at [2]. It produces a final text reply with <code>stop_reason = &quot;end_turn&quot;</code>.</p>
+<p><strong>Step 8: Surface the reply and break.</strong> The text content blocks are printed. The inner loop exits. The outer loop prompts for the next user input.</p>
+<h3><code>stop_reason</code> as a State Machine</h3>
+<p>The inner loop can be understood as a state machine with two states:</p>
+<pre><code>             ┌──────────────────────────────────────────┐
+             │                                          │
+             ▼                                          │
+  ┌─────────────────────┐    stop_reason             ┌──────────────┐
+  │   Call API with      │   == &quot;tool_use&quot;            │  Execute     │
+  │   full messages      │ ──────────────────────────► │  all tools,  │
+  │   array              │                            │  append      │
+  └─────────────────────┘                            │  tool_result │
+             │                                        │  as user msg │
+             │  stop_reason                           └──────────────┘
+             │  == &quot;end_turn&quot;
+             │
+             ▼
+    Surface text reply,
+    exit inner loop,
+    return to outer loop
+</code></pre>
+<p>The agent is always in one of two states: calling the API, or executing tools. <code>stop_reason</code> determines which transition to take. An agent can stay in the <code>tool_use</code> → <code>execute tools</code> → <code>call API</code> cycle for as many iterations as the model requires — reading files, listing directories, making edits, checking results — before finally arriving at <code>end_turn</code> and surfacing a reply.</p>
+<h3>How the Messages Array Grows</h3>
+<p>The messages array is the shared state between both loops. It is the model&#39;s entire working memory. Every API call sends the complete array; every tool call and result extends it. Understanding how it grows makes the loop&#39;s behavior concrete.</p>
+<p><strong>Single-tool exchange</strong> — &quot;Create hello.py with a hello world function&quot;:</p>
+<pre><code>[0] role: user       &quot;Create hello.py with a hello world function&quot;
+[1] role: assistant  [tool_use: edit_file(path=&quot;hello.py&quot;, old_str=&quot;&quot;, new_str=&quot;...&quot;)]
+[2] role: user       [tool_result id=tu_001: &quot;Created hello.py&quot;]
+[3] role: assistant  [text: &quot;Done — created hello.py with a hello world program.&quot;]
+</code></pre>
+<p>The inner loop ran twice. On the first iteration, the model requested a tool (entry [1]); on the second, it produced the final reply (entry [3]). The user sees only [0] and [3]. Entries [1] and [2] are the conversation between the agent code and the model.</p>
+<p><strong>Multi-tool exchange</strong> — &quot;Add a main block to hello.py that calls the function&quot;:</p>
+<p>The model must first read the file to know what text to replace. This is the read-before-edit rule playing out in real tool calls.</p>
+<pre><code>[0] role: user       &quot;Add a main block to hello.py&quot;
+[1] role: assistant  [tool_use: read_file(filename=&quot;hello.py&quot;)]
+[2] role: user       [tool_result id=tu_002: &quot;def hello():\n    print(&#39;Hello, world!&#39;)\n&quot;]
+[3] role: assistant  [tool_use: edit_file(path=&quot;hello.py&quot;,
+                         old_str=&quot;def hello():&quot;,
+                         new_str=&quot;def hello():\n    print(&#39;Hello, world!&#39;)\n\nif __name__ == &#39;__main__&#39;:\n    hello()&quot;)]
+[4] role: user       [tool_result id=tu_003: &quot;Edited hello.py&quot;]
+[5] role: assistant  [text: &quot;Done — added a main block to hello.py.&quot;]
+</code></pre>
+<p>The inner loop ran three times: read → edit → final reply. Each iteration is a full API call. The model on iteration 3 can see the contents of hello.py (from [2]) and the confirmation that the edit succeeded (from [4]). It uses both to verify its work before producing the reply at [5]. The user sees only [0] and [5].</p>
+<p><strong>What &quot;three times&quot; means in practice</strong>: each inner loop iteration is a separate call to <code>client.messages.create</code>. Each call sends the full messages array, which by iteration 3 is 200+ tokens larger than it was at the start. This is where token costs accumulate for agentic tasks — not in the individual responses, but in the repeated sending of a growing context on every inner-loop iteration.</p>
+<h3>Parallel Tool Calls Within One Inner Loop Iteration</h3>
+<p>A single API response can contain more than one <code>tool_use</code> block. When the model determines that multiple tools can be called independently — for example, reading two unrelated files — it may batch those requests into a single response. The agent handles this naturally: the <code>for block in response.content</code> loop collects every <code>tool_use</code> block, and all results are packaged into a single <code>tool_result</code> user message.</p>
+<pre><code>[1] role: assistant  [tool_use: read_file(&quot;utils.py&quot;),
+                      tool_use: read_file(&quot;tests.py&quot;)]      ← two tool calls, one response
+[2] role: user       [tool_result id=tu_004: &quot;...&quot;,
+                      tool_result id=tu_005: &quot;...&quot;]          ← two results, one message
+</code></pre>
+<p>Both results re-enter as a single user turn. The model sees both on the next iteration and can proceed with complete information. The inner loop still iterates the same number of times — it&#39;s just that some iterations carry more work per round.</p>
+<h3>The Messages Array as Shared State</h3>
+<p>Step back from the code and notice what the messages array actually is. It is not a log. It is the model&#39;s context — the complete record of everything that has happened in this session. Every fact the model knows about the files, every action it has taken, every result it has seen — all of it exists in this array.</p>
+<p>When the inner loop calls the API on its third iteration, the model is not &quot;remembering&quot; what happened on iterations one and two. The model has no persistent memory. Instead, the messages array contains the full record of iterations one and two, and the model reads all of it fresh on every call. The loop creates the illusion of an agent that remembers its own actions; the messages array makes that illusion real.</p>
+<p>This has a practical implication: if a tool result returns a large amount of text — say, a 300-line file — that text is in the messages array for every subsequent API call in this session. The context grows, and every call pays for all of it. This is not a theoretical concern for the current implementation; it is the primary reason Lab 4 replaces <code>read_file</code> with a targeted <code>search_file</code> + <code>read_lines</code> pair.</p>
+<h3>The Real Tool Implementations</h3>
+<pre><code class="language-python">def list_files(path):
+    entries = os.listdir(path)
+    lines = []
+    for entry in sorted(entries):
+        full = os.path.join(path, entry)
+        kind = &quot;dir&quot; if os.path.isdir(full) else &quot;file&quot;
+        lines.append(f&quot;{entry}  [{kind}]&quot;)
+    return &quot;\n&quot;.join(lines)
+</code></pre>
+<p><code>list_files</code> is <code>os.listdir()</code> with sorting and type annotation. It returns a string. That string becomes a <code>tool_result</code> content block in the next API call, and the model reads it to understand what is in the directory.</p>
+<pre><code class="language-python">def read_file(filename):
+    with open(filename, &quot;r&quot;, encoding=&quot;utf-8&quot;) as f:
+        return f.read()
+</code></pre>
+<p><code>read_file</code> opens and reads the file. The entire contents become the tool result. This is the naive design — every token of file content is injected into the context.</p>
+<pre><code class="language-python">def edit_file(path, old_str, new_str):
+    if old_str == &quot;&quot;:
+        with open(path, &quot;w&quot;, encoding=&quot;utf-8&quot;) as f:
+            f.write(new_str)
+        return f&quot;Created {path}&quot;
+    else:
+        with open(path, &quot;r&quot;, encoding=&quot;utf-8&quot;) as f:
+            contents = f.read()
+        if old_str not in contents:
+            return f&quot;Error: text not found in {path}&quot;
+        updated = contents.replace(old_str, new_str, 1)
+        with open(path, &quot;w&quot;, encoding=&quot;utf-8&quot;) as f:
+            f.write(updated)
+        return f&quot;Edited {path}&quot;
+</code></pre>
+<p><code>edit_file</code> has two behaviors. When <code>old_str</code> is empty, it creates the file. When <code>old_str</code> is provided, it reads the file, finds the first occurrence, replaces it, and writes back. If <code>old_str</code> is not found, it returns an error string. That error string goes into the tool result, the model reads it on the next inner loop iteration, and a well-prompted model will report the failure to the user rather than pretending it succeeded.</p>
+<p>Every tool returns a string. That string is the tool&#39;s answer to the model — how the world outside the model communicates back through the conversation.</p>
+<hr>
+<h2>Testing the System Prompt</h2>
+<p>Before wiring any system prompt into a running agent, test it with targeted cases. <code>code-agent-v0.py</code> is purpose-built for this: one prompt in, one API call, full visibility of what the model chose to do.</p>
+<p>Three cases cover the most important surface area:</p>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&quot;Create hello.py with a hello world function.&quot;</td>
+<td>File creation — does the model use <code>edit_file</code> with empty <code>old_str</code>?</td>
+</tr>
+<tr>
+<td>&quot;Add a multiply function to math_utils.py.&quot;</td>
+<td>Read-first enforcement — does the model call <code>read_file</code> before <code>edit_file</code>?</td>
+</tr>
+<tr>
+<td>&quot;Delete main.py.&quot;</td>
+<td>Constraint compliance — does the model refuse and explain?</td>
+</tr>
+</tbody></table>
+<p>When running these tests, the first result is often a failure. The model may edit without reading. It may ask for clarification when none is needed. It may ignore a constraint. This is normal — the diagnostic is not &quot;did it pass?&quot; but &quot;what exactly did it do, and which part of the prompt failed to constrain it?&quot;</p>
+<p>Failure modes and their fixes:</p>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Edits without reading</td>
+<td>Read-first instruction missing or buried</td>
+<td>Add to <code>edit_file</code> description AND to guidelines</td>
+</tr>
+<tr>
+<td>Verbose process narration</td>
+<td>No conciseness constraint</td>
+<td>Add explicit word limit</td>
+</tr>
+<tr>
+<td>Wrong argument format</td>
+<td>Tool description unclear</td>
+<td>Rewrite with an explicit argument example</td>
+</tr>
+<tr>
+<td>Constraint ignored</td>
+<td>Constraint placed too late</td>
+<td>Move earlier; repeat at the end</td>
+</tr>
+<tr>
+<td>Asks when it shouldn&#39;t</td>
+<td>Clarification rule too broad</td>
+<td>Add: &quot;only ask if truly ambiguous&quot;</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Prompts and Tools Are Coupled</h2>
+<p>When the tools change, the system prompt must change with them. Lab 4 replaces <code>read_file</code> with a <code>search_file</code> + <code>read_lines</code> pair. That change requires:</p>
+<ul>
+<li>Removing the <code>read_file</code> description from the Available Tools section</li>
+<li>Adding descriptions for both new tools</li>
+<li>Updating the workflow guidance: <em>&quot;First call search_file to find the relevant lines. Then call read_lines to retrieve the specific content.&quot;</em></li>
+<li>Updating the few-shot example to show the new pattern</li>
+</ul>
+<p>A system prompt written for one set of tools will produce incorrect behavior if the tools change without the prompt being updated. The tool descriptions are part of the prompt — they guide model behavior, not just document the API.</p>
+<hr>
+<h2>Common Questions</h2>
+<p><strong>What if the model edits without reading?</strong> First, check that the instruction appears in the <code>edit_file</code> tool description, not only in the guidelines. Second, make the language more explicit: &quot;You MUST call <code>read_file</code> before calling <code>edit_file</code> on any existing file. Never edit a file you have not read in the current session.&quot; Specificity is more reliably followed than generality.</p>
+<p><strong>Should the system prompt grow as the agent gets more tools?</strong> It will grow, but resist letting it grow unchecked. Each new tool description adds tokens to every API call. When the prompt starts to feel unwieldy, that is a signal to consider dynamic loading — the Skills architecture covered in later modules, which loads tool documentation only when the relevant capability is needed.</p>
+<p><strong>Why use string-replacement edit rather than full-file write?</strong> Full-file replacement requires the model to reproduce the entire file correctly, including every line it did not change. String replacement is surgical — the model specifies only what changes. This reduces hallucination risk, reduces token cost, and makes the edit verifiable: if the string is not found, the operation fails rather than silently corrupting the file.</p>
+<p><strong>Can the system prompt be tested in Claude.ai?</strong> The behavioral aspects — does the model follow guidelines, does it respect constraints — can be tested through claude.ai&#39;s system prompt field. But tool-calling behavior requires the API: the tool schemas and <code>tool_use</code> content blocks are API features that are not available through the chat interface.</p>
+</div>
+</body>
+</html>

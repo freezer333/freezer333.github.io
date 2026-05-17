@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 5 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 5: Context Management Strategies</h1>
+<p><strong>Section 4 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~3 hours
+<strong>Prerequisites:</strong> Lab 4 + Module 7 (Lectures 7.1–7.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>In Module 7 you learned three strategies for managing the agent&#39;s context window:</p>
+<ul>
+<li><strong>Sliding window</strong> — keep the most recent N messages, drop older ones</li>
+<li><strong>Selective deletion</strong> — drop old expirable messages while preserving the system prompt and tagged-as-important messages</li>
+<li><strong>Compaction</strong> — at a threshold, summarize the older portion of the conversation and replace the originals with the summary</li>
+</ul>
+<p>Each strategy makes a different trade between <em>coherence</em> (does the agent remember what matters?) and <em>efficiency</em> (how many tokens does it use?). On a short task none of this matters. On a long task, the choice determines whether the agent loses the thread.</p>
+<p>This lab is a controlled experiment to expose those trade-offs. You will:</p>
+<ol>
+<li>Implement all three strategies in your coding agent.</li>
+<li>Replay each strategy against three pre-built long conversations.</li>
+<li>Run a designed set of follow-on prompts against each (strategy, conversation) pair.</li>
+<li>Score the results and analyze which strategy wins where, and why.</li>
+</ol>
+<p>The conversations and follow-ons are provided. They are engineered to make each strategy fail in characteristic ways. The goal of the lab is not to &quot;get it working&quot; — the goal is to see what each strategy preserves, what it loses, and what that tells you about when to reach for each one.</p>
+<hr>
+<h2>What&#39;s Provided</h2>
+<p>In <code>lab05/</code> you will find:</p>
+<ul>
+<li><code>conversations/</code> — three pre-built long conversations as JSON message arrays:<ul>
+<li><code>conv_a_debug.json</code> — a multi-file debugging session (~60 messages)</li>
+<li><code>conv_b_features.json</code> — a multi-feature build (~80 messages)</li>
+<li><code>conv_c_refactor.json</code> — a constrained refactor (~70 messages)</li>
+</ul>
+</li>
+<li><code>tags/</code> — selective-preservation tag annotations for each conversation (one file per conversation, marking each message as <code>preserve</code> or <code>expirable</code>)</li>
+<li><code>followons/</code> — three designed follow-on prompts per conversation (9 total)</li>
+<li><code>planted_facts.md</code> — documentation of what each follow-on is designed to test, including the specific fact, its position in the conversation, and the strategies expected to pass or fail</li>
+<li><code>harness.py</code> — a test harness that loads a conversation, applies a strategy, appends a follow-on, runs your agent, and records token counts, peak context size, and the agent&#39;s response</li>
+</ul>
+<p>You do not generate the conversations or tags yourself. Using identical inputs across all students makes results comparable and turns the lab into a real experiment rather than a demo.</p>
+<hr>
+<h2>What You&#39;ll Produce</h2>
+<ol>
+<li><strong>Three strategy implementations</strong> in your <code>agent.py</code>:<ul>
+<li><code>sliding_window(messages, n)</code></li>
+<li><code>selective_delete(messages, tags, preserve_recent)</code></li>
+<li><code>compact(messages, llm_client, threshold_tokens)</code></li>
+</ul>
+</li>
+<li><strong>A measurement matrix</strong> — 36 runs (4 conditions × 3 conversations × 3 follow-ons), recorded in <code>results.csv</code> with token counts and your manual scores</li>
+<li><strong>An analysis writeup</strong> (<code>analysis.md</code>, 2–3 pages) — which strategy won where, why, and when you would use each in a real agent</li>
+</ol>
+<hr>
+<h2>Part 1: Implement the Three Strategies (~80 minutes)</h2>
+<h3>1.1 Sliding Window (~15 min)</h3>
+<p>Keep the most recent N messages, always preserving the system prompt at index 0.</p>
+<p><strong>Signature:</strong> <code>sliding_window(messages: list, n: int = 20) -&gt; list</code></p>
+<p>Requirements:</p>
+<ul>
+<li>The system message (index 0) is always preserved.</li>
+<li>The most recent <code>n</code> messages are preserved.</li>
+<li>All other messages are dropped.</li>
+<li>If the conversation is shorter than <code>n + 1</code> messages, return it unchanged.</li>
+</ul>
+<h3>1.2 Selective Deletion (~25 min)</h3>
+<p>Drop expirable old messages while preserving the system prompt, tagged-as-important messages, and recent messages.</p>
+<p><strong>Signature:</strong> <code>selective_delete(messages: list, tags: list, preserve_recent: int = 10) -&gt; list</code></p>
+<p>Where <code>tags</code> is a parallel list, one entry per message, with values <code>&quot;preserve&quot;</code> or <code>&quot;expirable&quot;</code>.</p>
+<p>Requirements:</p>
+<ul>
+<li>The system message is always preserved.</li>
+<li>Any message tagged <code>&quot;preserve&quot;</code> is kept regardless of position.</li>
+<li>The most recent <code>preserve_recent</code> messages are kept regardless of tag.</li>
+<li>All other messages are dropped.</li>
+<li>The relative order of surviving messages is maintained.</li>
+</ul>
+<p><strong>About the tags.</strong> For this lab, the tag files are provided so the lab stays focused on <em>strategy comparison</em> rather than <em>tagging policy</em>. In a real agent, you would need to generate tags programmatically. The provided tags follow a simple policy you could implement yourself:</p>
+<ul>
+<li>The <strong>system message</strong> is always <code>preserve</code>.</li>
+<li><strong>User messages</strong> are <code>preserve</code> — users state goals, ask questions, and give feedback. These tend to matter later in a session.</li>
+<li><strong>Assistant messages without a tool call</strong> are <code>preserve</code> — these are the model&#39;s reasoning, decisions, and explanations. Losing them loses the agent&#39;s logic chain.</li>
+<li><strong>Assistant messages with tool calls</strong> are <code>expirable</code> — the tool call itself is usually re-derivable from the result and the surrounding context.</li>
+<li><strong>Tool result messages</strong> are <code>expirable</code> by default, but can be promoted to <code>preserve</code> if they contain explicit decision-relevant content (a search hit the agent then acted on, an error that drove a pivot, a constraint discovered from the environment). The provided tags promote roughly 10% of tool results under this rule.</li>
+</ul>
+<p>The policy above could be applied automatically at message-append time: the role and a check for <code>tool_use</code> blocks tells you almost everything; the only piece requiring a real heuristic is the 10% promotion of decision-relevant tool results, which a small auxiliary LLM call could classify. As you work through Part 2 you will see where this provided policy preserves the right things and where it doesn&#39;t — useful intuition for designing your own policy in later projects.</p>
+<h3>1.3 Compaction (~40 min)</h3>
+<p>When context exceeds a threshold, summarize the older portion of the conversation into a single message and replace the originals with the summary.</p>
+<p><strong>Signature:</strong> <code>compact(messages: list, llm_client, threshold_tokens: int = 8000, recent_keep: int = 10) -&gt; list</code></p>
+<p>Requirements:</p>
+<ul>
+<li>Count tokens in <code>messages</code>. If under <code>threshold_tokens</code>, return unchanged.</li>
+<li>Otherwise: keep the system message, keep the last <code>recent_keep</code> messages, summarize everything in between via an LLM call, and return:
+<code>[system, summary_message, ...recent]</code></li>
+<li>The summary prompt must explicitly extract:<ul>
+<li>Current goal(s)</li>
+<li>Decisions made and the reasoning behind them</li>
+<li>Files modified or under modification</li>
+<li>Unresolved issues and the next intended action</li>
+</ul>
+</li>
+<li>The summary message should be inserted as a <code>user</code> role message with content of the form:
+<code>&quot;Summary of prior conversation:\n\n{summary}&quot;</code></li>
+</ul>
+<p>Before moving on, run <code>compact()</code> on one of the provided conversations manually and read the summary it generates. If the summary is missing decisions, drops files, or hallucinates content, revise your summary prompt. A bad summary will silently destroy the rest of your experiment.</p>
+<hr>
+<h2>Part 2: Run the Experiment Matrix (~50 minutes)</h2>
+<p>Use the provided <code>harness.py</code>. For each (strategy, conversation, follow-on) combination, the harness will:</p>
+<ol>
+<li>Load the conversation message array.</li>
+<li>Apply your strategy (or <code>none</code> for baseline) to produce a managed message array.</li>
+<li>Append the follow-on prompt.</li>
+<li>Run your agent for one turn (or until <code>end_turn</code>).</li>
+<li>Record: total input tokens, output tokens, peak context size, and the agent&#39;s full response.</li>
+</ol>
+<p><strong>Required runs (36 total):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Conversations</th>
+<th>Follow-ons</th>
+<th>Runs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Baseline (no management)</td>
+<td>3</td>
+<td>3</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Sliding window (n=20)</td>
+<td>3</td>
+<td>3</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Selective deletion (preserve_recent=10)</td>
+<td>3</td>
+<td>3</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Compaction (threshold=8000, recent_keep=10)</td>
+<td>3</td>
+<td>3</td>
+<td>9</td>
+</tr>
+</tbody></table>
+<p>The harness writes results to <code>results.csv</code> with columns:
+<code>strategy, conversation, followon_id, input_tokens, output_tokens, peak_context, response_text, response_path</code></p>
+<p>Note: the <strong>baseline</strong> runs with no management may exceed the model&#39;s context window on the longer conversations. If a baseline run errors out, record that as a result — context exhaustion is itself a finding.</p>
+<hr>
+<h2>Part 3: Score the Follow-Ons (~30 minutes)</h2>
+<p>Each follow-on is designed to test whether the agent recalled or used a specific planted fact, documented in <code>planted_facts.md</code>. For each row in <code>results.csv</code>, score the agent&#39;s response on three criteria:</p>
+<table>
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Score</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Fact recall</strong></td>
+<td>0 or 1</td>
+<td>Did the agent reference the planted fact correctly?</td>
+</tr>
+<tr>
+<td><strong>Coherence</strong></td>
+<td>0, 1, or 2</td>
+<td>Does the response read as a natural continuation? (0 = confused or contradictory, 1 = adequate, 2 = clean and contextually appropriate)</td>
+</tr>
+<tr>
+<td><strong>Hedging</strong></td>
+<td>0 or 1</td>
+<td>When the agent did <em>not</em> have the fact, did it appropriately surface uncertainty or admit missing context? (1 = yes; 0 = either confidently fabricated or refused unhelpfully)</td>
+</tr>
+</tbody></table>
+<p>Add three columns (<code>fact_recall</code>, <code>coherence</code>, <code>hedging</code>) to <code>results.csv</code> and fill in your scores.</p>
+<p>You score these manually. There is no auto-grader. The auto-grading approach (regex/keyword matching) is brittle — the agent will paraphrase, use synonyms, or reference the fact obliquely. Manual scoring is also itself part of the lesson: you will read what the agent actually produced under each strategy, which is the closest thing to seeing the strategy&#39;s effect with your own eyes.</p>
+<p>A short note in <code>analysis.md</code> later about disagreements you had with yourself (cases where coherence felt like a 1.5) is worth more than a forced binary.</p>
+<hr>
+<h2>Part 4: Analyze (~40 minutes)</h2>
+<p>Write <code>analysis.md</code> (2–3 pages) covering the following:</p>
+<h3>1. Comparison Table</h3>
+<p>Aggregate across follow-ons to produce a summary table per (strategy, conversation):</p>
+<ul>
+<li>Mean fact recall (out of 1.0)</li>
+<li>Mean coherence (out of 2.0)</li>
+<li>Mean input tokens used</li>
+</ul>
+<h3>2. Per-Strategy Verdict</h3>
+<p>For each of the four conditions (baseline, sliding window, selective deletion, compaction), one short paragraph answering:</p>
+<ul>
+<li>What did this strategy preserve well?</li>
+<li>What did it lose?</li>
+<li>Where did its tokens go?</li>
+</ul>
+<h3>3. The Interesting Cases</h3>
+<p>Identify at least <strong>three specific (strategy, conversation, follow-on) cells that surprised you</strong> — places where a strategy did better or worse than you expected. For each:</p>
+<ul>
+<li>What did the agent actually produce?</li>
+<li>Why did this strategy fail (or succeed) here? Trace the reason back to the mechanism — what did the strategy drop, summarize, or preserve that explains the outcome?</li>
+<li>What does that tell you about when this strategy is brittle?</li>
+</ul>
+<p>This section is the analytical core of the lab. The token numbers will roughly match expectations. The interesting findings are in the disagreements between expectation and observation.</p>
+<h3>4. When Would You Use Each?</h3>
+<p>Conclude with a one-paragraph recommendation per strategy: in what kind of agent task would you reach for this strategy first, and why? Be specific — &quot;long debugging sessions where the original symptom matters&quot; beats &quot;long tasks.&quot;</p>
+<hr>
+<h2>Deliverable</h2>
+<pre><code>lab-05/
+├── agent.py                  # extended with sliding_window, selective_delete, compact
+├── results.csv               # 36 rows with token counts and your three score columns
+├── analysis.md               # 2–3 pages
+└── compaction_summaries/     # the actual summaries your compact() generated, one per conversation
+</code></pre>
+<hr>
+<h2>Looking Ahead</h2>
+<p>The data you produce in this lab is the empirical foundation for <strong>Assignment 2: Coding Agent with Token Analysis</strong>, due at the end of Module 7. The assignment will extend this analysis with cost projections at scale, examination of edge cases your matrix didn&#39;t cover, and a design proposal for a hybrid strategy that combines the three approaches. Keep your <code>results.csv</code>, your compaction summaries, and the raw response transcripts — you will reference them.</p>
+<p>The broader takeaway of this lab is the one Module 7 has been building toward: there is no single best context management strategy. Each one preserves and loses different things. A production agent typically combines all three, applying the cheapest strategy first and escalating only when needed. Lab 5 gives you the empirical grounding to make those combination decisions on real systems later.</p>
+</div>
+</body>
+</html>

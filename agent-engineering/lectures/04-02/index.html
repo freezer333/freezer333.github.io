@@ -10,19 +10,22 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Context Management Strategies</h1>
-<p><strong>Lecture 4.2</strong></p>
-<ul>
-  <li>Strategy 1: Sliding window — keep last N messages, drop oldest</li>
-  <li>Strategy 2: Selective preservation — keep system + key decisions + recent messages</li>
-  <li>Strategy 3: Compaction — use the LLM to summarize conversation, restart with summary</li>
-  <li>What to preserve in compaction: decisions, current goals, unresolved items</li>
-  <li>What to discard: raw tool outputs already acted on, superseded plans, redundant exchanges</li>
-  <li>When to use each strategy — trade-offs of coherence vs. efficiency</li>
-</ul>
+<p><strong>Module 4, Lecture 4.2 | Section 2: Working with LLMs in Practice</strong></p>
+<p>When a context budget threshold is crossed, you need a strategy. This lecture covers three — sliding window, selective preservation, and compaction — from simplest to most powerful. Each involves a different trade-off between implementation complexity, information loss, and cost. Most production agents use a blend of all three, and the lecture walks through how OpenClaw, a widely-deployed open-source agent, implements compaction in production using &quot;silent turns.&quot;</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-04-02.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="compaction_demo.py">compaction_demo.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://ppaolo.substack.com/p/openclaw-system-architecture-overview">OpenClaw Architecture, Explained</a> — Full walkthrough of OpenClaw&#39;s runtime architecture, including its auto-compaction and memory systems.</li>
+<li><a href="https://snowan.gitbook.io/study-notes/ai-blogs/openclaw-memory-system-deep-dive">Deep Dive: How OpenClaw&#39;s Memory System Works</a> — Technical deep dive into OpenClaw&#39;s silent turn, token thresholds, and MemoryIndexManager internals.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching">Prompt Caching — Anthropic Docs</a> — How to cache repeated prompt prefixes to reduce cost and latency — a complementary technique to compaction for stable context segments.</li>
+<li><a href="https://docs.anthropic.com/en/api/messages">Messages API Reference — Anthropic Docs</a> — The canonical reference for the API calls used in the compaction demo.</li>
+<li><a href="https://learn.microsoft.com/en-us/agent-framework/agents/conversations/compaction">Compaction — Microsoft Agent Framework</a> — Official Microsoft documentation covering sliding-window truncation, LLM summarization, and tool-result compaction strategies with Python and C# examples.</li>
+<li><a href="https://blog.jetbrains.com/research/2025/12/efficient-context-management/">Cutting Through the Noise: Smarter Context Management for LLM-Powered Agents</a> — JetBrains Research empirical comparison of observation masking vs. LLM summarization on real agent tasks, finding masking was 52% cheaper and achieved better task solve rates.</li>
 </ul>
 </div>
 </body>

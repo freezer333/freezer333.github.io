@@ -1,0 +1,325 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Implementing Compaction — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Implementing Compaction
+
+???
+~25 minutes. The longest lecture of Module 7. Builds on 4.2's standalone compaction demo and integrates it into the agent loop with threshold detection, hybrid pattern, and edge-case handling.
+
+---
+
+# From Subsetting to Synthesis
+
+Sliding window and selective preservation are **subsetting** strategies. They keep a portion of the messages array unchanged and drop the rest.
+
+Both have a hard limit: when the set of messages worth keeping is itself too large, subsetting fails.
+
+Compaction is **synthesis**. It asks the model to produce a single summary message that captures everything important from a long conversation. The summary replaces the conversation.
+
+???
+30 seconds. Reference 4.2's compaction_demo.py — students have seen the standalone version. This lecture is about integration.
+
+---
+
+# When to Trigger Compaction
+
+Compaction is expensive — an extra API call, plus information loss. Trigger it when carrying the messages array costs more than summarizing it.
+
+The standard trigger is a **percentage of the model's context window**.
+
+- Sonnet's window: ~200K tokens
+- Threshold of 80% → trigger at 160K input tokens
+- Common range: 70-85%
+
+???
+The percentage is a tuning knob, not a constant. Different models have different windows; different agents have different traffic patterns.
+
+---
+
+# Why Not 100%
+
+Three reasons:
+
+1. **Need budget for the compaction call** — the request itself sends the entire conversation
+2. **Need budget for the next user turn** — model output near the cap can fail
+3. **Quality degrades before the limit** — "lost in the middle" effects appear well before 100%
+
+???
+The mid-tool-call exception is also important: never compact between an assistant `tool_use` and its matching `tool_result`. Same kind of structural rule as pair integrity from 7.1.
+
+---
+
+# `should_compact`
+
+```python
+def should_compact(input_tokens, model_limit, threshold=0.8):
+    return input_tokens >= model_limit * threshold
+```
+
+Reads the most recent `response.usage.input_tokens` from the token tracker (Lecture 6.4). Compares to the threshold.
+
+Hook point is the same as for truncation — between inner-loop iterations, before the next API call. Skip if the previous response was a `tool_use` (mid-tool-call rule).
+
+???
+60 seconds. The function is small. The interesting engineering is in the prompt and the wiring, not the threshold check.
+
+---
+
+# The Prompt Is the Engineering Artifact
+
+The compaction function is short. The compaction prompt is long.
+
+Almost all of the design effort goes into the prompt: what to preserve, what to discard, how to format the summary.
+
+A bad prompt produces a chatty narrative. A good prompt produces a structured artifact the agent can read on the next turn and continue working as if the prior conversation were fresh.
+
+???
+This is the slide that frames the next three. The preserve list, discard list, and format spec are the three pieces of the prompt.
+
+---
+
+# What to Preserve
+
+.split-left[
+- **Decisions made and actions taken** — what changed, what was committed
+- **Current state of the task** — done? what's left?
+- **Key facts about the project** — languages, frameworks, paths, schema details
+- **Unresolved issues** — what the user mentioned for later
+- **User preferences and constraints** — established earlier, still applies
+]
+
+.split-right[
+.center[<img src="compaction.png" style="max-width:90%;"/>]
+]
+
+<div class="clear"></div>
+
+Each item maps to a failure mode. Without "decisions made," the agent re-proposes work. Without "current state," it restarts the task.
+
+???
+Connect each item to a concrete failure mode. The preserve list is the contract between the summary and the next turn.
+
+---
+
+# What to Discard
+
+The discard list is what makes the summary actually shrink.
+
+- **Raw file contents** — note which files, not their bytes
+- **Full command outputs** — note the result, not the bytes
+- **Chain-of-thought reasoning** — keep conclusions, drop the reasoning
+- **Intermediate tool calls** — note the outcome, not the sequence
+- **Redundant or superseded information** — the third version of a plan, not the first two
+
+Without the discard list, the model produces a verbose summary that defeats the point.
+
+???
+The discard list is just as important as the preserve list. Verbose summaries are the most common failure mode of compaction prompts.
+
+---
+
+# Format Specification
+
+```
+## Conversation Summary
+
+Task: <one-line description>
+Key Findings: <bullets>
+Actions Taken: <bullets>
+Current State: <done | in-progress with what remains>
+```
+
+The model fills the four sections. The agent on the next turn reads them and resumes.
+
+A free-form summary varies in style and length. A structured summary is consistent.
+
+???
+60 seconds. Format consistency matters because the agent is going to read this on every turn until the next compaction.
+
+---
+
+# The Hook Point Logic
+
+```
+inner loop:
+    [HOOK]
+        if mid-tool-call:        skip
+*       elif should_compact(...): compact
+        elif should_truncate(...): truncate
+    response = client.messages.create(...)
+    ...
+```
+
+Compaction is checked **first** because it is more aggressive. If the threshold is hit, summarizing is the right move; falling back to truncation would lose information unnecessarily.
+
+???
+The priority ordering matters. Truncation is the fallback, not the default.
+
+---
+
+# The Hybrid Pattern
+
+Pure replacement throws away the most recent messages — exactly the active state of the task.
+
+The hybrid pattern keeps the last K messages verbatim and replaces only the older portion:
+
+.split-left[
+.center[<img src="../../images/hybrid-pattern.png" style="max-width:95%;"/>]
+]
+
+.split-right[
+- **K is typically 4-10**
+- Recent messages keep the agent grounded
+- Summary preserves long-term context
+- Pair integrity applies to the recent block — never split a `tool_use` from its `tool_result`
+]
+
+<div class="clear"></div>
+
+???
+The hybrid pattern is the production default. Pure replacement is too aggressive; pure verbatim doesn't shrink.
+
+Image prompt for `hybrid-pattern.png`: "Two vertical message-array diagrams side by side with an arrow between them. Left side: a tall stack of about 16 small rounded message rectangles labeled 0 through 15, alternating user/assistant colors, with a label above 'Before — 16 messages'. Right side: a much shorter stack — at the top a wide rounded rectangle labeled 'Summary (user)', below it a thinner rounded rectangle labeled 'Ack (assistant)', then 4 small rectangles labeled 'recent K=4'. Label above the right side: 'After — summary + last K verbatim'. A horizontal arrow between them with the label 'compact()'. Clean flat design, white background, sans-serif labels, teal/amber color palette."
+
+---
+
+# Use a Cheap Model for the Summary
+
+The model that does the work and the model that summarizes don't have to be the same.
+
+- **Main loop:** Sonnet (or Opus) — handles the actual task
+- **Compaction call:** Haiku — handles structured summarization
+
+Haiku is well-suited:
+- Reads the conversation just as well as Sonnet
+- Produces structured summaries reliably
+- Roughly 4x cheaper
+
+The savings compound: every compaction is one Haiku call; the savings accrue against Sonnet pricing on every subsequent main-loop call.
+
+???
+The cost difference is what makes compaction economical. Don't run summarization through Sonnet unless you have a specific reason.
+
+---
+
+class: center, middle
+
+# Let's build `compaction.py`
+
+???
+Walk through the file: `COMPACTION_PROMPT` (the artifact from the previous slides), `should_compact`, `compact_messages` (the hybrid pattern). Reuse `ensure_alternating_roles` from 7.1. Run the demo at the end and show the before/after token counts and the produced summary.
+
+---
+
+# Edge Case: Oversized Summary
+
+Sometimes the model produces a summary that is itself larger than expected.
+
+Causes:
+- Chatty model on a complex conversation
+- Conversation so dense that even the summary doesn't fit
+
+**Fix:** iterative compression. If the summary plus the recent K still exceeds the threshold, compact again on the result. One pass usually suffices; a second is rare but cheap.
+
+???
+Iterative compression is the safety net. Most agents never need it.
+
+---
+
+# Edge Case: Critical Detail Lost
+
+The summary may omit something the agent needs — most often a constraint stated late in the conversation that the model considered "context" rather than "decision."
+
+Two mitigations:
+
+- **The hybrid pattern** — keeping the last K verbatim preserves recent constraints regardless of what the summary captured
+- **`important: True` bypass** — messages flagged via selective preservation can be appended verbatim alongside the summary
+
+???
+The hybrid pattern is the first line of defense. The important-tag bypass is the safety net for older critical content.
+
+---
+
+# Edge Case: Compaction Loops
+
+If every compaction is followed quickly by enough new context to re-trip the threshold, the agent enters a loop — summarizing every few turns and producing summaries of summaries.
+
+**Fix:** enforce a minimum interval between compactions.
+
+- Track the index of the last compaction
+- Don't compact again until at least M new messages have been added
+- M of 10-20 is typical
+
+???
+The minimum-interval check is one line. It prevents pathological behavior in long sessions.
+
+---
+
+# Cost Analysis
+
+A session that triggers compaction at 160K input tokens, hybrid keeps last 8 (~5K), produces a 2K summary:
+
+| Item | Cost |
+|---|---|
+| Compaction call (Haiku, 160K in / 2K out) | ~$0.13 |
+| Per-call savings (~150K fewer Sonnet input tokens) | ~$0.45 |
+| Break-even | After 3 subsequent calls |
+| Long-session savings | 10-50x the compaction cost |
+
+.callout[Compaction is the dominant pattern in production agents because the economics work — small fixed cost, large recurring savings.]
+
+???
+The cost analysis is the justification. The extra Haiku call is not overhead, it's the cheapest way to keep the conversation going.
+
+---
+
+# Module 7 Wrap-Up
+
+Three strategies, all wired into the agent at the same hook point.
+
+| Strategy | When | Cost | Loss |
+|---|---|---|---|
+| Sliding window | Threshold hit, simple session | Free | Drops everything old |
+| Selective preservation | Threshold hit, important content to keep | Free | Drops untagged old |
+| Compaction | Threshold hit, deep context | One Haiku call | Lossy but preserves meaning |
+
+Lab 5 puts all three together and measures the result.
+
+???
+The comparison table is the reference students take away from Module 7.
+
+---
+
+# Key Takeaways
+
+1. **Trigger at 70-85%** of the model's window — never wait for 100%
+2. **The compaction prompt is the engineering artifact** — preserve list, discard list, format spec
+3. **Hybrid pattern** — summary + last K verbatim, pure replacement loses too much
+4. **Cheap model for summarization** — Haiku for compaction, main model for the work
+5. **Edge cases have known fixes** — iterative compression, important-tag bypass, minimum interval
+6. **Compaction is the dominant production pattern** because the economics work
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

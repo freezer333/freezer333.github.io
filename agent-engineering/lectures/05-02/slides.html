@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Prompt Architecture — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# System Prompt Architecture
+
+???
+~20 minutes. This is the architecture lecture — 5.3 is the implementation lecture where students build the actual coding agent prompt. Keep 5.2 at the design/principles level.
+
+---
+
+# The System Prompt Is an Engineering Artifact
+
+In Lecture 2.3: system prompts set the agent's identity, tools, and behavioral rules.
+
+Today: not just *what* goes in — but **why**, **how much**, and **in what order**.
+
+The system prompt is the first thing your agent reads **on every single turn**.
+
+.callout[The system prompt is not documentation. It is an engineering artifact that directly determines agent behavior.]
+
+???
+30 seconds. Framing slide. Connect back to 2.3 (first mention of system prompts). The key word is "engineering" — this is a designed thing with tradeoffs, not a description you write once and forget.
+
+---
+
+# The Four Sections
+
+.split-left[
+A production agent system prompt has four functional sections, in this order:
+
+**1. Identity and Role**
+Who the agent is and what it's for. Sets the frame for all subsequent instructions.
+
+**2. Available Tools**
+What the agent can call, what each does, and how to use them. Most token-expensive; changes most as the agent evolves.
+
+**3. Behavioral Guidelines**
+How the agent should behave: communication style, error handling, when to ask vs. act.
+
+**4. Constraints**
+Non-negotiable limits. Distinct from guidelines — constraints cannot be overridden by task pressure.
+]
+
+.split-right[
+.center[<img src="../../images/system-prompt-anatomy.png" style="height:320px;">]
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Walk through each section. Students should be able to recreate this list from memory after the lecture. The distinction between guidelines (preferences) and constraints (hard limits) is important — come back to it.
+
+---
+
+# Order Matters
+
+The "lost in the middle" phenomenon applies inside the system prompt too.
+
+In a long system prompt:
+- First ~20% — **highest attention**; followed most reliably
+- Middle — **lowest attention**; violations happen here
+- End — **re-attended** before generation begins
+
+.split-left[
+**What goes first:**
+Identity
+Critical behavioral constraints
+
+**What goes in the middle:**
+Tool documentation (necessary but not critical)
+
+**What goes last:**
+Closing reminders or response format
+]
+
+.split-right[
+.center[<img src="../../images/attention-curve.png" style="height:200px;">]
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. This is the structural solution to the "buried key info" anti-pattern from 5.1. Students now have a reason for the ordering, not just a rule. Spend time on the image placeholder — the attention curve is memorable and worth drawing on a whiteboard if needed.
+
+Image prompt for `attention-curve.png`: "A simple line graph. X-axis labeled 'Position in context (start → end)'. Y-axis labeled 'Relative attention'. The line starts high on the left, dips in the middle (approximately 30-70% of the way across), then rises slightly at the right. No grid lines. Clean minimal style, single curve, no legend needed. The dip should be clearly visible but not extreme."
+
+---
+
+# System Prompts Compete for Tokens
+
+The context window is a shared resource. Every token in the system prompt is unavailable for everything else.
+
+| Component | Typical token range |
+|---|---|
+| System prompt | 500 – 2,000 |
+| Conversation history | 5,000 – 20,000 |
+| Tool results (per call) | 100 – 2,000 |
+| Reserved for response | 1,000 – 4,000 |
+
+A system prompt that grows to 5,000 tokens because each tool has extensive inline documentation competes directly with conversation history.
+
+.warning[The goal is the minimum system prompt that produces the behavior you need — not the most thorough one you can write.]
+
+???
+90 seconds. Connect to Module 4 context budget framing. The table makes the competition concrete — it's not abstract. Students tend to think "more instructions = better" and this slide corrects that.
+
+---
+
+# Static vs. Dynamic System Prompts
+
+**Static system prompt:** same content on every turn.
+
+**Dynamic system prompt:** content changes based on task phase, active tools, or learned context.
+
+For now, the practical principle:
+
+.callout[Only put in the static system prompt what the agent needs on **every single turn**.]
+
+- Tool documentation for tools the agent rarely uses → **not in static prompt**
+- Instructions that only apply to one phase of a multi-phase task → **not in static prompt**
+- Identity, core constraints, always-needed tools → **in static prompt**
+
+Dynamic loading (the Skills architecture) is covered in a later module. The principle here is the foundation for it.
+
+???
+60 seconds. Students don't need to understand dynamic prompts yet — just the principle that distinguishes what belongs in static vs. what doesn't. This is prep for the Skills module.
+
+---
+
+# Why Agents Need Structured Output
+
+When an agent calls a tool, it must communicate three things:
+- **Which tool** to call
+- **What arguments** to pass
+- **That this is a tool call**, not a response to the user
+
+**The naive approach:** parse tool calls from free-form text.
+
+```
+TOOL: read_file
+ARGS: {"filename": "main.py"}
+```
+
+Problems:
+- Models don't always follow the format
+- Partial tool calls appear
+- Extra text gets mixed in
+- Parsing code becomes a brittle state machine
+
+???
+60 seconds. The naive approach is what students might think to do. Establish the problem clearly before showing the solution on the next slide.
+
+---
+
+# The Native Tool Use API
+
+Anthropic's API returns tool calls as **structured objects**, not strings.
+
+```python
+tools = [{
+    "name": "read_file",
+    "description": "Read the contents of a file by path.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "filename": {"type": "string", "description": "Path to the file"}
+        },
+        "required": ["filename"]
+    }
+}]
+```
+
+When the model calls `read_file`, the response contains a `tool_use` content block — guaranteed structured.
+
+**Advantages:**
+- No regex; no string matching
+- Schema validation built in; arguments are typed
+- Multiple tool calls in one response are natively supported
+- The model was trained on this format — more reliable
+
+???
+90 seconds. Walk through the schema briefly. Students have seen this in earlier labs but this is the first time it's explained architecturally. The "trained on this format" point is important — it's not just a convenience API, it's a behavioral improvement.
+
+---
+
+# Designing Tool Descriptions
+
+The `description` field is not documentation for you — **it is a prompt to the model**.
+
+A good description answers three questions:
+
+1. **What does this tool do?** (one sentence)
+2. **When should I call it?** (preconditions or use case)
+3. **What does it return?** (output format)
+
+.split-left[
+**Weak**
+
+`"description": "Does file stuff."`
+
+`"description": "Search for things."`
+]
+
+.split-right[
+**Strong**
+
+`"description": "Search a file for lines matching a query. Returns matching line numbers and snippets. Use this before read_lines to identify which lines to retrieve."`
+]
+
+<div class="clear"></div>
+
+.callout[Every word in every tool description is re-sent on every API call. Keep descriptions concise — but complete enough to guide the model's choice.]
+
+???
+90 seconds. The weak/strong comparison is the main takeaway. Students tend to write weak descriptions because they're thinking of documentation for themselves, not prompts for the model. Re-frame: "write it as if you're telling a new team member exactly when and how to use the tool."
+
+---
+
+# What Works: Real System Prompt Patterns
+
+Patterns from production agent system prompts worth studying:
+
+- **Confident role framing:** "You are a coding assistant." — not "You are an AI assistant that can help with coding."
+- **Specific behavioral rules:** "When editing files, always read the file first. Never edit a file you haven't read in the current session." — measurable and testable.
+- **Constraints grouped separately from guidelines** — hard limits are visually distinct from preferences.
+- **No tutorials:** A system prompt doesn't explain how tool calling works or why constraints exist. It states what the agent is and what it must do.
+
+???
+60 seconds. These are grounded in real patterns. "Measurable and testable" is key — if you can't tell whether the agent followed a rule, the rule isn't specific enough.
+
+---
+
+# What Doesn't Work: Common Mistakes
+
+Real production system prompt failures:
+
+**Motivational language**
+"You are an incredibly helpful assistant who always gives 110%." The model doesn't need motivation — it needs constraints. Filler crowds out useful instructions.
+
+**Contradiction**
+"Be concise. Provide thorough explanations with complete context." Pick one.
+
+**Vague constraints**
+"Be careful with user data." Careful how? "Do not store or log user-provided data" is actionable.
+
+**Missing error behavior**
+No instructions for what to do when a tool call fails, a file doesn't exist, or the user's request is out of scope. The model will improvise — often incorrectly.
+
+???
+60 seconds. These failure modes are directly observable in agent behavior. Students will encounter all four when they build their own prompts. Vague constraints and missing error behavior are the most common in first drafts.
+
+---
+
+# Key Takeaways
+
+1. **Four sections in order** — identity, tools, guidelines, constraints
+
+2. **Order affects compliance** — critical instructions at the top; middle attention is lowest
+
+3. **Token budget** — system prompt competes with history and tool results; minimum sufficient prompt is the goal
+
+4. **Native tool use API** — structured tool calls beat text parsing on every dimension
+
+5. **Tool descriptions are prompts** — answer what, when, and what it returns; keep them concise
+
+6. **Static = always needed** — only include what the agent uses every turn
+
+???
+30 seconds. Read through the list. Prompt students: "which of these will you apply first when you write your system prompt in the next lecture?"
+
+---
+
+# Next: Building the Coding Agent System Prompt
+
+Lecture 5.2 was the blueprint. Lecture 5.3 is the construction.
+
+We'll build the complete system prompt for our coding agent:
+- Identity and role — one confident statement
+- Three starter tools — descriptions written as model prompts
+- Behavioral guidelines — the four most common failure modes, addressed
+- Constraints — specific, testable, placed early
+- One few-shot example — the read-then-edit pattern
+
+.info[Lab 3 (The Booking Agent) applies everything from 5.1 and 5.2 in a testable environment. You'll write a system prompt, diagnose failures, and measure token efficiency.]
+
+???
+30 seconds. Quick forward pointer. Students who haven't done Lab 3 yet should note that the same architecture principles apply there as in 5.3.
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

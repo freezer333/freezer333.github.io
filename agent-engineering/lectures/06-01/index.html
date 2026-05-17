@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Agent Loop — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>The Agent Loop</h1>
+<p><strong>Module 6, Lecture 6.1 | Building the Coding Agent</strong></p>
+<p>This lecture takes a deep dive into the two-loop architecture that powers every tool-calling agent. Building on the coding agent introduced in Lecture 5.3, it examines why two loops are necessary, how <code>stop_reason</code> drives the inner loop as the sole branching condition, and how the messages array grows through single-tool and multi-tool exchanges. Students live-code the agent loop from scratch using stub tools, tracing the messages array at each step to see exactly what the model sees — and why tool results enter the conversation as <code>role: &quot;user&quot;</code>.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-06-01.mp4" type="video/mp4">
+</video>
+
+<h2>Additional Resources</h2>
+<ul>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a> — The foundational paper (Google Research, ICLR 2023) introducing the ReAct pattern of interleaving reasoning and tool actions. The conceptual basis for the inner loop&#39;s reasoning-acting cycle.</li>
+<li><a href="https://www.anthropic.com/research/building-effective-agents">Building Effective Agents</a> — Anthropic&#39;s canonical guidance on agent architecture. Covers the simple while-loop pattern, stop conditions, and tool design principles demonstrated in this lecture.</li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective Context Engineering for AI Agents</a> — Anthropic Engineering&#39;s treatment of how the messages array grows over a session and how tool results enter as <code>role: &quot;user&quot;</code>. Bridges directly to the context growth problem introduced at the end of this lecture.</li>
+<li><a href="https://www.braintrust.dev/blog/agent-while-loop">The Canonical Agent Architecture: A While Loop with Tools</a> — A practitioner-focused explanation of the minimal while-loop pattern, stop_reason branching, and tool_use_id from an industry engineering perspective.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview">Anthropic Tool Use Documentation</a> — The official API reference for tool schemas, <code>tool_use</code> and <code>tool_result</code> content blocks, and <code>stop_reason</code> values. The specification that the inner loop implements.</li>
+</ul>
+</div>
+</body>
+</html>

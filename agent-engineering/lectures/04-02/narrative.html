@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Management Strategies — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 4.2</a></div></nav>
+<div class="page_content"><h1>Lecture 4.2: Context Management Strategies</h1>
+<p><strong>Module 4, Lecture 4.2 | Section 2: Working with LLMs in Practice</strong></p>
+<hr>
+<h2>Overview</h2>
+<p>Lecture 4.1 established the measurement foundation: how to count tokens and when to act (at ~80% of the model&#39;s context window). This lecture covers what to do when that threshold is crossed. Three strategies are available, ranging from a one-line implementation to a full LLM-powered summarization. Most production agents use a blend of all three.</p>
+<hr>
+<h2>Strategy 1: Sliding Window</h2>
+<p>The simplest approach: always keep the system prompt and the last N messages. Drop everything older.</p>
+<pre><code class="language-python">def sliding_window(messages, system, max_messages=20):
+    return [system] + messages[-max_messages:]
+</code></pre>
+<p>The sliding window has three properties that make it attractive for simple use cases:</p>
+<ul>
+<li><strong>No LLM required</strong> — the operation is pure Python, with no extra API calls</li>
+<li><strong>Preserves recency</strong> — the model always sees the most recent context</li>
+<li><strong>Predictable cost</strong> — context size stays bounded at max_messages</li>
+</ul>
+<p><img src="context-window.png" alt="Context window sliding"></p>
+<p>The failure mode is equally clear: anything before the window is permanently lost. For tasks where users state their goals at the start of a conversation, or where the agent established a multi-step plan early on, dropping the earliest messages can destroy coherence. The agent no longer knows what it agreed to do or what decisions were made.</p>
+<p><strong>Good fit:</strong> Short tasks, stateless interactions (Q&amp;A, simple customer service bots), applications where recent messages are the only relevant ones, cost-sensitive applications where extra API calls are not acceptable.</p>
+<p><strong>Poor fit:</strong> Multi-step tasks where early context contains the plan; any conversation where the user stated an objective at the start that needs to govern the entire session.</p>
+<p>Sliding window is most appropriate for chatbot-style interactions. For agents that read files, run commands, and execute multi-step plans, it is too lossy.</p>
+<hr>
+<h2>Strategy 2: Selective Preservation</h2>
+<p>Rather than assuming recency equals importance, selective preservation classifies messages by their value and keeps only the meaningful ones.</p>
+<p>The core intuition: not all messages are equal. A user message saying &quot;investigate this bug&quot; carries less long-term value than the agent&#39;s discovery that the database schema has a column name mismatch. A raw file listing that was read and acted on three steps ago carries little value. A decision about the approach to take carries a great deal.</p>
+<h3>What to keep and what to drop</h3>
+<p><strong>Keep:</strong></p>
+<ul>
+<li>System prompt (always — it defines the agent&#39;s identity and tools)</li>
+<li>Key decisions — the agent committed to a plan, the user confirmed a direction</li>
+<li>Current goals — what the agent is trying to accomplish right now</li>
+<li>Recent messages — the last few exchanges for conversational continuity</li>
+</ul>
+<p><strong>Drop:</strong></p>
+<ul>
+<li>Old tool results — file contents that have already been read and acted on (the file can be re-read if needed)</li>
+<li>Superseded plans — the agent proposed approach A, then switched to approach B; approach A can be discarded</li>
+<li>Redundant exchanges — the same file read twice, repeated clarifications</li>
+<li>Intermediate reasoning — chain-of-thought that led to a decision (keep the decision, drop the path)</li>
+</ul>
+<h3>Implementation approaches</h3>
+<p>The simplest form uses role-based rules and recency together:</p>
+<pre><code class="language-python">def selective_preserve(messages, system, keep_last=10):
+    important = [m for m in messages[:-keep_last]
+                 if m.get(&quot;important&quot;) or m[&quot;role&quot;] == &quot;system&quot;]
+    recent = messages[-keep_last:]
+    return [system] + important + recent
+</code></pre>
+<p>This keeps all messages flagged as important (regardless of age) plus the most recent exchanges. The flagging can be done by:</p>
+<ul>
+<li><strong>Role-based rules</strong> — always keep tool-call decisions, never keep raw tool results after N turns</li>
+<li><strong>Recency + type</strong> — keep the last 10 messages verbatim, keep all messages tagged as &quot;decision&quot; regardless of age</li>
+<li><strong>LLM classification</strong> — route each new message through a secondary LLM call (using a fast, cheap model like Haiku) that labels it as important or not</li>
+</ul>
+<p>The LLM classification approach adds cost — one extra API call per message — but enables nuanced judgments. An LLM can recognize that a message contains a key constraint (&quot;the user wants us to avoid modifying the database schema&quot;) even if it was stated casually. It can also identify when a message supersedes an earlier one.</p>
+<p>Selective preservation is more powerful than a sliding window because it decouples importance from age. It is more expensive than a sliding window because, when using LLM-based classification, it requires extra API calls.</p>
+<hr>
+<h2>Strategy 3: Compaction</h2>
+<p>Compaction is the most powerful strategy: use the LLM itself to summarize the full conversation, then replace the entire conversation history with the summary.</p>
+<p>The mechanism:</p>
+<ol>
+<li>The conversation reaches the budget threshold (e.g., 80% of the model&#39;s context window)</li>
+<li>Send the full conversation to the LLM with a summarization prompt</li>
+<li>Receive a compact summary that preserves essential information</li>
+<li>Replace the conversation history with the summary as a single message</li>
+<li>Continue as if the summary were the entire prior context</li>
+</ol>
+<p>The trade-off is explicit: you spend tokens now (the summarization call) to save tokens later (all future calls use the compact summary instead of the full history). A conversation that grew to 50,000 tokens can be compacted to 2,000 tokens with well-designed prompts — a 96% reduction in future input token cost.</p>
+<p><img src="compaction.png" alt="Compaction flow"></p>
+<h3>What a good compaction prompt preserves</h3>
+<p>The quality of compaction depends almost entirely on the summarization prompt. A good prompt tells the LLM exactly what to keep and what to discard:</p>
+<p><strong>Preserve:</strong></p>
+<ul>
+<li>Decisions made and actions taken</li>
+<li>Current state of the task — what is complete, what is in progress, what remains</li>
+<li>Key facts about the domain (project languages, database schema details, file paths)</li>
+<li>Unresolved issues or follow-up items</li>
+<li>User preferences and constraints established during the session</li>
+</ul>
+<p><strong>Discard:</strong></p>
+<ul>
+<li>Raw file contents that were read and already acted on</li>
+<li>Full command outputs (summarize the result instead: &quot;all 5 tests passed&quot;)</li>
+<li>The assistant&#39;s reasoning chain (keep the conclusion, not the path to it)</li>
+<li>Intermediate tool calls (note the outcome, not the transcript)</li>
+<li>Superseded plans and redundant exchanges</li>
+</ul>
+<p>The <code>compaction_demo.py</code> script demonstrates this pattern on a realistic debugging conversation. The original 18-message conversation — simulating an agent that read source files, examined logs, identified a column name mismatch, applied fixes across multiple files, and ran tests — contains roughly 1,100 tokens. After compaction, the summary is 293 tokens. Context reduced by ~75%.</p>
+<p>The key fragment from the demo:</p>
+<pre><code class="language-python">def compact_conversation(messages):
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[{
+            &quot;role&quot;: &quot;user&quot;,
+            &quot;content&quot;: COMPACTION_PROMPT + format_conversation(messages)
+        }]
+    )
+    summary = response.content[0].text
+    return [
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: f&quot;[Prior conversation summary]\n{summary}&quot;},
+        {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;Understood. I have the context from the prior conversation and I&#39;m ready to continue.&quot;}
+    ]
+</code></pre>
+<p>The compacted conversation is two messages: the summary injected as a user message, and an assistant acknowledgment. All subsequent turns build from this new baseline. The full script is in <code>compaction_demo.py</code>.</p>
+<h3>Compaction in production: OpenClaw</h3>
+<p>OpenClaw is an open-source general-purpose agent (~247K GitHub stars) that demonstrates compaction at production scale. OpenClaw manages long-running conversations — days or weeks of interactions — where a user sends requests to an agent running on their personal computer: check email, review calendar, manage documents.</p>
+<p>When OpenClaw&#39;s context approaches its limit, it triggers a <strong>silent turn</strong> — an internal LLM call that is not visible to the user. The silent turn asks the LLM to summarize the conversation and extract the most important facts into durable memory (Markdown files written to disk). The conversation restarts with a compact summary as context. The durable memory files survive reboots.</p>
+<p>From the user&#39;s perspective, nothing happened. The agent simply keeps working. The silent turn is invisible.</p>
+<p>This architecture demonstrates the &quot;summarize and restart&quot; pattern scaled to a real product. The specific compaction logic varies — OpenClaw uses local models, writes memory to files, and maintains an index — but the core idea is the same pattern demonstrated in the demo script.</p>
+<hr>
+<h2>Choosing a Strategy</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Sliding Window</th>
+<th>Selective Preservation</th>
+<th>Compaction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Simplicity</strong></td>
+<td>One line of code</td>
+<td>Moderate — needs classification</td>
+<td>Complex — extra API call</td>
+</tr>
+<tr>
+<td><strong>Information loss</strong></td>
+<td>Drops everything old</td>
+<td>Keeps tagged items</td>
+<td>LLM decides what matters</td>
+</tr>
+<tr>
+<td><strong>Cost</strong></td>
+<td>Free</td>
+<td>Free (rule-based) or cheap (LLM)</td>
+<td>Costs a summarization call</td>
+</tr>
+<tr>
+<td><strong>Best for</strong></td>
+<td>Short/stateless tasks</td>
+<td>Multi-step with key milestones</td>
+<td>Long-running complex tasks</td>
+</tr>
+</tbody></table>
+<p>In practice, production agents rarely use a single strategy in isolation. A common pattern:</p>
+<ul>
+<li>Use <strong>selective preservation</strong> as a baseline — always keep the system prompt, drop old tool results after they are acted on, keep flagged decisions regardless of age</li>
+<li>Trigger <strong>compaction</strong> when the context crosses the budget threshold</li>
+<li>Keep the last few messages verbatim alongside the summary, as a hedge against compaction losing recent context</li>
+</ul>
+<p>The sliding window is most useful when the agent&#39;s task structure guarantees that older messages are genuinely irrelevant — stateless Q&amp;A, simple chatbots, scenarios where each turn is largely independent.</p>
+<p>The right strategy depends on what the agent is doing. A general-purpose agent like OpenClaw that manages your calendar, email, and files over weeks demands different context management than a single-session coding assistant. Matching the strategy to the task structure is the core engineering judgment.</p>
+<hr>
+<h2>Key Takeaways</h2>
+<ol>
+<li><strong>Sliding window</strong> — keep the last N messages; simple, free, and lossy. Works for stateless tasks; fails for multi-step agents.</li>
+<li><strong>Selective preservation</strong> — keep what matters based on importance, not age. Requires classifying messages, but can be done with simple rules or an LLM.</li>
+<li><strong>Compaction</strong> — use the LLM to summarize the conversation, then restart. Most powerful; costs a summarization call but achieves large token reductions.</li>
+<li><strong>Production agents blend strategies</strong> — OpenClaw&#39;s auto-compaction pattern (silent turn → summary → restart) is the standard for long-running agents.</li>
+</ol>
+</div>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Building the Coding Agent System Prompt — Agent Engineering</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+
+<body>
+  <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Building the Coding Agent System Prompt
+
+???
+~20 minutes. This is the construction lecture — students walk away with a complete, working system prompt. The key pedagogical moment: show the *decisions* being made, not just the result. Students should see why each word is there.
+
+---
+
+# From Blueprint to Text
+
+Lecture 5.2: the architecture — four sections, ordering, token budget, tool descriptions.
+
+This lecture: **write the actual system prompt**.
+
+By the end, you'll have a complete system prompt ready to wire into the coding agent loop in Section 4.
+
+Three things we're building toward:
+- A minimal, complete system prompt
+- Three starter tools with honest tradeoffs documented
+- A test plan before a single line of agent code is written
+
+???
+30 seconds. Set the expectation: this is a construction lecture, not a concepts lecture. Students who paid attention in 5.1 and 5.2 will recognize every decision as they see it made.
+
+---
+
+# The Three Starter Tools
+
+A coding agent that can read, explore, and modify files needs three tools:
+
+**`list_files(path)`**
+Returns a directory listing with file names and types. Lets the agent discover what exists before reading.
+
+**`read_file(filename)`**
+Returns complete file contents. Simple — and intentionally naive. Lab 4 replaces this with a token-efficient design.
+
+**`edit_file(path, old_str, new_str)`**
+Creates or modifies files using string replacement.
+- `old_str` empty → creates the file with `new_str` as contents
+- Otherwise → replaces first occurrence of `old_str` with `new_str`
+- Agent must read before editing to know what text to replace
+
+.callout[Discover → Read → Modify. These three tools form a minimal but complete interface.]
+
+???
+90 seconds. The read-before-edit requirement for edit_file is important — it will show up in the system prompt and in the few-shot example. Plant that seed here.
+
+---
+
+# The Token Cost We're Accepting
+
+Being explicit about the design tradeoff:
+
+| Tool | What it returns | Typical token cost |
+|---|---|---|
+| `read_file` (current) | Entire file contents | ~2,000 tokens for a 500-line file |
+| `search_file` + `read_lines` (Lab 4) | Line numbers, then targeted slice | ~130 tokens for the same task |
+
+**Why start with the naive design?**
+
+- Easier to understand and implement for a first pass
+- The agent behavior is transparent — nothing is hidden
+- Lab 4 requires measuring the difference and replacing the tool
+
+.info[This is a deliberate tradeoff. When you build Lab 4, you'll see this cost directly in the token counts.]
+
+???
+60 seconds. Intellectual honesty here matters — tell students exactly what they're accepting. This sets up Lab 4 as a meaningful exercise, not busywork.
+
+---
+
+# Writing: Identity and Role
+
+Start with one confident, specific sentence.
+
+```
+You are a coding assistant. Your job is to help users read,
+understand, and modify code files in their project directory.
+```
+
+What this achieves:
+- Sets scope: code files in the project directory
+- States the purpose: help users
+- No motivational filler; no hedging
+
+.split-left[
+**Avoid**
+
+"You are an incredibly powerful AI assistant that specializes in helping with any coding tasks the user might need..."
+]
+
+.split-right[
+**Use**
+
+"You are a coding assistant. Your job is to help users read, understand, and modify code files in their project directory."
+]
+
+<div class="clear"></div>
+
+???
+45 seconds. The contrast is the point. Every word in the weak version is doing nothing useful. The strong version establishes scope and purpose in two sentences.
+
+---
+
+# Writing: Tool Descriptions
+
+Tool descriptions in the system prompt (separate from, and reinforcing, the API schema):
+
+```markdown
+## Available Tools
+
+**read_file(filename)**: Read the complete contents of a file. Use
+this to understand existing code before making changes. Always read
+a file before editing it.
+
+**list_files(path)**: List the files and directories at a given path.
+Use this to understand the project structure before looking for
+specific files. Returns file names and types.
+
+**edit_file(path, old_str, new_str)**: Create or edit a file.
+- To create: set old_str to empty string, new_str to file contents.
+- To edit: set old_str to exact text to replace, new_str to replacement.
+You must read the file first to know what text to use for old_str.
+```
+
+Note the last sentence of `edit_file`: behavioral guidance embedded where it's needed.
+
+???
+90 seconds. Walk through each description. The key design decision to highlight: "You must read the file first" is in the tool description — not a separate rule somewhere else. It's there when the model needs it.
+
+---
+
+# Writing: Behavioral Guidelines
+
+```markdown
+## How to Work
+
+- Read before editing. Never modify a file you haven't read in this session.
+- Be concise. Respond with what the user needs — not explanations of your
+  process unless the user asks.
+- When in doubt, ask. If a request is ambiguous, ask one clarifying question
+  before acting.
+- Report what you did. After completing a task, briefly confirm what was done.
+  Example: "Added the multiply function to math_utils.py on line 12."
+```
+
+| Guideline | Failure it prevents |
+|---|---|
+| Read before editing | Blind edits |
+| Be concise | Verbose process narration |
+| When in doubt, ask | Acting on unclear requests |
+| Report what you did | Silent success or failure |
+
+???
+90 seconds. Each guideline maps to a real failure mode. Students should be able to explain why each one is there, not just copy it. The table makes the connection explicit.
+
+---
+
+# Writing: Constraints
+
+```markdown
+## Constraints
+
+- Only access files within the current project directory. Do not
+  attempt to read or modify files outside the project.
+- Never delete files. If the user asks you to delete something,
+  explain that you cannot and suggest alternatives.
+- Do not execute code. You can read and write files, but not run them.
+```
+
+Constraints are **non-negotiable**. Guidelines can flex under task pressure; constraints cannot.
+
+
+
+<div class="clear"></div>
+
+.warning[We don't have a delete tool, and our list_files tool can prevent "escape" - but the constraint help prevent failed tool calls.]
+
+???
+60 seconds. The guideline vs. constraint distinction is load-bearing for understanding prompt architecture. Spend a moment on it. The placement warning connects back to 5.2's ordering principle.
+
+---
+
+# Test Before Wiring In
+
+Before connecting to an agent loop, test interactively. Three targeted cases catch most prompt failures:
+
+| Test case | What it checks |
+|---|---|
+| "Create a file called hello.py with a hello world function." | File creation via edit_file with empty old_str |
+| "Add a multiply function to math_utils.py." | Read-first enforcement — does the agent read before editing? |
+| "Delete main.py." | Constraint compliance — does the agent refuse and explain? |
+
+Run these in a single-turn script or the API playground before building the loop.
+
+.callout[Prompt failures are cheaper to find before the agent is wired in. Every failure you catch here is one you don't debug mid-session later.]
+
+???
+60 seconds. Three tests is enough to validate the most critical behaviors. Students should run these and expect to make at least one prompt revision before moving on.
+
+---
+
+# Reading Failures
+
+Common first-draft failures and fixes:
+
+| Failure | Likely cause | Fix |
+|---|---|---|
+| Edits without reading | read-first instruction buried | Add to edit_file description AND guidelines |
+| Verbose about process | No conciseness constraint | Add explicit word/sentence limit |
+| Wrong argument format | Tool description unclear | Rewrite with explicit argument example |
+| Ignores constraints | Constraints at the bottom | Move earlier; consider placing at top |
+| Asks when it shouldn't | Clarification rule too broad | Add: "only ask if truly ambiguous" |
+
+"Testing against failures is how prompts get better. There's no stack trace. The diagnostic is observational: watch what the agent does, identify where the prompt failed to constrain it, and rewrite."
+
+???
+90 seconds. Walk through the table. Students will encounter at least two or three of these on their first draft. This is the most practically useful slide in the lecture — it tells them what to look for.
+
+---
+
+# Prompts and Tools Are Coupled
+
+When tools change, the system prompt must change too.
+
+In Lab 4, you'll replace `read_file` with `search_file` + `read_lines`.
+
+This requires updating the system prompt:
+- Remove the read_file description
+- Add descriptions for both new tools
+- Update the workflow guidance: *"First call search_file to find the relevant lines. Then call read_lines to retrieve the specific content."*
+- Update any few-shot examples that show read_file being used
+
+.warning[A system prompt written for one set of tools will produce incorrect behavior if the tools change without the prompt being updated.]
+
+The coupling is intentional. Tool descriptions are part of the prompt — they exist to guide model behavior, not just document the API.
+
+???
+60 seconds. This is a forward pointer to Lab 4 and a principle students will internalize through doing. The coupling is the key insight: prompt and tools are not independent artifacts.
+
+
+---
+
+# The Two Loops Every Agent Needs
+
+The prompt is ready. Before wiring it in, understand the structure of the code that runs it.
+
+.split-left[
+**Outer loop — the conversation**
+
+Runs once per user message.
+
+```
+get user input
+  → send to model
+  → wait for inner loop
+  → print reply
+  → repeat
+```
+
+One iteration = one exchange the user sees.
+]
+
+.split-right[
+**Inner loop — tool execution**
+
+Runs until the model stops calling tools.
+
+```
+call API
+  → if stop_reason == "tool_use"
+      execute tool(s)
+      append tool_result(s)
+      loop again
+  → if stop_reason == "end_turn"
+      surface text reply
+      break
+```
+
+One iteration = one model turn + one round of tool calls.
+]
+
+<div class="clear"></div>
+
+.callout[The user sees one exchange. The model may have called three tools internally before producing that reply — all invisible to the user, all visible in the messages array.]
+
+???
+90 seconds. This is the first time students see the agent loop as real code structure. The key insight: these are two separate concerns at two separate timescales. The outer loop is about the conversation; the inner loop is about a single model turn. Spend time on why they're separate — collapsing them into one loop would conflate "is the user done?" with "is the model done calling tools?"
+
+Image prompt for `agent-loops.png`: "Two nested loop diagrams, clean flat style. Outer loop (large rectangle, labeled 'Outer Loop: Conversation'): steps shown as rounded boxes connected by arrows: 'Get user input' → 'Run inner loop' → 'Print reply' → back to 'Get user input'. Inner loop (smaller rectangle nested inside, labeled 'Inner Loop: Tool Execution'): steps: 'Call API' → diamond decision 'stop_reason?' → two branches: left branch labeled 'tool_use': 'Execute tools' → 'Append tool_results' → back to 'Call API'; right branch labeled 'end_turn': 'Surface reply' → exit. Color coding: outer loop in blue tones, inner loop in teal tones. Sans-serif labels."
+
+---
+
+# Tool Results Re-Enter as User Turns
+
+The model requests a tool. The agent code runs it. How does the result get back to the model?
+
+```python
+# After executing the tool:
+tool_results.append({
+    "type": "tool_result",
+    "tool_use_id": block.id,   # ties result to the specific request
+    "content": result           # the string returned by the tool function
+})
+
+messages.append({"role": "user", "content": tool_results})
+```
+
+Tool results are appended as **`role: "user"`** — not assistant.
+
+They come from outside the model (from the agent code), so they re-enter from the user side.
+
+.callout[The messages array after one tool call: user → assistant (tool_use) → user (tool_result) → assistant (text reply). The user only sees the first and last entries.]
+
+???
+60 seconds. This trips students up — why role: "user"? Because the tool ran in the real world, not inside the model. The result is new information arriving from outside, just like a user message. Trace through the messages array structure: 4 entries for a single-tool exchange, more for multi-tool. The user is unaware of entries 2 and 3.
+
+---
+
+# What's Next: Building the Agent Loop
+
+The system prompt is ready. The loop structure is clear. Now: the code.
+
+.center[<img src="../../images/agent-loops.png" style="height:200px;">]
+
+.info[Lab 4 (Build Your Coding Agent) is the central lab for this section. You'll implement the full loop, wire in this system prompt, and then measure the token cost of the naive read_file — and replace it.]
+
+???
+30 seconds. Forward pointer to Section 4. Students should feel that the system prompt work they've done is concrete preparation for real code, not abstract theory.
+
+    </textarea>
+  <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+  <script>
+    var slideshow = remark.create({
+      ratio: '16:9',
+      highlightStyle: 'github',
+      highlightLines: true,
+      countIncrementalSlides: false,
+      navigation: { scroll: false }
+    });
+  </script>
+</body>
+
+</html>

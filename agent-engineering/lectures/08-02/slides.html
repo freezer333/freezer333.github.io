@@ -1,0 +1,341 @@
+<!doctype html>
+<html>
+    <head>
+        <title>
+            Embeddings, Similarity, and Vector Storage — Agent Engineering
+        </title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Embeddings, Similarity, and Vector Storage
+
+???
+~22 minutes. The deep dive on the most common RAG implementation. Be explicit throughout that this is one approach — Lecture 8.3 covers the others.
+
+---
+
+# The Most Common RAG Implementation
+
+Lecture 8.1 established RAG as a category and vectors as one implementation.
+
+This lecture covers that implementation in depth, because it dominates production RAG systems.
+
+The pieces:
+- **Embeddings** — turn text into vectors
+- **Similarity** — compare vectors
+- **Storage** — manage vectors at scale
+- **Chunking** — prepare documents for embedding
+
+???
+30 seconds. Frame as the deep dive. Reinforce that this is one approach among many.
+
+---
+
+# Text as a Vector
+
+.split-left[
+An **embedding** is a numerical representation of text, produced by an embedding model.
+
+Input: text. Output: a fixed-length list of numbers (a vector).
+
+Modern embeddings: 768 to 3,072 dimensions.
+
+Each dimension is a learned feature. Together they encode meaning.
+
+The numbers themselves are not interpretable. What matters is that two pieces of text with similar meanings produce vectors close to each other in this space.
+]
+
+.split-right[
+<img src="../../images/embedding-vector.png" style="max-width:95%;"/>
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Show the input/output of an embedding model without going into how it works internally.
+
+Image prompt for `embedding-vector.png`: "A horizontal flow diagram. Left side: a rounded rectangle containing the text 'How do I reset my password?'. An arrow pointing right to a rounded rectangle labeled 'Embedding model' (with a small icon suggesting a neural network). An arrow pointing right to a rounded rectangle containing a row of small numbers like '[0.024, -0.183, 0.412, 0.091, -0.248, ..., -0.057]' with the label '1024 numbers' below it. Clean flat design, white background, sans-serif labels, teal/blue color palette. The numbers in brackets should be in a monospace font."
+
+---
+
+# How Embedding Models Are Trained
+
+Embedding models are trained with **contrastive objectives**.
+
+- Pairs of texts that should be similar (a question and its answer, two paraphrases) are pushed close together in vector space
+- Unrelated pairs are pushed apart
+
+The result: a model that maps text to vectors in a way that preserves semantic similarity.
+
+.info[The embedding model is a separate model from the LLM. The embedding model represents; the LLM generates. Different model, different purpose.]
+
+???
+60 seconds. Students often confuse the embedding model with the LLM. Make the distinction clearly.
+
+---
+
+# Similar Meanings, Similar Vectors
+
+.split-left[
+Every piece of text becomes a point in high-dimensional space. Points cluster by meaning.
+
+- "How do I reset my password?" and "I forgot my password, how can I recover it?" land near each other
+- "How do I reset my password?" and "What is the capital of France?" land far apart
+
+Retrieval: take the user's query, embed it, find document vectors closest to the query vector, return those documents.
+]
+
+.split-right[
+<img src="../../images/semantic-space.png" style="max-width:95%;"/>
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. The geometric picture is the most useful intuition. Real embeddings are 1024-dim or so; the 2D picture is a projection that preserves the clustering idea.
+
+Image prompt for `semantic-space.png`: "A 2D scatter plot showing points in semantic space. Three distinct clusters: (1) a cluster of three or four labeled points like 'reset password', 'forgot password', 'recover account', 'change password' grouped tightly together, (2) a cluster of points labeled 'pricing plans', 'subscription cost', 'how much does it cost' grouped together but far from the first cluster, (3) one isolated point labeled 'capital of France' on the other side of the plot. Each cluster a different color. Axes are unlabeled (dimensions are abstract). Clean flat design, white background, sans-serif labels."
+
+---
+
+# Why This Beats Keyword Search
+
+Keyword search fails when query and document use different words for the same idea.
+
+> Query: "Password reset"
+> Document title: "Recovering account access"
+> Keyword match: **none**
+
+Embedding-based search compares **meaning**, not words. Both query and document are mapped to vectors based on what they mean — the words don't have to match.
+
+This is the practical reason embeddings dominate RAG: paraphrase and synonym handling that breaks keyword search.
+
+???
+60 seconds. The practical payoff. Once students see this, they understand why everyone uses embeddings for unstructured retrieval.
+
+---
+
+# Embedding APIs
+
+Embedding is a hosted service for most production use:
+
+- **Voyage AI** — Anthropic's recommended embedding partner
+- **OpenAI** — `text-embedding-3-small`, `text-embedding-3-large`
+- **Cohere** — multilingual support, reranking models alongside
+
+The API call is simple: send text, receive a vector.
+
+Cost: roughly $0.02-$0.13 per million tokens — about 1/100th the cost of generation.
+
+???
+60 seconds. Brief survey. Don't go deep on any one provider.
+
+---
+
+# Pick One and Commit
+
+.warning[Embeddings from different models live in different vector spaces. A vector from Voyage cannot be compared to a vector from OpenAI — they don't share a coordinate system.]
+
+The choice of embedding model is **sticky**:
+
+- Once your corpus is embedded, switching means re-embedding everything
+- Pick a model that fits your domain and budget
+- Stick with it until you have a clear reason to change
+
+???
+60 seconds. The "vectors don't cross models" point catches students off guard. Important for cost and architecture planning.
+
+---
+
+# Cosine Similarity
+
+.split-left[
+Once both query and document are vectors, you need a similarity score.
+
+The standard choice: **cosine similarity**, the angle between the two vectors.
+
+$$\text{cos sim}(a, b) = \frac{a \cdot b}{||a|| \, ||b||}$$
+
+Result is between -1 and 1:
+
+- **1** — identical direction (most similar)
+- **0** — orthogonal (unrelated)
+- **-1** — opposite (rare with embeddings)
+]
+
+.split-right[
+<img src="../../images/cosine-similarity.png" style="max-height:420px; max-width:95%; display:block; margin-top:-1em;"/>
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. The math is simple — a normalized dot product. Don't oversell complexity.
+
+Image prompt for `cosine-similarity.png`: "Three small vector diagrams stacked vertically, each showing two arrows from a common origin point in 2D. (1) Top: two arrows pointing in nearly the same direction with a small angle between them, labeled below 'cos sim ≈ 0.95 — similar'. (2) Middle: two arrows at roughly 90 degrees to each other, labeled 'cos sim ≈ 0 — unrelated'. (3) Bottom: two arrows pointing in roughly opposite directions, labeled 'cos sim ≈ -0.9 — opposite (rare)'. Clean flat design, white background, sans-serif labels, teal arrows."
+
+---
+
+# Why Cosine and Not Distance
+
+Two reasons cosine wins over Euclidean distance:
+
+- **Length-invariant** — a short and a long document on the same topic should be similar; their vectors might have different magnitudes but should point the same direction. Cosine ignores magnitude.
+- **Computationally cheap** — if vectors are normalized to unit length, cosine reduces to a single dot product. Very fast.
+
+Every embedding library and vector database uses cosine similarity by default.
+
+???
+60 seconds. The two reasons are practical. Length-invariance is the conceptual one; computational efficiency is the operational one.
+
+---
+
+# When a Dictionary Stops Being Enough
+
+For small corpora — a few hundred chunks — a Python dict works:
+
+```python
+embeddings = {chunk_id: vector for chunk_id, vector in ...}
+```
+
+Retrieval: linear scan. Compute cosine between the query and every stored vector, sort, take top K.
+
+Fast enough for hundreds. Breaks at scale:
+
+- A million vectors: seconds per query
+- A billion: hours
+
+???
+60 seconds. Establish the baseline before introducing vector databases.
+
+---
+
+# What Vector Databases Add
+
+Vector databases (ChromaDB, FAISS, Pinecone, Weaviate, pgvector) provide three things a dict does not:
+
+- **Indexing** — approximate nearest neighbor (ANN) algorithms like HNSW that find top K without scanning every vector. Trades a small accuracy hit for orders-of-magnitude speed.
+- **Persistence** — vectors live on disk, survive restarts, can be backed up
+- **Metadata filtering** — store metadata alongside each vector and filter the search by metadata as well as similarity
+
+.info[ChromaDB is the easy on-ramp (local, no infrastructure). FAISS is library-only and very fast. Pinecone is a managed service.]
+
+???
+90 seconds. Three concrete value-adds. The metadata filtering one is often overlooked but matters in practice.
+
+---
+
+# When You Need One
+
+**Use a dict when:**
+- Fewer than ~1,000 chunks
+- Prototyping or experimenting
+- No persistence needed between runs
+
+**Use a vector database when:**
+- More than a few thousand chunks
+- Persistence and operational stability matter
+- Metadata filtering alongside similarity
+
+.callout[Most production systems start with a dict, prove the retrieval works, then switch to a vector database when scale or persistence becomes a real requirement.]
+
+???
+60 seconds. Practical guidance. Students should not reach for ChromaDB on day one.
+
+---
+
+# Why Chunk
+
+.split-left[
+Documents are usually too large to embed as a single vector. A 50-page PDF as one vector loses all granularity — the resulting vector "averages" everything and matches poorly to specific queries.
+
+Chunking splits documents into smaller units. Each chunk is embedded separately. Retrieval returns matching chunks, not whole documents.
+
+Two reasons:
+
+- **Granularity** — the user's query is usually about a specific section
+- **Window fit** — retrieved chunks have to fit in the context window, often alongside several others
+]
+
+.split-right[
+<img src="../../images/chunking.png" style="max-width:95%;"/>
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Why chunking exists at all. The image makes the splitting concept concrete.
+
+Image prompt for `chunking.png`: "A diagram showing a long document on the left being split into smaller chunks on the right. Left: a tall rounded rectangle representing a long document (use placeholder lines suggesting text). An arrow points right. Right: four to five smaller rounded rectangles stacked vertically, each labeled 'Chunk 1', 'Chunk 2', etc. Adjacent chunks share a small overlapping region (slightly darker color band where they overlap), with one of these overlaps labeled 'overlap'. Clean flat design, white background, sans-serif labels, teal/blue color palette."
+
+---
+
+# Three Common Strategies
+
+| Strategy | How | Best for |
+|---|---|---|
+| **Fixed-size** | Split every N tokens (~500-1,000) | Uniform corpora, simplest |
+| **Sentence/paragraph** | Split on natural boundaries | Prose, documentation |
+| **Semantic** | Split where topic changes | Long-form with clear shifts |
+
+**Chunk overlap.** Adjacent chunks usually overlap by 10-20%. Prevents an answer from being split awkwardly across the boundary.
+
+.callout[Use library defaults until you have a measured reason not to. The more common retrieval problems are bad embeddings, bad reranking, or bad query phrasing — not bad chunking.]
+
+???
+90 seconds. The practical guidance is the most important point on this slide. Students over-engineer chunking; the defaults are usually right.
+
+---
+
+# When Vector RAG Fits
+
+**Fits well:**
+- Large unstructured corpus — documents, articles, knowledge bases, codebases
+- Semantic queries — query and document use different words for the same idea
+- Privacy matters — your data stays in your vector store
+- Repeat queries — embedding cost amortized over many queries
+
+**Fits poorly:**
+- Structured data → use a database
+- Information must be fresh by the second → re-indexing has latency
+- Tiny corpus → dict, or just send it all in the prompt
+- Need exact-match precision → keyword search may do better
+
+???
+60 seconds. The fit/misfit table sets up Lecture 8.3 — the misfit cases are where other retrieval methods shine.
+
+---
+
+# Key Takeaways
+
+1. **Embeddings turn text into vectors** — a separate model from the LLM, trained to preserve semantic similarity
+2. **Geometric intuition** — similar meanings, similar vectors; retrieval is "find closest vectors to the query"
+3. **Cosine similarity** — normalized dot product, length-invariant, the standard measure
+4. **Vector databases** — needed at scale, for persistence, or for metadata filtering; a dict is fine until then
+5. **Chunking** — necessary for granularity and window fit; library defaults are usually right
+
+### Next: vector RAG is one mechanism. The others.
+
+???
+Transition to 8.3.
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

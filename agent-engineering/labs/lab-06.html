@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 6 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 6: Build a Web Search Tool</h1>
+<p><strong>Section 4 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~1.5 hours
+<strong>Prerequisites:</strong> Lab 4 (Extended Coding Agent) + Module 8 (Lectures 8.1–8.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>Module 8 covered Retrieval-Augmented Generation as a category — the broad pattern of fetching external information and injecting it into the model&#39;s context for the current generation. Lecture 8.2 went deep on the vector-based implementation. Lecture 8.3 made the case that RAG is broader than vectors and that web search, database queries, and file reads are all valid retrieval mechanisms.</p>
+<p>This lab gives your coding agent its first external-information capability that is not a file read: a web search tool backed by the Brave Search API. After this lab, your agent will be able to answer questions about current information, recent releases, and topics outside its training data.</p>
+<p>The point is not to build something elaborate. The tool itself is small. What matters is the conceptual move: extending the agent with a retrieval mechanism that has nothing to do with vectors.</p>
+<hr>
+<h2>What You&#39;ll Produce</h2>
+<ol>
+<li><strong>Extended agent code</strong> (<code>agent.py</code>) — Your coding agent from Lab 4 with a new <code>web_search</code> tool registered alongside the existing tools</li>
+<li><strong>Brave Search wrapper</strong> (<code>web_search.py</code>) — The function that calls the Brave API and returns results</li>
+<li><strong>Reflection</strong> (<code>reflection.md</code>) — A short writeup answering the three questions in Part 4</li>
+</ol>
+<hr>
+<h2>Part 1: Set Up the Brave Search API (~15 minutes)</h2>
+<h3>1.1 Get an API Key</h3>
+<p>Brave Search offers a free tier suitable for this lab.</p>
+<ol>
+<li>Go to <a href="https://api.search.brave.com/">https://api.search.brave.com/</a> and sign up for an account</li>
+<li>Subscribe to the <strong>Free</strong> plan (2,000 queries per month, 1 query per second)</li>
+<li>From the dashboard, create an API key. Copy it.</li>
+</ol>
+<h3>1.2 Store the Key</h3>
+<p>Add the key to your <code>.env</code> file at the project root:</p>
+<pre><code>BRAVE_API_KEY=your-key-here
+</code></pre>
+<p>Make sure <code>.env</code> is in your <code>.gitignore</code> — never commit API keys.</p>
+<h3>1.3 Quick Sanity Check</h3>
+<p>Verify the key works with a one-line <code>curl</code> test before integrating it into the agent:</p>
+<pre><code class="language-bash">curl -s &quot;https://api.search.brave.com/res/v1/web/search?q=python+packaging&quot; \
+     -H &quot;X-Subscription-Token: $BRAVE_API_KEY&quot; \
+     -H &quot;Accept: application/json&quot; | head -100
+</code></pre>
+<p>You should see a JSON response with a <code>web.results</code> array. If you get an authentication error, check the key. If you get a rate-limit error, wait a minute and retry.</p>
+<hr>
+<h2>Part 2: Build the Web Search Tool (~30 minutes)</h2>
+<h3>2.1 The Wrapper Function</h3>
+<p>Create <code>web_search.py</code> alongside your <code>agent.py</code>. The wrapper handles the HTTP call, error handling, and result formatting.</p>
+<p><strong><code>web_search(query, count=5)</code></strong></p>
+<p>Requirements:</p>
+<ul>
+<li><code>query</code> (str): the search query</li>
+<li><code>count</code> (int, default 5): number of results to return; the API allows up to 20</li>
+<li>Returns a string formatted for the model: each result on its own block with title, URL, and snippet</li>
+<li>Reads <code>BRAVE_API_KEY</code> from the environment (use <code>os.getenv</code> with <code>python-dotenv</code>)</li>
+<li>Raises a clean error message (returned as a string for the agent to read) on:<ul>
+<li>Missing API key</li>
+<li>Network errors</li>
+<li>Non-200 HTTP responses</li>
+<li>Rate-limit (429) responses</li>
+</ul>
+</li>
+<li>Times out after 10 seconds</li>
+</ul>
+<p><strong>API details:</strong></p>
+<ul>
+<li>Endpoint: <code>https://api.search.brave.com/res/v1/web/search</code></li>
+<li>Method: GET</li>
+<li>Query string: <code>q</code> (the search), <code>count</code> (1-20)</li>
+<li>Headers: <code>X-Subscription-Token: &lt;api key&gt;</code>, <code>Accept: application/json</code></li>
+<li>Response: JSON; results are at <code>response.json()[&quot;web&quot;][&quot;results&quot;]</code>, each with <code>title</code>, <code>url</code>, and <code>description</code> fields</li>
+</ul>
+<p><strong>Output format suggestion:</strong></p>
+<pre><code>[1] Python 3.13 Released — What&#39;s New
+    https://docs.python.org/3.13/whatsnew/3.13.html
+    Python 3.13.0 was released on October 7, 2024, with a free-threaded build,
+    a new interactive interpreter, and improvements to typing...
+
+[2] Python 3.13 release notes
+    https://www.python.org/downloads/release/python-3130/
+    Major new features: PEP 703 (Making the Global Interpreter Lock optional),
+    PEP 744 (JIT Compilation), improved error messages...
+
+[3] ...
+</code></pre>
+<p>Numbered, with the title on its own line, the URL on the second line, and the snippet wrapped to a reasonable width on subsequent lines. The model handles this format well and can cite specific results.</p>
+<h3>2.2 Edge Cases</h3>
+<p>Your tool should handle:</p>
+<ul>
+<li><strong>No results.</strong> Brave can return an empty <code>results</code> array. Return a clear message like <code>No web search results for &#39;&lt;query&gt;&#39;.</code></li>
+<li><strong>Long snippets.</strong> The API&#39;s <code>description</code> can be hundreds of characters. Truncate to ~300 characters per snippet to keep token usage reasonable.</li>
+<li><strong>Special characters in the query.</strong> Use <code>urllib.parse.quote_plus</code> or <code>requests</code>&#39; <code>params</code> argument so spaces and punctuation are encoded.</li>
+<li><strong>Rate limiting.</strong> On a 429 response, return a string explaining that the rate limit was hit and the agent should wait. Do not silently retry — the agent should know.</li>
+</ul>
+<h3>2.3 Standalone Test</h3>
+<p>Add an <code>if __name__ == &quot;__main__&quot;:</code> block so the tool runs standalone:</p>
+<pre><code class="language-bash">python3 web_search.py
+</code></pre>
+<p>It should perform one search (e.g., <code>&quot;latest Anthropic Claude release&quot;</code>) and print the formatted results. This lets you verify the tool independently before wiring it into the agent.</p>
+<hr>
+<h2>Part 3: Add the Tool to the Agent (~20 minutes)</h2>
+<h3>3.1 Tool Schema</h3>
+<p>Define the tool schema for the Anthropic API in <code>agent.py</code>. Add it to your existing <code>TOOLS</code> list:</p>
+<pre><code class="language-python">{
+    &quot;name&quot;: &quot;web_search&quot;,
+    &quot;description&quot;: (
+        &quot;Search the public web for current information using the Brave &quot;
+        &quot;Search API. Use this when the user asks about recent events, &quot;
+        &quot;current versions of software, news, or any topic where the &quot;
+        &quot;answer might not be in your training data. Do not use for &quot;
+        &quot;questions about the user&#39;s local files — use read_file for that.&quot;
+    ),
+    &quot;input_schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+            &quot;query&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;description&quot;: &quot;The search query. Phrase as you would in a search engine.&quot;
+            },
+            &quot;count&quot;: {
+                &quot;type&quot;: &quot;integer&quot;,
+                &quot;description&quot;: &quot;Number of results to return (1-10). Default 5.&quot;,
+                &quot;default&quot;: 5
+            }
+        },
+        &quot;required&quot;: [&quot;query&quot;]
+    }
+}
+</code></pre>
+<p>The description matters. The model uses it to decide when to call the tool. Two key phrases: &quot;current information&quot; (so the model picks this for time-sensitive questions) and the explicit contrast with <code>read_file</code> (so the model doesn&#39;t reach for web search when the user is asking about local code).</p>
+<h3>3.2 Dispatch</h3>
+<p>Add <code>web_search</code> to your tool dispatch (registry from Lecture 6.3 or the <code>if/elif</code> from earlier lectures, whichever your agent uses):</p>
+<pre><code class="language-python">from web_search import web_search
+
+# In your tool registry or dispatch function:
+&quot;web_search&quot;: web_search,
+</code></pre>
+<h3>3.3 System Prompt Update</h3>
+<p>Add a brief mention of the new capability to your agent&#39;s system prompt:</p>
+<pre><code>## Available Tools
+...
+**web_search(query, count=5)**: Search the public web for current
+information. Use this when the user asks about recent events, current
+versions, news, or anything that might not be in your training data.
+Each result includes a title, URL, and snippet.
+</code></pre>
+<p>If your system prompt has a &quot;How to Work&quot; section, add guidance like:</p>
+<pre><code>- For questions about current information (today&#39;s news, recent
+  releases, current best practices), use web_search rather than
+  answering from training data.
+- When you use web search, mention the source URLs in your reply
+  so the user can verify.
+</code></pre>
+<p>The &quot;mention the source URLs&quot; instruction encourages source attribution, which is one of the practical advantages of RAG over training-data-only answers.</p>
+<hr>
+<h2>Part 4: Test and Reflect (~25 minutes)</h2>
+<h3>4.1 Test Queries</h3>
+<p>Run the agent with each of the following queries. For each one, observe what the agent does and write it down.</p>
+<ol>
+<li><p><strong>&quot;What is the latest version of Python?&quot;</strong> — Time-sensitive. The model&#39;s training data may have an out-of-date answer. Does the agent use <code>web_search</code>? Does it cite the source?</p>
+</li>
+<li><p><strong>&quot;List the files in this directory.&quot;</strong> — Local. The agent should NOT use <code>web_search</code> here — it should use <code>list_files</code>. This tests whether the tool descriptions correctly steer the model.</p>
+</li>
+<li><p><strong>&quot;What were the major announcements at the most recent Anthropic event?&quot;</strong> — Recent and specific. Should pull from the web. Look at how the agent phrases its query.</p>
+</li>
+<li><p><strong>&quot;What is the time complexity of binary search?&quot;</strong> — General knowledge, well-covered in training data. The agent should answer directly without web search. If it does call <code>web_search</code>, that suggests your tool description is over-broad.</p>
+</li>
+<li><p><strong>&quot;What&#39;s the current weather in Mahwah, New Jersey?&quot;</strong> — Tests something Brave may or may not handle well. Snippet results probably show a weather widget summary. Does the agent extract a useful answer from the snippet?</p>
+</li>
+</ol>
+<p>For each query, note:</p>
+<ul>
+<li>Did the agent call <code>web_search</code>?</li>
+<li>If so, what query did it pass?</li>
+<li>Did the answer use the retrieved information?</li>
+<li>Were the URLs cited?</li>
+</ul>
+<h3>4.2 Reflection</h3>
+<p>Write <code>reflection.md</code> answering these three questions. Two-to-three sentences each is enough.</p>
+<ol>
+<li><p><strong>In which of your test queries did the agent correctly choose between <code>web_search</code> and other tools? In which did it choose poorly? What about your tool descriptions or system prompt could you change to improve those decisions?</strong></p>
+</li>
+<li><p><strong>Lecture 8.3 framed retrieval as a category — vector search, web search, database queries, file reads, and parametric &quot;retrieval&quot; from the model itself are all RAG. After implementing the web search tool, where do you see the conceptual overlap with the other tools your agent already has (<code>read_file</code>, <code>search_file</code>)? What do they have in common as retrieval mechanisms?</strong></p>
+</li>
+<li><p><strong>What kind of agent application would benefit most from web search as its primary retrieval mechanism, vs. one that would be better served by vector RAG over a private corpus? Give one concrete example of each.</strong></p>
+</li>
+</ol>
+<hr>
+<h2>Submission</h2>
+<p>Submit:</p>
+<ul>
+<li><code>agent.py</code> — Your extended agent with the <code>web_search</code> tool registered</li>
+<li><code>web_search.py</code> — The Brave Search wrapper</li>
+<li><code>reflection.md</code> — Your answers to the three reflection questions</li>
+<li>A short transcript of one of your test sessions (any format) showing the agent calling <code>web_search</code> and using the results</li>
+</ul>
+<hr>
+<h2>Grading Rubric</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Weight</th>
+<th>Criteria</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tool implementation</td>
+<td>30%</td>
+<td><code>web_search</code> works, handles errors and edge cases (no results, rate limits, missing key, special characters), formats results clearly</td>
+</tr>
+<tr>
+<td>Agent integration</td>
+<td>25%</td>
+<td>Tool schema is well-written, dispatch works, system prompt update is clear and steers the model correctly</td>
+</tr>
+<tr>
+<td>Test coverage</td>
+<td>20%</td>
+<td>All five test queries attempted and observations recorded</td>
+</tr>
+<tr>
+<td>Reflection quality</td>
+<td>25%</td>
+<td>Three answers are specific, draw on actual lab observations, and demonstrate understanding of the broader retrieval framing from Lecture 8.3</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Notes and Tips</h2>
+<ul>
+<li><p><strong>Stay within the free tier.</strong> 2,000 queries/month is plenty for this lab, but if you iterate aggressively you can burn through them. The standalone test in 2.3 lets you verify the tool without going through the agent (and using extra queries on tool calls you can predict).</p>
+</li>
+<li><p><strong>One result vs. many.</strong> Returning more results gives the model more to work with but uses more tokens. Five is a reasonable default; one or two is enough for many simple questions; ten only if the user is asking for a survey.</p>
+</li>
+<li><p><strong>The model decides what to search for.</strong> Notice how the model rephrases the user&#39;s question into a search query — sometimes it makes good choices, sometimes not. This is the same skill humans bring to using search engines.</p>
+</li>
+<li><p><strong>No vector embeddings here.</strong> This lab deliberately avoids the vector-based implementation from Lecture 8.2. The point is to demonstrate that RAG works without vectors. If you want to build a vector RAG system, ChromaDB and LangChain make it straightforward — but it is its own project, not this lab.</p>
+</li>
+</ul>
+</div>
+</body>
+</html>

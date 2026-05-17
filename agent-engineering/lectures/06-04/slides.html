@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Step Behavior, Instrumentation, and Streaming — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Multi-Step Behavior, Instrumentation, and Streaming
+
+???
+~20 minutes. Three topics: emergent multi-step chaining, token tracking, and streaming. The instrumentation section bridges to Section 4 (context management).
+
+---
+
+# What Happens When You Ask for Something Hard?
+
+"Find all Python files and add docstrings to any function that doesn't have one."
+
+The agent has three tools. No one told it how to do this.
+
+```
+[1] list_files(".")              → discovers .py files
+[2] read_file("main.py")        → sees functions without docstrings
+[3] edit_file("main.py", ...)   → adds docstring to first function
+[4] edit_file("main.py", ...)   → adds docstring to second function
+[5] read_file("utils.py")       → checks next file
+[6] edit_file("utils.py", ...)  → adds docstring
+[7] text reply                   → "Done — added docstrings to 3 functions."
+```
+
+Seven inner-loop iterations. The model composed the plan from the task description and the available tools.
+
+???
+90 seconds. This is the "aha" moment. Run this live if possible.
+
+---
+
+# Why Emergent Chaining Works
+
+Three ingredients:
+
+1. **Clear tool descriptions** — the model knows what each tool does and what it returns
+
+2. **Tool results as context** — after `list_files`, the directory listing is in context; the model can now reason about which files to read
+
+3. **The inner loop** — the model gets to keep calling tools until it decides it's done
+
+There is no plan object. No task queue. The "plan" is implicit in the model's reasoning — each step is a fresh prediction given everything that has happened so far.
+
+.callout[The model can improvise when something unexpected happens. But it can also forget its plan if the context gets too long.]
+
+???
+90 seconds. Connect back to Module 2: the model is doing next-token prediction on a very long context. The plan is implicit, not stored.
+
+---
+
+# Failure Mode 1: The Infinite Loop
+
+The model calls the same tool with the same arguments, repeatedly.
+
+**Causes:**
+- Error it can't recover from (retries the same call)
+- Ambiguous task with no clear completion criteria
+- Context confusion after many tool calls
+
+**Fix:** Add an iteration limit.
+
+```python
+MAX_ITERATIONS = 25
+iteration = 0
+while True:
+    iteration += 1
+    if iteration > MAX_ITERATIONS:
+        messages.append({"role": "user",
+            "content": "Maximum tool calls reached. Summarize what "
+                       "you've done and stop."})
+        # One more API call for the summary, then break
+```
+
+???
+60 seconds. The limit is a safety valve. If the agent regularly hits it, the task is too complex or the tools need better error messages.
+
+---
+
+# Failure Mode 2: Premature Stop
+
+The model produces `end_turn` before completing the task.
+
+**Causes:**
+- Task is too vague — "clean up this code" has no completion criteria
+- Model thinks it's done after editing one file, skips the rest
+- Context pressure — long context pushes the model to wrap up
+
+**Fix:** Better prompts from the user, and system prompt guidance like: *"When completing multi-file tasks, verify you've handled all files before reporting completion."*
+
+---
+
+# Failure Mode 3: Context Exhaustion
+
+The messages array grows with every tool call. Eventually:
+
+- The API rejects the request (too many tokens)
+- The model's quality degrades — attention spreads too thin
+- The model forgets earlier decisions and repeats work
+
+This is the context growth problem from Module 4, happening in real time.
+
+The fix isn't in the loop — it's in the context management strategies from Section 4: sliding window, compaction, progressive disclosure.
+
+But first, you need to **see** the problem. That's what instrumentation is for.
+
+???
+60 seconds. Bridge to the next section.
+
+---
+
+# Counting Tokens
+
+The API returns usage on every response:
+
+```python
+response = client.messages.create(...)
+print(f"Input:  {response.usage.input_tokens}")
+print(f"Output: {response.usage.output_tokens}")
+```
+
+`input_tokens` = system prompt + tool schemas + entire messages array.
+
+On each inner-loop iteration, `input_tokens` **grows** because the messages array is longer.
+
+???
+30 seconds. Simple API — the data is already there.
+
+---
+
+# TokenTracker
+
+```python
+class TokenTracker:
+    def __init__(self):
+        self.calls = []
+
+    def record(self, response):
+        self.calls.append((
+            response.usage.input_tokens,
+            response.usage.output_tokens
+        ))
+
+    def report(self):
+        total_in = sum(c[0] for c in self.calls)
+        total_out = sum(c[1] for c in self.calls)
+        print(f"\n--- Token Usage ---")
+        print(f"API calls:   {len(self.calls)}")
+        print(f"Total input: {total_in:,} tokens")
+        print(f"Total output:{total_out:,} tokens")
+        print(f"Peak input:  {max(c[0] for c in self.calls):,} tokens")
+        print(f"\nPer-call breakdown:")
+        for i, (inp, out) in enumerate(self.calls):
+            print(f"  Call {i+1}: {inp:,} in / {out:,} out")
+```
+
+???
+60 seconds. Simple class, wire it into the inner loop with `tracker.record(response)` after each API call.
+
+---
+
+# What the Numbers Show
+
+Running the docstring task on two small files:
+
+```
+Call 1:  1,240 in / 45 out     ← list_files
+Call 2:  1,340 in / 520 out    ← read_file (file contents enter context)
+Call 3:  2,100 in / 85 out     ← edit_file
+Call 4:  2,240 in / 78 out     ← edit_file
+Call 5:  2,380 in / 490 out    ← read_file (second file)
+Call 6:  3,100 in / 92 out     ← edit_file
+Call 7:  3,250 in / 65 out     ← final text reply
+```
+
+.center[<img src="token-growth-chart.png" style="max-width:55%;">]
+
+**Input tokens grow monotonically.** The biggest jumps happen on `read_file` — file contents enter and stay.
+
+???
+90 seconds. The numbers make context growth tangible. Point out each jump.
+
+Image prompt for `token-growth-chart.png`: "A line chart showing input tokens per API call. X-axis labeled 'API Call' with values 1-7. Y-axis labeled 'Input Tokens' ranging from 1000 to 3500. The line starts around 1240, has a notable jump at call 2 (to ~1340→2100 area due to read_file), continues climbing with smaller increments, then jumps again at call 5. Annotations on the two biggest jumps: 'read_file' with an arrow. Clean minimal style, single line, teal color, no grid lines, white background, sans-serif font."
+
+---
+
+# The Cost
+
+At Sonnet pricing ($3/M input, $15/M output):
+
+| Metric | Value |
+|---|---|
+| 7 API calls, small files | ~$0.07 |
+| 20 user messages, larger files | $2–5 |
+| Enterprise: 100 sessions/day | $200–500/day |
+
+Context management isn't optimization — it's **economic necessity**.
+
+.callout[Lab 4 measures the difference: naive `read_file` vs. token-efficient `search_file` + `read_lines` on the same real task.]
+
+???
+60 seconds. Make the economics concrete.
+
+---
+
+# Streaming
+
+Without streaming, the user sees nothing during multi-step tool calling. A five-tool-call task = 10–25 seconds of silence.
+
+```python
+with client.messages.stream(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,
+    system=SYSTEM_PROMPT,
+    tools=TOOLS,
+    messages=messages
+) as stream:
+    response = stream.get_final_message()
+```
+
+`get_final_message()` returns the same response object as `messages.create()`. The loop logic is unchanged.
+
+???
+60 seconds. Streaming is a transport-level change, not an architectural one.
+
+---
+
+# Streaming Events
+
+```python
+for event in stream:
+    if hasattr(event, 'type'):
+        if event.type == 'content_block_start':
+            if event.content_block.type == 'text':
+                print("\nAssistant: ", end="", flush=True)
+        elif event.type == 'content_block_delta':
+            if hasattr(event.delta, 'text'):
+                print(event.delta.text, end="", flush=True)
+```
+
+Two uses:
+1. **Stream text replies** character by character
+2. **Show tool call activity** so the user knows the agent is working
+
+Streaming changes the UX, not the logic. `stop_reason`, `response.content`, tool results — all identical.
+
+.info[Same token cost. Same behavior. The only difference is that the user sees output incrementally instead of all at once.]
+
+???
+60 seconds. Students can add streaming to their existing agent without restructuring anything.
+
+---
+
+# Key Takeaways
+
+1. **Emergent chaining** — the model composes multi-step plans from tool descriptions and results
+2. **Three failure modes** — infinite loop (add limits), premature stop (better prompts), context exhaustion (Section 4)
+3. **Instrument first** — `TokenTracker` shows where tokens accumulate before you try to fix it
+4. **Context grows monotonically** — biggest jumps from `read_file`; Lab 4 measures the alternative
+5. **Streaming** — UX improvement, not architectural change; same cost, same behavior
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

@@ -10,18 +10,23 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Measuring and Managing Context</h1>
-<p><strong>Lecture 4.1</strong></p>
-<ul>
-  <li>Token counting in practice: tracking usage per API call</li>
-  <li>Setting context budgets and thresholds (e.g., 80% triggers action)</li>
-  <li>Observing context growth empirically: how a 10-step agent task fills the window</li>
-  <li>The cost curve: when does context length start hurting quality?</li>
-  <li>Building instrumentation into your agent from the start</li>
-</ul>
+<p><strong>Module 4, Lecture 4.1 | Section 2: Working with LLMs in Practice</strong></p>
+<p>Context windows have limits — but quality degrades before you hit them. This lecture makes context growth visible: how to count tokens per API call, where tokens actually accumulate during an agent task (spoiler: tool results dominate), and how to set a budget threshold that lets you act before the window fills. You&#39;ll also see empirically, through a live code demo, how a simple five-turn conversation can accumulate thousands of input tokens in minutes.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-04-01.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="context_growth.py">context_growth.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://docs.anthropic.com/en/api/messages">Messages — Claude API Reference</a> — Official documentation for the <code>usage</code> object returned on every API response, with <code>input_tokens</code> and <code>output_tokens</code> fields.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/token-counting">Token Counting — Claude API Docs</a> — Anthropic&#39;s guide to estimating token counts before sending a request, using the count_tokens API.</li>
+<li><a href="https://arxiv.org/abs/2307.03172">Lost in the Middle: How Language Models Use Long Contexts (Liu et al., 2023)</a> — The foundational paper establishing that LLM performance degrades for content positioned in the middle of long contexts, with highest accuracy when relevant information appears at the beginning or end.</li>
+<li><a href="https://www.anthropic.com/pricing">Anthropic Pricing</a> — Per-token costs for input and output across all Claude models, making the input/output price differential concrete.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching">Prompt Caching — Claude API Docs</a> — How to cache repeated prompt prefixes to reduce both cost and latency for stable context.</li>
+<li><a href="https://research.trychroma.com/context-rot">Context Rot — Chroma Research</a> — A 2025 empirical study of 18 frontier models showing performance degrades measurably as context grows, well before the window limit, due to attention dilution.</li>
+<li><a href="https://arxiv.org/abs/2404.06654">RULER: What&#39;s the Real Context Size of Your Long-Context Language Models? (Hsieh et al., 2024)</a> — NVIDIA/Stanford benchmark demonstrating that advertised context length and effective context length often differ significantly; most models underperform at their claimed maximum.</li>
 </ul>
 </div>
 </body>

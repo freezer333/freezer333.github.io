@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Implementing Sliding Window — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Implementing Sliding Window
+
+???
+~15 minutes. Module 7 is the implementation module — Module 4 introduced the strategies, Module 6 built the agent and the instrumentation, Module 7 connects them. This is the first of three lectures.
+
+---
+
+# From Strategy to Code
+
+Lecture 4.2 introduced sliding window in one line.
+
+Lecture 6.4 instrumented the agent so we can see context grow on every API call.
+
+This lecture writes the code that runs when the threshold from instrumentation is crossed.
+
+<img src="../../images/context-window.png" style="width:100%; margin-top:0.5em;"/>
+
+???
+30 seconds. Frame Module 7 as implementation. The conceptual work happened in 4.2; the agent infrastructure was built in Module 6. The sliding-window banner is a callback to the 4.2 slide where this image was introduced.
+
+---
+
+# Where Truncation Runs in the Loop
+
+The agent loop has one safe place to manage context: between inner-loop iterations, before the next API call.
+
+```
+inner loop:
+*   [HOOK: manage context here]
+    response = client.messages.create(...)
+    if stop_reason == "tool_use":
+        execute tools, append results
+    else:
+        break
+```
+
+- Can't shrink a request after it's sent
+- Can't truncate inside an active tool exchange
+- Need the most recent `usage.input_tokens` to decide
+
+???
+The hook point is the only safe placement. Students will try to call truncation in the wrong place — after the response, inside the tool branch — and produce broken behavior.
+
+---
+
+# The Naive One-Liner
+
+```python
+def sliding_window(messages, n):
+    return messages[-n:]
+```
+
+This compiles. It runs. It will silently corrupt your agent.
+
+The messages array has structure that a blind slice ignores. Two API constraints make this concrete.
+
+???
+The point: a working-looking line of code is not a working line of code. The next two slides show what's actually required.
+
+---
+
+# Constraint 1: Pair Integrity
+
+.split-left[
+Every `tool_use` block in an assistant message must be followed by its matching `tool_result` in the next user message.
+
+A cut between them produces:
+
+```
+400 Bad Request: messages: tool_use ids
+found without tool_result blocks
+immediately after
+```
+
+In a multi-step session roughly half of all messages contain `tool_result` blocks. A random cut has a high chance of orphaning a pair.
+]
+
+.split-right[
+<img src="../../images/pair-integrity.png" style="max-width:100%;"/>
+]
+
+<div class="clear"></div>
+
+???
+The pair-integrity rule is enforced by the API. Show students the actual error so they recognize it when they hit it in Lab 5.
+
+Image prompt for `pair-integrity.png`: "A vertical column of 8 stacked rounded rectangles representing chat messages. Each labeled by role (user/assistant) and content type. From top: user 'task', assistant 'tool_use', user 'tool_result', assistant 'tool_use', user 'tool_result', assistant 'text', user 'next request'. Two pairs of messages (the two tool_use/tool_result pairs) are wrapped in a thin teal bracket on the right side labeled 'pair'. A red dashed horizontal line cuts between the second tool_use and its tool_result, with a red label 'naive cut here → orphans the tool_use'. Clean flat design, white background, sans-serif labels. No 3D effects."
+
+---
+
+# Constraint 2: Alternating Roles
+
+The API requires `user` and `assistant` roles to alternate. Two consecutive same-role messages are rejected.
+
+- Sliding window's contiguous tail satisfies this trivially
+- Anchor preservation (next section) is what creates the problem
+- Same fix shape: a small post-processing pass
+
+???
+This is the constraint students miss. Naming both constraints up front sets up the anchor section.
+
+---
+
+# The Pair-Aware Walk
+
+A safe cut point is a **user message that is not a `tool_result`**.
+
+- Compute the candidate cut: `len(messages) - keep_last_n`
+- If the message at that index is not safe, walk forward until you find one
+- Cut at the first safe boundary
+
+The kept window may be smaller than `keep_last_n` requested — but it is never broken.
+
+.callout[Walking forward trades exact size for correctness. There is no point keeping the requested number of messages if the API rejects them.]
+
+???
+Walking forward (toward newer messages) is the deliberate choice — sliding window is supposed to favor recency.
+
+---
+
+# Anchor Preservation
+
+The first user message is almost always the original task description.
+
+- The user asks: "Refactor the database layer to use connection pooling."
+- 20 messages later, sliding window has dropped that message
+- The agent now proposes a new design from scratch — it forgot the goal
+
+**Fix:** if the first user message is not in the kept window, prepend it.
+
+???
+The anchor problem is the most common failure mode of sliding window. Students will see it in Lab 5 if they skip this step.
+
+---
+
+# The Side Effect — Two User Messages Adjacent
+
+The pair-aware walk lands on a user message (that's the safe-boundary rule).
+
+Prepending the anchor — also a user message — creates two adjacent users. The API rejects the next call.
+
+```
+[anchor]   user: "Refactor the database layer..."
+[ack]      assistant: "Understood."         ← inserted
+[cut+0]    user: "Now update models/user.py..."
+[cut+1]    assistant: [tool_use edit_file]
+```
+
+The alternating-roles pass walks the kept list and inserts a one-line ack wherever two same-role messages are adjacent.
+
+.info[Both passes — pair-aware walk and alternating-roles repair — will be reused by selective preservation in Lecture 7.2.]
+
+???
+The two-pass design is what makes the function safe. Both passes are cheap and both are mandatory. Pulling them out as helpers pays off in 7.2.
+
+---
+
+class: center, middle
+
+# Let's build `sliding_window.py`
+
+???
+Open sliding_window.py and walk through it: `is_safe_boundary` (the pair-integrity check), `ensure_alternating_roles` (the synthetic-ack pass), then `sliding_window` itself. Run the demo at the end and read the three configurations out loud.
+
+---
+
+# What the Demo Shows
+
+12-message conversation, `keep_last_n=6`:
+
+| Configuration | Result |
+|---|---|
+| Naive `messages[-6:]` | Orphans a `tool_result` — API rejects |
+| Pair-aware, no anchor | 4 messages — walked forward to safe boundary |
+| Pair-aware, anchor preserved | 6 messages — anchor + ack + safe tail |
+
+The function asked for 6, returned 4 in one case and 6 in another. Both are valid. Both preserve pair integrity. The anchored version preserves the original task.
+
+???
+60 seconds. The numbers tell the story. Asked for 6, got 4 — the function correctly traded exact size for API correctness.
+
+---
+
+# Key Takeaways
+
+1. **One hook point** — between inner-loop iterations, before the next API call
+2. **Two API constraints** — pair integrity and alternating roles
+3. **Walk forward to a safe cut** — a user message that is not a `tool_result`
+4. **Anchor the goal** — prepend the first user message; insert a synthetic ack to keep roles alternating
+5. **Trades exact size for correctness** — the kept window may be smaller than requested but is always valid
+
+### Next: when sliding window is too lossy.
+
+???
+Transition to selective preservation: the sliding window dropped a key user constraint. Some old messages are too important to drop just because they're old.
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

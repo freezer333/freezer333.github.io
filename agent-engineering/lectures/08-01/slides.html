@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+    <head>
+        <title>RAG as Context Engineering — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# RAG as Context Engineering
+
+???
+~15 minutes. Module 8 opener. Sets up the broader framing for the module: RAG is a category, not a technology. Vectors are one implementation among many.
+
+---
+
+# Where the Knowledge Comes From
+
+Modules 4 and 7 covered managing context once it accumulates.
+
+This module flips the question: where does new information come from in the first place?
+
+The model knows what it learned during training. It does not know your private documents, last week's news, or the schema of your production database.
+
+???
+30 seconds. Bridge from previous modules. Module 4/7 = managing existing context. Module 8 = deliberately growing context with relevant external information.
+
+---
+
+# What the Model Doesn't Know
+
+Three categories of information are missing from a model's training data:
+
+- **Private knowledge** — your codebase, internal docs, customer data
+- **Recent information** — anything after the training cutoff
+- **High-precision facts** — exact API specs, current pricing, database schemas
+
+Even when the information exists somewhere, it is not in the model. Asking directly produces a confident wrong answer or a refusal.
+
+???
+60 seconds. Three categories give students a concrete framework for what RAG addresses.
+
+---
+
+# Why Not Just Put Everything in Context?
+
+.split-left[
+The naive answer: send all the documents in the system prompt or user message.
+
+This fails for three reasons:
+
+- **The window is finite** — even 200K tokens can't hold a company's knowledge base
+- **It costs every call** — every token is paid for on every API call
+- **Quality degrades with length** — "lost in the middle" effects from 2.1
+]
+
+.split-right[
+<img src="../../images/context-window-full.png" style="max-width:95%;"/>
+]
+
+<div class="clear"></div>
+
+The solution is selective. Send only what is relevant to the current query.
+
+???
+90 seconds. The window-fill image (from 4.1) is a reminder of the context-growth problem. Selectivity is the answer — and that's what RAG provides.
+
+---
+
+# Retrieval-Augmented Generation
+
+Three steps:
+
+1. **Retrieve** — fetch information relevant to the query from some external source
+2. **Augment** — inject the retrieved information into the model's context
+3. **Generate** — the model produces a response, now grounded in the retrieved content
+
+.callout[The model itself is not modified. The model's *context* is augmented. Same model, different context, different answer.]
+
+???
+60 seconds. State the definition precisely. The "augmented" word is the key — students often think RAG modifies the model.
+
+---
+
+# The Pipeline at a Glance
+
+<img src="../../images/rag-pipeline.png" style="max-width:70%; display:block; margin:1em auto;"/>
+
+Two phases:
+
+- **Setup** — done once (and re-done when content changes): prepare your source content for retrieval
+- **Query** — done on every user query: retrieve, augment, generate
+
+???
+60 seconds. Setup vs. query is the right mental model. Setup is where the engineering choices live. The next two lectures cover specific implementations.
+
+Image prompt for `rag-pipeline.png`: "Horizontal pipeline diagram showing the RAG flow. Left side: 'User Query' in a rounded rectangle. Arrow right to 'Retrieve' (rounded rectangle, with a small icon of a magnifying glass over a stack of documents). Arrow right to 'Augment Context' (rounded rectangle showing a small representation of a context window with the original query plus added retrieved chunks highlighted in a different color). Arrow right to 'Model' (rounded rectangle with an LLM icon). Arrow right to 'Response' (rounded rectangle). Below the pipeline: a smaller box on the left labeled 'Knowledge source (docs, web, database)' with a dashed arrow up to the 'Retrieve' step. Clean flat design, white background, sans-serif labels, teal/blue color palette."
+
+---
+
+# Just-in-Time Knowledge
+
+The Module 4/7 principle applied to external knowledge:
+
+- Don't pre-load everything into the system prompt
+- Pull only what is relevant for this query
+- Discard it after — the next query may need different information
+
+Each query is treated as a separate retrieval problem. Retrieved content is **ephemeral context**, not permanent state.
+
+???
+60 seconds. This is a direct callback to the "context is something you pull, not something you push" idea from Module 7. Same principle, applied to knowledge sources.
+
+---
+
+# RAG vs. Fine-Tuning
+
+| | Fine-tuning | RAG |
+|---|---|---|
+| **What changes** | Model weights | Context (per query) |
+| **Persistence** | Permanent | Per-call |
+| **Cost** | Training run + inference | Retrieval call + larger prompt |
+| **Update cycle** | Re-train when content changes | Re-index when content changes |
+| **Source attribution** | None — knowledge fused into weights | Yes — show which document supplied the answer |
+| **Best for** | Style, format, domain language | Facts, current info, source-attributable answers |
+
+???
+2 minutes. The comparison table is the reference. Two different tools for two different problems.
+
+---
+
+# When to Reach for Which
+
+- **Use RAG** when the information is factual, changes often, must be source-attributable, or is too large to fine-tune on
+- **Use fine-tuning** when you need a specific style, output format, or specialized vocabulary that prompting can't reliably produce
+- **Often you want both** — fine-tune for style, RAG for content
+
+For most application work, RAG is the default. Fine-tuning is a specialty tool.
+
+???
+60 seconds. Clear practical guidance. Most students should not be reaching for fine-tuning.
+
+---
+
+# RAG Is Not Vector Databases
+
+.callout[RAG is a **category**, not a technology. Vector search is one implementation; web search, database queries, and file reads are others.]
+
+- **RAG** = Retrieval-Augmented Generation. The pattern: get info, put it in context, generate.
+- **Vector RAG** = one specific way to retrieve, using embeddings and similarity search.
+
+Other ways to retrieve:
+
+- **Web search** — query a search engine, take the top results
+- **Database queries** — fetch rows from SQL
+- **File reads** — pull a known file from disk
+- **API calls** — fetch data from any external service
+
+All of these are retrieval. All of them inject external information into the model's context. All of them are valid RAG implementations.
+
+???
+90 seconds. This is the framing the rest of the module hangs on. Lecture 8.2 covers vectors in depth (most common). Lecture 8.3 covers the others and the framework for choosing.
+
+---
+
+# Key Takeaways
+
+1. **RAG solves the knowledge gap** — private, recent, or high-precision information that isn't in the model
+2. **Augmented, not modified** — the model is unchanged; only the context for each query is augmented
+3. **Just-in-time, not pre-loaded** — pull what's relevant per query rather than packing everything in the system prompt
+4. **Different from fine-tuning** — RAG changes context, fine-tuning changes weights; usually you want RAG
+5. **A category, not a technology** — vector search is one implementation; web search, databases, and file reads are others
+
+### Next: the most common implementation — embeddings and similarity search.
+
+???
+Transition to 8.2.
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

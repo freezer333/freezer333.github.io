@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Compaction — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Implementing Compaction</h1>
+<p><strong>Lecture 7.3</strong></p>
+<ul>
+  <li>Detecting the threshold: when to trigger compaction (e.g., 80% of context budget)</li>
+  <li>The compaction prompt as the central engineering artifact</li>
+  <li>Wiring compaction into the agent loop at the same hook point as truncation</li>
+  <li>The hybrid pattern: summary + last K verbatim messages for safety</li>
+  <li>Use a cheap model (Haiku) for summarization; reserve the main model for the work</li>
+  <li>Edge cases: oversized summaries (iterative compression), critical detail loss (hybrid), compaction loops (minimum interval)</li>
+  <li>Cost analysis: one extra Haiku call vs. tokens saved on every subsequent main-model call</li>
+</ul>
+<h2>Additional Resources</h2>
+<ul>
+  <li><a href="slides.html">Lecture slides</a></li>
+  <li><a href="compaction.py">compaction.py</a> (Python demo)</li>
+</ul>
+</div>
+</body>
+</html>

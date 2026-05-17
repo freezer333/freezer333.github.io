@@ -10,18 +10,22 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Token-Efficient Tool Design</h1>
-<p><strong>Lecture 4.3</strong></p>
-<ul>
-  <li>Every tool result enters the context — design tools with this in mind</li>
-  <li>Return minimal necessary information, not everything available</li>
-  <li>Metadata first, full content on demand (progressive disclosure preview)</li>
-  <li>Pagination for large results</li>
-  <li>Summarizing tool output before returning it</li>
-  <li>Redesigning tools with token budgets in mind — concrete before/after examples</li>
-</ul>
+<p><strong>Module 4, Lecture 4.3 | Section 2: Working with LLMs in Practice</strong></p>
+<p>Tool results account for 50–70% of tokens in a typical agent session — and unlike system prompts or user messages, tool design is entirely under the engineer&#39;s control. This lecture shifts from reactive context management to proactive prevention: how to design tools that return the minimum the model needs, rather than everything available. The core pattern is progressive disclosure — metadata first, specific content on demand — illustrated through a concrete before/after redesign of a naive <code>read_file</code> tool. Pagination and summarized results extend the same principle to search tools and command output.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-04-03.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use">Tool Use with Claude — Anthropic Docs</a> — How to define and use tools with the Claude API, including token cost breakdowns for tool definitions and the tool result lifecycle.</li>
+<li><a href="https://docs.anthropic.com/en/docs/build-with-claude/token-counting">Token Counting — Anthropic Docs</a> — Pre-call token estimation for messages that include tool definitions and tool results.</li>
+<li><a href="https://docs.anthropic.com/en/api/messages">Messages API Reference — Anthropic Docs</a> — Full reference for the <code>tool_use</code> and <code>tool_result</code> content block schemas that carry tool results in context.</li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective Context Engineering for AI Agents — Anthropic Engineering Blog</a> — Anthropic&#39;s own post on context as a finite resource, with recommendations for token-efficient tool design, progressive disclosure, and just-in-time retrieval.</li>
+<li><a href="https://developers.openai.com/api/docs/guides/function-calling">Function Calling — OpenAI API</a> — OpenAI&#39;s counterpart documentation, with a &quot;Best Practices for Defining Functions&quot; section showing that token-aware tool design is a cross-platform concern.</li>
+<li><a href="https://arxiv.org/abs/2511.22729">Solving Context Window Overflow in AI Agents (arXiv, 2025)</a> — Research paper proposing external storage and memory pointers for large tool results, achieving ~7x token reduction — academic grounding for the progressive disclosure approach.</li>
 </ul>
 </div>
 </body>

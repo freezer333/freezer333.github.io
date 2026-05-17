@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>The Agent Loop — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# The Agent Loop
+
+???
+~20 minutes. Live coding lecture. Students build the agent loop from scratch with stub tools. Focus: two-loop architecture, stop_reason branching, messages array growth.
+
+---
+
+# Two Loops, One Agent
+
+An agent handles two different kinds of work:
+
+1. **Conversation** — getting input from the user, surfacing the final reply
+2. **Tool execution** — calling tools, feeding results back, letting the model decide what's next
+
+These operate at different timescales. A single user message might trigger five tool calls internally. A single loop can't express both.
+
+.split-left[
+**Outer loop** — one iteration per user message
+
+```
+get user input
+append to messages
+run inner loop
+print reply
+repeat
+```
+]
+
+.split-right[
+**Inner loop** — one iteration per API call
+
+```
+call API
+check stop_reason
+if tool_use → execute, loop
+if end_turn → surface reply, break
+```
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. The key insight: these are separate concerns. The user sees one exchange; the model may have done five rounds of tool calling internally.
+
+---
+
+# stop_reason Is the Entire Control Flow
+
+.split-left[
+.center[<img src="../../images/agent-loop-state-machine.png" style="max-width:100%;">]
+]
+
+.split-right[
+Two states. One branch. That's the entire agent.
+
+- **`"tool_use"`** — the model needs more information. Execute the requested tool, send the result back.
+- **`"end_turn"`** — the model is done. Surface the text reply, return to the outer loop.
+
+.callout[Every agent built on the Anthropic API — from 200 lines to Claude Code — uses this exact branching structure.]
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Emphasize simplicity. The complexity lives in the tools, prompt, and context management — not in the loop itself.
+
+Image prompt for `agent-loop-state-machine.png`: "A state machine diagram with two states. Clean, minimal flat design. Top: rounded rectangle labeled 'Call API with messages array'. Arrow down to a diamond decision node labeled 'stop_reason?'. Two branches from the diamond: Left branch labeled 'end_turn' goes to a rounded rectangle 'Surface text reply → break to outer loop'. Right branch labeled 'tool_use' goes to a rounded rectangle 'Execute tools, append tool_result as role: user'. An arrow loops back from this rectangle up to the 'Call API' rectangle. Colors: teal/blue tones, white background, sans-serif labels. No decorative elements."
+
+---
+
+class: center, middle
+
+# Let's revisit the agent loop code itself
+
+???
+Open agent.py and walk through the full implementation live.
+
+---
+
+# Five Lines That Matter
+
+1. **`messages.append({"role": "assistant", "content": response.content})`**
+The *full* content list goes in — tool_use blocks and all. The model needs to see its own requests on the next iteration.
+
+2. **`if response.stop_reason == "tool_use"`**
+The only branch. Everything else follows from this.
+
+3. **`"tool_use_id": block.id`**
+Ties each result to its request. The model may issue multiple tool calls per response.
+
+4. **`messages.append({"role": "user", "content": tool_results})`**
+Tool results enter as **role: "user"**. They come from outside the model (the agent code ran them), so they re-enter from the user side.
+
+5. **`break`**
+The only exit. The inner loop runs until `end_turn`.
+
+???
+2 minutes. These five lines are the entire agent mechanism. Everything else is setup.
+
+---
+
+# Tracing the Messages Array: Single Tool Call
+
+"Create hello.py with a hello world function"
+
+```
+[0] role: user       "Create hello.py with a hello world function"
+[1] role: assistant  [tool_use: edit_file(path="hello.py", old_str="", ...)]
+[2] role: user       [tool_result: "Created hello.py"]
+[3] role: assistant  [text: "Done — created hello.py."]
+```
+
+Inner loop ran **twice**: tool request → final reply.
+
+The user sees only `[0]` and `[3]`. Entries `[1]` and `[2]` are invisible — the conversation between the agent code and the model.
+
+???
+60 seconds. Trace through the entries. Make the visible/invisible distinction clear.
+
+---
+
+# Tracing: Multi-Tool Exchange
+
+"Add a main block to hello.py" — requires reading first:
+
+```
+[0] role: user       "Add a main block to hello.py"
+[1] role: assistant  [tool_use: read_file(filename="hello.py")]
+[2] role: user       [tool_result: "def hello():\n    print('Hello!')"]
+[3] role: assistant  [tool_use: edit_file(path="hello.py", ...)]
+[4] role: user       [tool_result: "Edited hello.py"]
+[5] role: assistant  [text: "Done — added a main block."]
+```
+
+Inner loop ran **three times**: read → edit → reply.
+
+The model on iteration 3 can see the file contents (from `[2]`) and the edit confirmation (from `[4]`).
+
+???
+60 seconds. The read-before-edit pattern from 5.3, now visible in the messages array.
+
+---
+
+# Messages are the Memory
+
+.split-left[
+Each API call sends the **complete** messages array. The model has no persistent memory — it reads the full array fresh every time.
+
+Every tool result stays in the array for every subsequent API call:
+
+- A `read_file` returning 2,000 tokens → those tokens are in *every future call*
+- Context grows monotonically
+- The cost per API call increases with every iteration
+
+.warning[This is the context growth problem from Module 4. Lecture 6.4 instruments it; Section 4 solves it.]
+]
+
+.split-right[
+.center[<img src="../../images/context-growth-sketch.png" style="max-width:100%;">]
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Connect to Module 4. This is the bridge — the loop creates the problem, context management solves it.
+
+Image prompt for `context-growth-sketch.png`: "A simple bar chart showing 7 vertical bars, labeled 'API Call 1' through 'API Call 7'. Each bar is taller than the previous one, showing monotonic growth. The bars are color-coded with two segments: a small constant blue segment at the bottom (labeled 'System prompt + schemas') and a growing teal segment on top (labeled 'Messages array'). The y-axis is labeled 'Input tokens'. Clean, minimal style, no grid lines, sans-serif font."
+
+---
+
+# Parallel Tool Calls
+
+A single API response can contain multiple `tool_use` blocks:
+
+```
+[1] role: assistant  [tool_use: read_file("utils.py"),
+                      tool_use: read_file("tests.py")]
+[2] role: user       [tool_result id=tu_004: "...",
+                      tool_result id=tu_005: "..."]
+```
+
+The `for block in response.content` loop handles this naturally — it collects every `tool_use` block, not just the first.
+
+Both results re-enter as a single user turn. The `tool_use_id` ties each result to its request.
+
+???
+60 seconds. Worth mentioning even though it's uncommon with three tools. Becomes common once the agent has more capabilities.
+
+---
+
+# Key Takeaways
+
+1. **Two loops** — outer manages conversation, inner manages tool execution
+2. **`stop_reason`** — the only decision point in the inner loop
+3. **Messages array** — shared state that grows monotonically; the model reads it fresh each call
+4. **Tool results as `role: "user"`** — external information re-enters from the user side
+5. **The loop is trivially simple** — the complexity lives elsewhere
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+
+</html>

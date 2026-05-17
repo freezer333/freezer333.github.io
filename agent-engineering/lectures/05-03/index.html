@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building the Coding Agent System Prompt — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Building the Coding Agent System Prompt</h1>
+<p><strong>Module 5, Lecture 5.3 | Section 3: Prompt and Context Engineering</strong></p>
+<p>This lecture puts everything together: system prompt, tool schemas, and working agent code. Starting from the three starter tools (list_files, read_file, edit_file), it builds the complete system prompt section by section — identity, tool descriptions, behavioral guidelines, constraints, and a few-shot example. It then introduces two Python programs: <code>code-agent-v0.py</code>, a diagnostic that reveals the raw API response structure before adding loop complexity, and <code>code-agent-v1.py</code>, the first fully working agent. The central lesson is the nested loop architecture — an outer loop that manages the conversation and an inner loop driven by <code>stop_reason</code> that handles tool execution — and how the messages array grows through each iteration to form the model&#39;s complete working memory.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-05-03.mp4" type="video/mp4">
+</video>
+
+<h2>Additional Resources</h2>
+<ul>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="./code-agent-v0.py">code-agent-v0.py</a> — Diagnostic script: single API call showing raw <code>stop_reason</code> and <code>tool_use</code> response structure, with stub tools.</li>
+<li><a href="./code-agent-v1.py">code-agent-v1.py</a> — Working coding agent: outer/inner loop, real filesystem tools, full conversation history.</li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/build-a-tool-using-agent">Build a tool-using agent (Anthropic Docs)</a> — Step-by-step tutorial building the full two-loop agent in annotated Python, directly mirroring the pattern introduced in this lecture.</li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works">How tool use works (Anthropic Docs)</a> — Conceptual reference covering <code>stop_reason</code>, <code>tool_use</code> content blocks, and agentic loop mechanics.</li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls">Handle tool calls (Anthropic Docs)</a> — Reference for <code>tool_result</code> message formatting, the <code>role: &quot;user&quot;</code> convention, and <code>is_error</code> handling.</li>
+<li><a href="https://www.anthropic.com/engineering/writing-tools-for-agents">Writing tools for agents (Anthropic Engineering)</a> — Engineering post on tool design principles, including how system prompt and tool definitions work together.</li>
+<li><a href="https://docs.temporal.io/ai-cookbook/agentic-loop-tool-call-claude-python">Agentic loop with tool calls — Temporal AI Cookbook</a> — Third-party Python example demonstrating the same nested loop pattern generalized beyond a single course implementation.</li>
+</ul>
+</div>
+</body>
+</html>

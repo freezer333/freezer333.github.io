@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Retrieval Beyond Vectors — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Retrieval Beyond Vectors
+
+???
+~15 minutes. The conceptual closer for Module 8. RAG is a category, vectors are one implementation, this lecture covers the rest. Sets up Lab 6.
+
+---
+
+# RAG Was Never About Vectors
+
+Lecture 8.1 set up the framing. Lecture 8.2 went deep on vectors.
+
+This lecture is the rest of the picture.
+
+Vector search is one retrieval mechanism. There are several others, and most production agents use more than one. The choice depends on what kind of information you need and how it is structured.
+
+???
+30 seconds. Re-state the framing from 8.1. This lecture is the conceptual unification.
+
+---
+
+# Web Search as Retrieval
+
+Web search APIs return current results from the public web. The agent issues a query, the API returns ranked results, the agent injects them into context.
+
+Common providers:
+
+- **Brave Search API** — privacy-focused, free tier (~2,000 queries/month)
+- **Tavily** — designed for AI agents, returns clean snippets
+- **Google Custom Search** — broad coverage, paid past a small free tier
+- **Serper, SerpAPI** — wrappers around Google's results
+
+The pattern: send a query string, receive structured results (title, URL, snippet).
+
+???
+60 seconds. Brave is called out first because Lab 6 uses it.
+
+---
+
+# Web Search: Strengths and Limits
+
+**Strengths:**
+- **Live information** — anything indexed by the search engine is available
+- **Broad coverage** — no upfront ingestion of a corpus
+- **Cheap to start** — most providers have a free tier
+
+**Limits:**
+- **External dependency** — your agent depends on a third-party service
+- **Per-query cost at scale** — pricing past free-tier limits
+- **No control over indexing** — you take what the search engine has crawled
+- **Latency** — each query is a network round trip
+
+Right choice when info changes faster than you can re-index, or scope is broader than any private corpus.
+
+???
+60 seconds. The tradeoffs frame what kinds of agents benefit from web search.
+
+---
+
+# Database Queries as Retrieval
+
+When information lives in a database — customer records, inventory, transaction logs — the right retrieval mechanism is a database query.
+
+The agent generates a query (often from natural language), the database returns rows, the result enters context.
+
+**Why this beats vector search for structured data:**
+
+- **Exact precision** — no similarity threshold, no fuzziness
+- **Aggregation** — counts, sums, joins across tables
+- **Cheap and fast** — milliseconds per query, no embedding cost
+- **Always current** — reflects database state at query time, no re-indexing
+
+???
+90 seconds. Vector search would treat structured data as text and try to find "similar" records. That works poorly. Database queries handle structured questions natively.
+
+---
+
+# Database Tool Safety
+
+Three things to enforce at the tool boundary:
+
+- **Read-only credentials** — give the agent a read-only user, not a write-capable one
+- **Allowed-tables list** — same pattern as approved-folders from Lab 4; restrict which tables the tool will query
+- **Result size caps** — add `LIMIT` clauses or row caps in the wrapper; a query can return millions of rows
+
+.warning[Don't give the agent your production database credentials. Give it a read-replica or a constrained view.]
+
+The agent's database tool is usually narrowly scoped. Constrain at the boundary, like with file operations.
+
+???
+60 seconds. Safety pattern matches the approved-folders concept from Lab 4. Same principle: enforce at the tool boundary.
+
+---
+
+# File Reads and API Calls Are Retrieval Too
+
+The `read_file` tool from Module 6 is a retrieval tool. The agent retrieves a known file's contents and injects them into context.
+
+Any tool that fetches information from outside the model and returns it is retrieval:
+
+- `read_file(path)` — retrieves a file from disk
+- `fetch_api(url)` — retrieves a JSON response from an HTTP endpoint
+- `get_weather(city)` — retrieves current weather from a service
+- `read_email(message_id)` — retrieves an email body
+
+What these have in common: they bring external information into the model's context for the current generation.
+
+???
+60 seconds. The point: students have been building RAG since Module 6 without calling it that. Naming the pattern unifies what they've already done.
+
+---
+
+# Parametric Retrieval
+
+The model itself is a retrieval system, in a loose sense. Training compressed an enormous text corpus into the model's weights. Asking a question without providing context is retrieval from the model's parametric memory.
+
+This kind of retrieval:
+
+- No API call, costs nothing extra, fastest available
+- Stale (training cutoff), opaque (no source attribution), prone to hallucination
+
+Fine for general knowledge. For anything specific, recent, or auditable, use one of the explicit mechanisms.
+
+???
+30 seconds. One-slide aside. Important to recognize that "the model knows" is also a kind of retrieval.
+
+---
+
+# Real Agents Use More Than One
+
+.split-left[
+Production agents combine retrieval mechanisms. Claude Code is a good example:
+
+- **File reads** — for the user's codebase (`read_file`, `glob`, `grep`)
+- **Web search** — for documentation, current API specs
+- **Bash execution** — for tools that themselves retrieve (`git log`, `psql`)
+- **Parametric** — for general programming knowledge
+
+Each mechanism handles what it's best at. The agent's intelligence is partly in choosing the right one for each question.
+]
+
+.split-right[
+<img src="../../images/retrieval-composition.png" style="max-width:95%;"/>
+]
+
+<div class="clear"></div>
+
+???
+90 seconds. Composition is the most important takeaway from this lecture.
+
+Image prompt for `retrieval-composition.png`: "A central rounded rectangle labeled 'Agent' with five arrows extending outward in different directions to five different rounded rectangles, each labeled and with a small representative icon. (1) Top-left: 'Vector store' (with stack-of-documents icon). (2) Top-right: 'Web search' (with globe icon). (3) Right: 'Database' (with cylinder/database icon). (4) Bottom-right: 'Files / APIs' (with file or HTTP icon). (5) Bottom-left: 'Training data (parametric)' (with brain or neural network icon, drawn in lighter color to indicate it's not external). Each arrow labeled with the tool used (e.g., 'search_docs', 'web_search', 'query_db', 'read_file'). Clean flat design, white background, sans-serif labels, teal/blue color palette."
+
+---
+
+# When to Choose What
+
+| Need | Mechanism |
+|---|---|
+| Semantic search over unstructured docs | Vector RAG |
+| Current public web information | Web search |
+| Structured data with exact answers | Database query |
+| Known specific resource | File read or API call |
+| General world knowledge | The model itself |
+
+Most agents need at least two of these. Few need all five.
+
+???
+60 seconds. The decision table is the practical reference.
+
+---
+
+# The Unifying Principle
+
+.callout[**Retrieval is any way to get external information into the context.**]
+
+Strip away the implementation details. Every retrieval mechanism does the same thing: brings information from outside the model into the prompt for one specific generation.
+
+- Vector search retrieves from an embedded corpus
+- Web search retrieves from a search engine
+- Database queries retrieve from a database
+- File reads retrieve from disk
+- API calls retrieve from external services
+
+All of them are RAG. The R is the only thing that varies.
+
+???
+60 seconds. Land the principle one more time. This is the takeaway students should leave with.
+
+---
+
+# Key Takeaways
+
+1. **Vector search is one retrieval mechanism** — web search, database queries, file reads, API calls, and parametric "retrieval" are others
+2. **Match the mechanism to the data** — structured data wants databases, current info wants web search, semantic search wants vectors
+3. **Real agents compose** — production systems blend mechanisms based on what each does best
+4. **The unifying principle** — any tool that brings external information into the context is a retrieval mechanism
+5. **Lab 6 brings this home** — build a web search tool with the Brave Search API and integrate it into your coding agent
+
+### Next: Module 9 — memory systems. Persistent, agent-owned, accumulated over time.
+
+???
+Transition to Lab 6 and Module 9. Memory is another way to get information into context — persistent and accumulated rather than queried fresh.
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

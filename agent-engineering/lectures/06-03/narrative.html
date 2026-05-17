@@ -1,0 +1,417 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Registry and Schema Generation — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 6.3</a></div></nav>
+<div class="page_content"><h1>Tool Registry and Schema Generation</h1>
+<p>The agent built in Lectures 6.1 and 6.2 works correctly with three tools and an <code>if/elif</code> dispatch. The control flow is sound, the tools are safe, and the error handling is informative. What it is not is <em>maintainable</em>. As soon as a real agent grows past three tools, the dispatch function and the hand-written API schemas become a source of duplication, drift, and silent bugs. This lecture is a detour from agent behavior into software engineering: how to organize tool code so that adding a new tool means writing a single Python function and nothing else.</p>
+<p>The fix is a <strong>tool registry</strong> — a dictionary mapping names to functions — combined with <strong>automatic schema generation</strong> that derives the API schema directly from the function&#39;s signature and docstring. Together these two changes eliminate every place where tool information was duplicated, replace the <code>if/elif</code> chain with a single dictionary lookup, and create a centralized dispatch point that becomes the natural home for validation, logging, and error wrapping.</p>
+<h2>The Scaling Problem</h2>
+<p>The dispatch function from Lecture 6.2 was a chain of <code>if/elif</code> branches:</p>
+<pre><code class="language-python">def dispatch_tool(name, inputs):
+    try:
+        if name == &quot;list_files&quot;:
+            return list_files(**inputs)
+        elif name == &quot;read_file&quot;:
+            return read_file(**inputs)
+        elif name == &quot;edit_file&quot;:
+            return edit_file(**inputs)
+        else:
+            return f&quot;Error: unknown tool: {name}&quot;
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f&quot;Error: {type(e).__name__}: {e}&quot;
+</code></pre>
+<p>This works for three tools. It will not work for thirty. There are three concrete problems:</p>
+<ol>
+<li><strong>Information is duplicated.</strong> Every tool name appears in three places — the function definition, the hand-written API schema, and the <code>if/elif</code> chain. Adding a tool means editing all three, and forgetting one means the tool silently doesn&#39;t work.</li>
+<li><strong>The schemas are maintained by hand.</strong> Each tool&#39;s <code>name</code>, <code>description</code>, and <code>input_schema</code> is a hand-written dict that drifts from the actual function signature whenever the function changes.</li>
+<li><strong>There is no single source of truth.</strong> The function&#39;s docstring, the API schema&#39;s description, and the parameter names in the schema can all disagree with one another. When they do, which one is correct?</li>
+</ol>
+<p>The deeper issue is that one part of the code is acting as documentation for another part of the code. Whenever this happens, you are guaranteeing that the two will eventually fall out of sync. The solution is to make the function itself the only place where tool information lives, and to derive everything else from it programmatically.</p>
+<h2>Python Decorators in Sixty Seconds</h2>
+<p>The mechanism that makes this clean is the Python decorator — the <code>@</code> symbol that appears above a function definition. Many students in this course are new to Python, and decorators are foundational background that will reappear when we get to LangChain (<code>@tool</code>, <code>@chain</code>) and other agent frameworks. A working mental model now will save confusion later.</p>
+<p>The starting point is a Python feature you may not have used in other languages: <strong>functions are first-class values</strong>. A function in Python is just an object, like a string or a list. You can store one in a variable, pass it as an argument to another function, return it from a function, and put it in a dictionary. None of this is special syntax — it follows directly from &quot;everything is an object.&quot;</p>
+<pre><code class="language-python">def greet(name):
+    return f&quot;Hello, {name}&quot;
+
+# A function is a value
+say_hi = greet           # &#39;say_hi&#39; now refers to the same function
+say_hi(&quot;Ada&quot;)            # → &quot;Hello, Ada&quot;
+
+# It can go into a dict
+funcs = {&quot;greet&quot;: greet}
+funcs[&quot;greet&quot;](&quot;Ada&quot;)    # → &quot;Hello, Ada&quot;
+</code></pre>
+<p>A <strong>decorator</strong> is just a function that takes a function as its argument and returns a function. Nothing more. The decorator syntax:</p>
+<pre><code class="language-python">@register_tool
+def list_files(path: str):
+    ...
+</code></pre>
+<p>is exactly equivalent to:</p>
+<pre><code class="language-python">def list_files(path: str):
+    ...
+
+list_files = register_tool(list_files)
+</code></pre>
+<p>The decorator runs once, at import time, when Python is reading the module top-to-bottom. It receives the original function as its input, does something with it (in our case, stores it in a dictionary), and returns a function (in our case, the original, unchanged).</p>
+<p>If you have used Flask or FastAPI, you have already seen this pattern. <code>@app.route(&quot;/path&quot;)</code> registers a URL handler the same way <code>@register_tool</code> registers a tool handler. The only thing the decorator pattern adds to plain Python is a tidier syntax for &quot;do something with this function as soon as it&#39;s defined.&quot; If you wrote <code>list_files = register_tool(list_files)</code> after every tool definition, the program would behave identically — the decorator just keeps the registration declaration next to the function it applies to.</p>
+<p>Decorators that take their own arguments (<code>@register_tool(name=&quot;search&quot;)</code>) are slightly more involved — they are functions that <em>return</em> a decorator — but we will not need that form here. The plain <code>@register_tool</code> is enough.</p>
+<h2>The Registry Pattern</h2>
+<p>With decorators in hand, the registry is just a dictionary and a one-line decorator function:</p>
+<pre><code class="language-python">TOOL_REGISTRY = {}
+
+def register_tool(func):
+    &quot;&quot;&quot;Register a function as a tool.&quot;&quot;&quot;
+    TOOL_REGISTRY[func.__name__] = func
+    return func
+</code></pre>
+<p>Every Python function exposes a <code>__name__</code> attribute that holds the string name of the function. The decorator uses this name as the dictionary key and stores the function itself as the value. The function is returned unchanged, so calling it works exactly as before — the only side effect is that it has been added to the registry.</p>
+<p>Decorators run at <strong>import time</strong>, not at call time. By the time <code>main()</code> executes, every decorated tool has already been added to <code>TOOL_REGISTRY</code>:</p>
+<pre><code class="language-python">TOOL_REGISTRY = {}                       # 1. Empty dict created
+
+def register_tool(func):
+    TOOL_REGISTRY[func.__name__] = func  # called once per @ below
+    return func
+
+@register_tool                           # 2. runs immediately
+def list_files(path: str): ...           # registry: {&#39;list_files&#39;: ...}
+
+@register_tool                           # 3. runs immediately
+def read_file(filename: str): ...        # registry: {..., &#39;read_file&#39;: ...}
+
+@register_tool                           # 4. runs immediately
+def edit_file(path: str, ...): ...       # registry: {..., &#39;edit_file&#39;: ...}
+</code></pre>
+<p>No explicit registration step is needed. As Python parses the file, the decorators are eagerly evaluated and the dictionary is built. By the time the agent makes its first API call, the registry already contains every tool.</p>
+<h2>The New Dispatch</h2>
+<p>With the registry in place, dispatch collapses to a single dictionary lookup:</p>
+<pre><code class="language-python">def dispatch_tool(name, inputs):
+    if name not in TOOL_REGISTRY:
+        available = &quot;, &quot;.join(TOOL_REGISTRY.keys())
+        return f&quot;Error: unknown tool &#39;{name}&#39;. Available: {available}&quot;
+    try:
+        return TOOL_REGISTRY[name](**inputs)
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f&quot;Error: {type(e).__name__}: {e}&quot;
+</code></pre>
+<p>There is no <code>if/elif</code>. The registry <em>is</em> the dispatch. Adding a new tool requires no changes to this function. The lookup <code>TOOL_REGISTRY[name]</code> returns the function object, and <code>(**inputs)</code> calls it with the model&#39;s arguments. The behavior is identical to the previous dispatch — just without the duplication.</p>
+<p>The unknown-tool error includes the list of available tools by name. This is deliberate: the error string is communication with the model, not just a log line. If the model hallucinates a tool name, listing the real ones gives it enough information to self-correct on the next iteration. Vague errors waste tool calls; specific errors enable retries.</p>
+<h2>Auto-Generating Tool Schemas</h2>
+<p>The Anthropic API requires every tool to be declared with a JSON object: a name, a description, and an <code>input_schema</code> describing the arguments and which ones are required.</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;read_file&quot;,
+  &quot;description&quot;: &quot;Read the contents of a file.&quot;,
+  &quot;input_schema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;properties&quot;: {
+      &quot;filename&quot;: {
+        &quot;type&quot;: &quot;string&quot;,
+        &quot;description&quot;: &quot;Path to the file.&quot;
+      }
+    },
+    &quot;required&quot;: [&quot;filename&quot;]
+  }
+}
+</code></pre>
+<p>Every field of this schema corresponds to something the Python function already declares:</p>
+<table>
+<thead>
+<tr>
+<th>Schema field</th>
+<th>Python source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td><code>func.__name__</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>first line of <code>func.__doc__</code></td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>inspect.signature(func)</code></td>
+</tr>
+<tr>
+<td><code>required</code></td>
+<td>parameters without defaults</td>
+</tr>
+</tbody></table>
+<p>If we structure the function carefully — typed parameters, a Google-style docstring with an <code>Args:</code> section — we can derive the entire schema by reflection. The function becomes the single source of truth, and the schema is regenerated every time it is needed.</p>
+<h3>Docstrings as Two-Part Documentation</h3>
+<p>A <strong>docstring</strong> in Python is the string literal that appears as the first statement inside a function, class, or module body. By convention it is written with triple quotes (<code>&quot;&quot;&quot;...&quot;&quot;&quot;</code>) so it can span multiple lines. Python stores it on the function itself as <code>func.__doc__</code>, where any other code can read it back at runtime.</p>
+<pre><code class="language-python">def read_file(filename: str):
+    &quot;&quot;&quot;Read the contents of a file.
+
+    Args:
+        filename: Path to the file.
+    &quot;&quot;&quot;
+    ...
+
+print(read_file.__doc__)   # the full docstring as a string
+</code></pre>
+<p>This is just a regular Python feature — nothing about it is specific to tool building. What makes it useful here is that we can structure the text so it carries two pieces of information that map directly to two parts of the schema:</p>
+<ul>
+<li>The <strong>first line</strong> of the docstring becomes the tool&#39;s top-level <code>description</code>.</li>
+<li>Each indented entry under an <code>Args:</code> block becomes the <code>description</code> for that parameter.</li>
+</ul>
+<p>The format we use is <strong>Google-style docstrings</strong> — a widely adopted convention that distinguishes section headers (<code>Args:</code>, <code>Returns:</code>, <code>Raises:</code>) and uses <code>name: description</code> for each item. The same convention is used by Sphinx (with the <code>napoleon</code> extension), most large open-source Python codebases, and many editor tools. Students writing tools just follow it; the schema generator parses it. The docstring is doing double duty — it is normal Python documentation that any reader can understand, <em>and</em> it is the source of the API descriptions the LLM will see.</p>
+<p>The parser we&#39;ll write handles the simple case. A production framework would use <code>docstring_parser</code> or a similar library to handle every format variation correctly. The point is the principle: <strong>structured comments are extractable.</strong> As long as you write your docstrings consistently, code can read them.</p>
+<h3>A Short Tour of the <code>inspect</code> Module</h3>
+<p>Python ships with a standard-library module called <code>inspect</code> whose job is to let code examine <em>other</em> code at runtime. This is what makes auto-generated schemas possible — without <code>inspect</code>, we would have no way to ask a function what its parameters are.</p>
+<p>The two pieces we use:</p>
+<ul>
+<li><code>inspect.signature(func)</code> returns a <code>Signature</code> object representing the function&#39;s argument list. From this we can ask for <code>signature.parameters</code>, an ordered mapping from parameter name to a <code>Parameter</code> object that describes one argument.</li>
+<li>Each <code>Parameter</code> exposes:<ul>
+<li><code>param.name</code> — the parameter&#39;s name as a string</li>
+<li><code>param.annotation</code> — the type annotation (e.g., <code>str</code>, <code>int</code>), or the sentinel <code>inspect.Parameter.empty</code> if no annotation was given</li>
+<li><code>param.default</code> — the default value, or the sentinel <code>inspect.Parameter.empty</code> if no default was given</li>
+</ul>
+</li>
+</ul>
+<p>A short demonstration:</p>
+<pre><code class="language-python">import inspect
+
+def read_file(filename: str, encoding: str = &quot;utf-8&quot;):
+    ...
+
+sig = inspect.signature(read_file)
+
+for name, param in sig.parameters.items():
+    print(name, param.annotation, param.default)
+# filename &lt;class &#39;str&#39;&gt; &lt;class &#39;inspect._empty&#39;&gt;
+# encoding &lt;class &#39;str&#39;&gt; utf-8
+</code></pre>
+<p><code>encoding</code> has a default (<code>&quot;utf-8&quot;</code>), so it is optional. <code>filename</code> does not, so it is required. This is exactly the distinction the JSON Schema&#39;s <code>required</code> list cares about, which is why <code>if param.default is inspect.Parameter.empty</code> is the test we use to decide whether a parameter goes into the required list.</p>
+<p>Python type annotations like <code>filename: str</code> are also runtime-readable through <code>param.annotation</code>. They are not enforced at runtime — Python itself does not check types — but <code>inspect</code> lets <em>us</em> read them and decide what to do with them. This is what makes <code>python_type_to_json</code> possible: we read the annotation as a Python type object and look it up in our mapping.</p>
+<pre><code class="language-python">import inspect
+
+def generate_tool_schema(func):
+    sig = inspect.signature(func)
+    properties = {}
+    required = []
+
+    for param_name, param in sig.parameters.items():
+        prop = {&quot;type&quot;: python_type_to_json(param.annotation)}
+        desc = extract_param_description(func, param_name)
+        if desc:
+            prop[&quot;description&quot;] = desc
+        properties[param_name] = prop
+
+        if param.default is inspect.Parameter.empty:
+            required.append(param_name)
+
+    return {
+        &quot;name&quot;: func.__name__,
+        &quot;description&quot;: (func.__doc__ or &quot;&quot;).strip().split(&quot;\n&quot;)[0],
+        &quot;input_schema&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;properties&quot;: properties,
+            &quot;required&quot;: required
+        }
+    }
+</code></pre>
+<p>The loop visits each parameter, reads its type annotation, parses its description out of the docstring, and decides whether it is required based on whether it has a default value. The result is a fully formed schema dict with no manual maintenance.</p>
+<p>A small helper maps Python types to JSON Schema types:</p>
+<pre><code class="language-python">def python_type_to_json(python_type):
+    type_map = {
+        str: &quot;string&quot;,
+        int: &quot;integer&quot;,
+        float: &quot;number&quot;,
+        bool: &quot;boolean&quot;,
+    }
+    return type_map.get(python_type, &quot;string&quot;)
+</code></pre>
+<p>This is intentionally simple. JSON Schema supports arrays, nested objects, enums, and other complex types — production frameworks like <code>pydantic</code> handle all of them — but for the tools an agent typically needs, <code>string</code>, <code>integer</code>, <code>number</code>, and <code>boolean</code> cover the vast majority of cases. If a tool needs something more elaborate, the auto-generated schema can be overridden.</p>
+<p>A second helper parses parameter descriptions out of the <code>Args:</code> block of the docstring. This is a lightweight, hand-written parser rather than a full docstring library — sufficient to demonstrate the principle that the function is the single source of truth.</p>
+<h3>Putting It Together</h3>
+<p>A <code>get_tool_schemas</code> function generates the schemas for every registered tool, and the result is passed straight into the API call:</p>
+<pre><code class="language-python">def get_tool_schemas():
+    &quot;&quot;&quot;Generate API-ready schemas for all registered tools.&quot;&quot;&quot;
+    return [generate_tool_schema(func) for func in TOOL_REGISTRY.values()]
+
+response = client.messages.create(
+    model=&quot;claude-sonnet-4-6&quot;,
+    max_tokens=4096,
+    system=SYSTEM_PROMPT,
+    tools=get_tool_schemas(),
+    messages=messages
+)
+</code></pre>
+<p>Adding a new tool to the agent now means writing a single decorated function with a typed signature and a docstring. No JSON schema to author by hand, no dispatch to update, no registry entry to add. The before/after contrast is the payoff:</p>
+<table>
+<thead>
+<tr>
+<th>Before adding a tool</th>
+<th>After adding a tool</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1. Write the function</td>
+<td>1. Write the function with <code>@register_tool</code></td>
+</tr>
+<tr>
+<td>2. Write the JSON schema by hand</td>
+<td>2. Done</td>
+</tr>
+<tr>
+<td>3. Add a branch to the <code>if/elif</code> dispatch</td>
+<td></td>
+</tr>
+<tr>
+<td>4. Hope all three agree</td>
+<td></td>
+</tr>
+</tbody></table>
+<h2>System Prompt vs. API Schema</h2>
+<p>A reasonable question at this point is whether the system prompt&#39;s tool descriptions could be auto-generated too. The answer is yes in principle but no in practice — they serve different purposes.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>System Prompt</th>
+<th>API Tool Schema</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Purpose</td>
+<td>Behavioral guidance</td>
+<td>Structured invocation</td>
+</tr>
+<tr>
+<td>Content</td>
+<td>When to use, workflow rules</td>
+<td>Name, args, types</td>
+</tr>
+<tr>
+<td>Example</td>
+<td>&quot;Always read before editing&quot;</td>
+<td><code>{&quot;name&quot;: &quot;read_file&quot;, ...}</code></td>
+</tr>
+</tbody></table>
+<p>The API schema tells the model <strong>how</strong> to call a tool — what arguments it takes, what types they are, which are required. The system prompt tells the model <strong>when</strong> and <strong>why</strong> to use it — workflow rules, ordering constraints, behavioral guidance like &quot;always read before editing&quot; or &quot;ask for confirmation before deleting.&quot; Those rules don&#39;t belong in the API schema.</p>
+<p>The auto-generation we just built keeps the API schema in sync with the code automatically. The system prompt&#39;s tool descriptions still need to be updated by hand when behavior changes. This coupling is a design feature, not a limitation — keeping the two surfaces separate lets each one say what it is best at saying.</p>
+<p>There is also a practical reason to keep them separate: the Anthropic API caches the <code>tools</code> parameter and the system prompt independently. Splitting them lets each one be cached effectively across calls.</p>
+<h2>Handling Malformed Tool Calls</h2>
+<p>The Anthropic API validates tool arguments against the <code>input_schema</code>, so type mismatches are caught before they reach our code. But several failure modes still slip through:</p>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Example</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unknown tool name</td>
+<td>Model hallucinates a tool</td>
+<td>List available tools in the error</td>
+</tr>
+<tr>
+<td>Semantically wrong args</td>
+<td>Empty filename, nonexistent path</td>
+<td>Tool-level validation</td>
+</tr>
+<tr>
+<td>Extra arguments</td>
+<td>Model sends <code>language=&quot;python&quot;</code> to <code>read_file</code></td>
+<td>Filter to expected params</td>
+</tr>
+<tr>
+<td>Missing optional args</td>
+<td>Model omits a parameter with a default</td>
+<td>Python handles this naturally</td>
+</tr>
+</tbody></table>
+<p>The mental shift required here is that <strong>the LLM is essentially writing code that calls our functions</strong>, and our job as agent developers is to verify that the code is correct. When you, the programmer, call a function incorrectly, your editor underlines it, the type checker complains, or the program crashes with a stack trace. The LLM gets none of that feedback. It writes a tool call as a JSON blob, sends it through the API, and waits for a result. If we crash, the agent dies. If we return a vague error, the model has nothing to retry with. The dispatch function is where we catch all of this and turn it into something the model can act on.</p>
+<h3>The Defensive Dispatch</h3>
+<pre><code class="language-python">def dispatch_tool(name, inputs):
+    if name not in TOOL_REGISTRY:
+        available = &quot;, &quot;.join(TOOL_REGISTRY.keys())
+        return f&quot;Error: unknown tool &#39;{name}&#39;. Available: {available}&quot;
+
+    func = TOOL_REGISTRY[name]
+
+    # Filter to expected parameters only
+    sig = inspect.signature(func)
+    valid_params = set(sig.parameters.keys())
+    filtered = {k: v for k, v in inputs.items() if k in valid_params}
+
+    try:
+        return func(**filtered)
+    except TypeError as e:
+        return f&quot;Error calling {name}: {e}&quot;
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f&quot;Error: {type(e).__name__}: {e}&quot;
+</code></pre>
+<p>Three design choices in this dispatch are worth highlighting:</p>
+<ol>
+<li><strong>Filter unexpected arguments rather than crashing.</strong> Models occasionally include parameters that aren&#39;t part of the function&#39;s signature — a <code>language</code> field on <code>read_file</code>, for example. The Python <code>**filtered</code> unpacking would raise <code>TypeError</code> on unknown keyword arguments. Inspecting the function&#39;s actual parameters and dropping the unknown ones is more robust than failing on a hallucinated extra.</li>
+<li><strong>Return errors as strings.</strong> Every failure path produces a string the model can read. The agent loop is built around tools that return strings; an exception that escapes dispatch crashes the entire agent.</li>
+<li><strong>Catch-all exception handler.</strong> The agent must never die from a tool error. Specific exceptions are caught for the cases where we have a useful message to give; the final <code>except Exception</code> ensures that nothing slips through and kills the loop.</li>
+</ol>
+<h3>Self-Correction in Action</h3>
+<p>Why does any of this matter? Because the model uses error messages to recover. When the model receives an error as a tool result, it typically reads it, adjusts its approach, and retries:</p>
+<pre><code>[1] assistant: [tool_use: edit_file(old_str=&quot;def add(x, y)&quot;, ...)]
+[2] user:      [tool_result: &quot;Error: text not found in utils.py&quot;]
+[3] assistant: [tool_use: read_file(filename=&quot;utils.py&quot;)]
+[4] user:      [tool_result: &quot;def add(a, b):\n    return a + b&quot;]
+[5] assistant: [tool_use: edit_file(old_str=&quot;def add(a, b)&quot;, ...)]
+[6] user:      [tool_result: &quot;Edited utils.py&quot;]
+[7] assistant: [text: &quot;Done — updated the add function.&quot;]
+</code></pre>
+<p>The first edit failed because the model guessed wrong about the parameter names. The error told it the text wasn&#39;t found. It read the file, saw the actual signature, and retried with the correct string. Three iterations instead of two — but the task completed correctly without human intervention.</p>
+<p>This self-correction behavior is <strong>emergent</strong>. It is not programmed into the agent. It comes from the way the model was trained: when an LLM sees an error message in its context, it tends to treat it as feedback and try something different. But this only works if the error messages are clear and informative. &quot;Error: text not found in utils.py&quot; is actionable. &quot;Error: operation failed&quot; is not. The principle from Lecture 6.2 holds: <strong>error handling is communication with the model.</strong> The registry pattern makes that communication centralized and consistent.</p>
+<h2>The Dispatch as a Control Point</h2>
+<p>The dispatch function is now the one place every tool call passes through. That makes it the natural home for cross-cutting concerns:</p>
+<pre><code class="language-python">def dispatch_tool(name, inputs):
+    print(f&quot;  [tool] {name}({&#39;, &#39;.join(f&#39;{k}={v!r}&#39; for k, v in inputs.items())})&quot;)
+
+    # ... validation and execution ...
+
+    preview = result[:120] + &quot;...&quot; if len(result) &gt; 120 else result
+    print(f&quot;  [result] {preview}&quot;)
+
+    return result
+</code></pre>
+<p>A handful of useful things to log:</p>
+<ul>
+<li><strong>Tool name and arguments</strong> — what was requested</li>
+<li><strong>Result preview</strong> — truncated to avoid flooding the terminal with file contents</li>
+<li><strong>Timing</strong> — how long the tool took, useful for spotting slow operations</li>
+<li><strong>Errors</strong> — distinguished from successful results</li>
+</ul>
+<p>Simple <code>print</code> calls are sufficient for now. Production agents use structured logging — JSON lines that can be queried and analyzed — but the principle is the same. The next lecture builds on this foundation by adding token counting and context-growth tracking, all hooked into the same dispatch function.</p>
+<h2>Common Questions</h2>
+<p><strong>&quot;Why not use Pydantic for schema generation?&quot;</strong>
+You can, and production frameworks do. Libraries like <code>pydantic</code> and <code>instructor</code> generate JSON Schema from Python models with full validation. The <code>inspect</code>-based approach in this lecture exists to show the mechanism — once you understand what is happening under the hood, swapping in a library becomes a choice rather than a mystery. Module 12 returns to this when we look at LangChain.</p>
+<p><strong>&quot;What if I want a tool name different from the function name?&quot;</strong>
+Extend the decorator to take an optional name argument: <code>@register_tool(name=&quot;search&quot;)</code>. Store the custom name in the registry instead of <code>func.__name__</code>. This is a one-line change that doesn&#39;t affect anything else.</p>
+<p><strong>&quot;Should I auto-generate the system prompt tool descriptions too?&quot;</strong>
+You could, but you&#39;d lose the ability to embed behavioral guidance like &quot;always read before editing.&quot; That guidance doesn&#39;t belong in the API schema, and keeping the two surfaces separate is a feature.</p>
+<p><strong>&quot;How do I test that my schemas are valid?&quot;</strong>
+Call <code>client.messages.create</code> with the schemas and a simple prompt. The Anthropic API validates schemas on every call and returns a clear error immediately if something is malformed.</p>
+<h2>Key Takeaways</h2>
+<ol>
+<li><strong>The registry pattern eliminates duplication.</strong> One decorated function is the single source of truth for name, description, arguments, and implementation.</li>
+<li><strong>Auto-generated schemas stay in sync.</strong> <code>inspect.signature</code> plus docstring parsing produces API-ready schemas with no manual JSON to maintain.</li>
+<li><strong>Defensive dispatch is non-negotiable.</strong> Filter unexpected arguments, catch every exception, and never let the agent crash from a tool error.</li>
+<li><strong>Error messages fuel self-correction.</strong> Clear errors let the model retry intelligently. Vague errors waste tool calls.</li>
+<li><strong>Centralized dispatch is the right place for observability.</strong> Every tool call passes through one function — the natural location for logging, validation, and metrics, which Lecture 6.4 builds on.</li>
+</ol>
+</div>
+</body>
+</html>

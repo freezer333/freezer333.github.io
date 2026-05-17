@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tool Registry and Schema Generation — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Tool Registry and Schema Generation
+
+???
+~20 minutes. Refactor from if/elif dispatch to registry pattern. Auto-generate API schemas from Python functions. Handle malformed calls.
+
+---
+
+# The Scaling Problem
+
+Current dispatch from Lecture 6.2:
+
+.small-code[
+```python
+def dispatch_tool(name, inputs):
+    if name == "list_files":
+        return list_files(**inputs)
+    elif name == "read_file":
+        return read_file(**inputs)
+    elif name == "edit_file":
+        return edit_file(**inputs)
+    else:
+        return f"Error: unknown tool: {name}"
+```
+]
+
+Three problems:
+
+1. **Duplicated information** — tool name appears in the function, the schema, and the dispatch
+2. **Manual schema maintenance** — each tool schema is a hand-written dict
+3. **No single source of truth** — docstring says one thing, schema says another
+
+Adding a tool means editing three places. Miss one and it silently fails.
+
+???
+60 seconds. Students should recognize this code smell from earlier CS courses.
+
+---
+
+# Python Decorators in 60 Seconds
+
+The `@` symbol wraps a function with another function.
+
+.split-left[
+**Decorator syntax**
+
+```python
+@register_tool
+def list_files(path: str):
+    ...
+```
+]
+
+.split-right[
+**What Python actually does**
+
+```python
+def list_files(path: str):
+    ...
+
+list_files = register_tool(list_files)
+```
+]
+
+<div class="clear"></div>
+
+The two forms are **equivalent**. The decorator function:
+
+1. Receives the original function as its argument
+2. Does something with it — here, stores it in a dict
+3. Returns a function (usually the original, unchanged)
+
+Functions in Python are first-class values: you can pass them, store them in dicts, and return them.
+
+???
+60 seconds. Many students will not have seen `@` before. If they've used Flask, compare to `@app.route`. Decorators reappear in LangChain (`@tool`, `@chain`) — give them a working mental model now.
+
+---
+
+# The Registry Pattern
+
+.small-code[
+```python
+TOOL_REGISTRY = {}
+
+def register_tool(func):
+    """Register a function as a tool."""
+    TOOL_REGISTRY[func.__name__] = func
+    return func
+
+@register_tool
+def list_files(path: str):
+    """List files and directories at the given path.
+    Args:
+        path: Directory path to list. Use '.' for current directory.
+    """
+    # ... implementation ...
+
+@register_tool
+def read_file(filename: str):
+    """Read the complete contents of a file.
+    Args:
+        filename: Path to the file to read.
+    """
+    # ... implementation ...
+```
+]
+
+Adding a new tool: write one decorated function. Done.
+
+???
+60 seconds. Now that decorators are explained, the registry pattern is straightforward — `register_tool` stores the function under its own name as the key.
+
+---
+
+# When Does `register_tool` Run?
+
+Decorators execute **at import time**, not when the decorated function is called.
+
+.small-code[
+```python
+TOOL_REGISTRY = {}                       # 1. Empty dict created
+
+def register_tool(func):
+    TOOL_REGISTRY[func.__name__] = func  # called once per @ below
+    return func
+
+@register_tool                           # 2. runs here, immediately
+def list_files(path: str): ...           # registry: {'list_files': ...}
+
+@register_tool                           # 3. runs here, immediately
+def read_file(filename: str): ...        # registry: {..., 'read_file': ...}
+
+@register_tool                           # 4. runs here, immediately
+def edit_file(path: str, ...): ...       # registry: {..., 'edit_file': ...}
+
+# By the time main() executes, TOOL_REGISTRY is fully populated.
+```
+]
+
+No runtime registration step needed — Python builds the dict as it parses the module top to bottom.
+
+???
+60 seconds. The mental model: decorators are eagerly evaluated as Python reads the file. By the time the API call runs, the registry already contains every decorated tool.
+
+---
+
+# New dispatch_tool
+
+.small-code[
+```python
+def dispatch_tool(name, inputs):
+    if name not in TOOL_REGISTRY:
+        available = ", ".join(TOOL_REGISTRY.keys())
+        return f"Error: unknown tool '{name}'. Available: {available}"
+    try:
+        return TOOL_REGISTRY[name](**inputs)
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f"Error: {type(e).__name__}: {e}"
+```
+]
+
+No if/elif. The registry *is* the dispatch.
+
+Listing available tools in the error message gives the model enough information to self-correct.
+
+???
+60 seconds. The error message design is deliberate — it's communication with the model, not just logging.
+
+---
+
+# Auto-Generating Tool Schemas
+
+The Anthropic API requires each tool as a JSON object — every field maps to something the Python function already declares.
+
+.split-left[
+.tight-code[
+```json
+{
+  "name": "read_file",
+  "description": "Read the contents of a file.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "Path to the file."
+      }
+    },
+    "required": ["filename"]
+  }
+}
+```
+]
+]
+
+.split-right[
+| Schema field | Python source |
+|---|---|
+| `name` | `func.__name__` |
+| `description` | first line of `func.__doc__` |
+| `properties` | `inspect.signature(func)` |
+| `required` | params without defaults |
+
+The function becomes the **single source of truth** — write it once, derive the schema automatically.
+]
+
+<div class="clear"></div>
+
+???
+45 seconds. Set up the mapping before showing the code. Each schema field has a corresponding piece of the Python function declaration.
+
+---
+
+# Docstrings → Tool Descriptions
+
+Two parts of the docstring map to two parts of the schema.
+
+.split-left[
+**The function**
+
+.small-code[
+```python
+def read_file(filename: str):
+    """Read the contents of a file.
+
+    Args:
+        filename: Path to the file.
+    """
+    ...
+```
+]
+]
+
+.split-right[
+**The schema**
+
+.tight-code[
+```json
+{
+  "name": "read_file",
+* "description": "Read the contents of a file.",
+  "input_schema": {
+    "properties": {
+      "filename": {
+        "type": "string",
+*       "description": "Path to the file."
+      }
+    }
+  }
+}
+```
+]
+]
+
+<div class="clear"></div>
+
+- **First line of the docstring** → tool `description`
+- Each entry under `Args:` → that parameter's `description`
+
+Students writing tools just follow the Google-style docstring convention. The schema generator parses it.
+
+???
+60 seconds. The docstring serves double duty: it's normal Python documentation AND the source of the API descriptions. Students don't have to maintain two parallel documents.
+
+---
+
+# Schema Generation Code
+
+.split-left[
+.tight-code[
+```python
+import inspect
+
+def generate_tool_schema(func):
+    sig = inspect.signature(func)
+    properties = {}
+    required = []
+
+    for param_name, param in sig.parameters.items():
+        prop = {"type": python_type_to_json(param.annotation)}
+        desc = extract_param_description(func, param_name)
+        if desc:
+            prop["description"] = desc
+        properties[param_name] = prop
+
+        if param.default is inspect.Parameter.empty:
+            required.append(param_name)
+
+    return {
+        "name": func.__name__,
+        "description": (func.__doc__ or "").strip().split("\n")[0],
+        "input_schema": {
+            "type": "object",
+            "properties": properties,
+            "required": required
+        }
+    }
+```
+]
+]
+
+.split-right[
+.callout[
+**Called by** `get_tool_schemas()`, once per registered tool, just before each API call.
+
+**Steps:**
+
+1. `inspect.signature(func)` → parameter list
+2. `param.annotation` → JSON type
+3. `extract_param_description` → parses the `Args:` block
+4. No default → `required`
+5. First line of `__doc__` → tool description
+]
+]
+
+<div class="clear"></div>
+
+???
+2 minutes. Walk through the loop step by step. The callout on the right anchors the "when" and "how" — students should be able to point to each numbered step in the code. `python_type_to_json` is a trivial dict lookup — mention it briefly without dwelling.
+
+---
+
+# Putting It Together
+
+.small-code[
+```python
+def get_tool_schemas():
+    """Generate API-ready schemas for all registered tools."""
+    return [generate_tool_schema(func) for func in TOOL_REGISTRY.values()]
+
+# In the API call:
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,
+    system=SYSTEM_PROMPT,
+*   tools=get_tool_schemas(),
+    messages=messages
+)
+```
+]
+
+.split-left[
+**Before (adding a tool)**
+
+1. Write the function
+2. Write the JSON schema by hand
+3. Add to if/elif dispatch
+4. Hope they all agree
+]
+
+.split-right[
+**After (adding a tool)**
+
+1. Write the function with `@register_tool`
+2. Done
+]
+
+<div class="clear"></div>
+
+???
+60 seconds. The before/after contrast is the payoff.
+
+---
+
+# System Prompt vs. API Schema
+
+Two places where tool information lives:
+
+| | System Prompt | API Tool Schema |
+|---|---|---|
+| Purpose | Behavioral guidance | Structured invocation |
+| Content | When to use, workflow rules | Name, args, types |
+| Example | "Always read before editing" | `{"name": "read_file", ...}` |
+
+The API schema stays in sync automatically via the registry.
+
+The system prompt descriptions still need manual updates when tools change — this coupling is a design reality.
+
+.callout[The schema tells the model *how* to call the tool. The system prompt tells it *when* and *why*.]
+
+???
+60 seconds. Reinforces the distinction from Lecture 5.2.
+
+---
+
+# Handling Malformed Tool Calls
+
+The API validates types against `input_schema`. But several failures still get through:
+
+| Failure | Example | Fix |
+|---|---|---|
+| Unknown tool name | Model hallucinates a tool | List available tools in error |
+| Semantically wrong args | Empty filename, nonexistent path | Tool-level validation |
+| Extra arguments | Model sends `language="python"` to `read_file` | Filter to expected params |
+| Missing optional args | Omits a parameter with a default | Python handles this naturally |
+
+???
+60 seconds. Quick survey of what can go wrong.
+
+---
+
+# Defensive Dispatch
+
+.small-code[
+```python
+def dispatch_tool(name, inputs):
+    if name not in TOOL_REGISTRY:
+        available = ", ".join(TOOL_REGISTRY.keys())
+        return f"Error: unknown tool '{name}'. Available: {available}"
+
+    func = TOOL_REGISTRY[name]
+
+    # Filter to expected parameters only
+    sig = inspect.signature(func)
+    valid_params = set(sig.parameters.keys())
+*   filtered = {k: v for k, v in inputs.items() if k in valid_params}
+
+    try:
+        return func(**filtered)
+    except TypeError as e:
+        return f"Error calling {name}: {e}"
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f"Error: {type(e).__name__}: {e}"
+```
+]
+
+Filter unexpected arguments rather than crashing. The agent must **never** die from a tool error.
+
+???
+90 seconds. The filtering line is key — the model sometimes sends extra args. Dropping them silently is more robust than failing.
+
+---
+
+# Self-Correction in Action
+
+When the model receives an error, it typically adjusts and retries:
+
+.small-code[
+```
+[1] assistant: [tool_use: edit_file(old_str="def add(x, y)", ...)]
+[2] user:      [tool_result: "Error: text not found in utils.py"]
+[3] assistant: [tool_use: read_file(filename="utils.py")]
+[4] user:      [tool_result: "def add(a, b):\n    return a + b"]
+[5] assistant: [tool_use: edit_file(old_str="def add(a, b)", ...)]
+[6] user:      [tool_result: "Edited utils.py"]
+[7] assistant: [text: "Done — updated the add function."]
+```
+]
+
+The first edit failed — wrong parameter names. The model read the file, saw the actual text, and retried correctly.
+
+This behavior is **emergent** — not programmed. But it only works if error messages are clear and informative.
+
+???
+90 seconds. Self-correction is the payoff of good error handling.
+
+---
+
+# Key Takeaways
+
+1. **Registry pattern** — one decorated function is the single source of truth for name, schema, and implementation
+2. **Auto-generated schemas** — `inspect.signature` + docstrings → no manual JSON maintenance
+3. **Defensive dispatch** — filter extra args, catch all exceptions, never crash
+4. **Error messages fuel self-correction** — clear errors let the model retry intelligently
+5. **Centralized dispatch** — natural point for logging, validation, and metrics
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

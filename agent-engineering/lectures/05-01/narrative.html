@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompting Principles and Techniques — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 5.1</a></div></nav>
+<div class="page_content"><h1>Prompting Principles and Techniques</h1>
+<p><strong>Module 5, Lecture 5.1 | Section 3: Prompt and Context Engineering</strong></p>
+<hr>
+<p>Modules 2 through 4 built a mental model of how LLMs work: they are next-token predictors, trained on internet text, shaped by reinforcement learning from human feedback. This lecture puts that model to work. The question is no longer <em>what</em> LLMs are, but <em>how do you ask them things effectively</em>?</p>
+<p>Prompting is not a collection of magic phrases. It is an applied discipline grounded in what we know about how models were trained and how they process context. The principles here are directly applicable to agent development, where prompt failures are not annoyances — they are bugs.</p>
+<hr>
+<h2>Clarity and Specificity</h2>
+<p>The most impactful prompting principle is also the most obvious: vague prompts produce vague results.</p>
+<p>An LLM is a completion engine. It continues whatever pattern the prompt establishes. A vague or underspecified prompt establishes an ambiguous pattern, and the model fills the ambiguity with whatever was most statistically common in its training data — which often does not match the intent of the request.</p>
+<p>Consider the difference between:</p>
+<blockquote>
+<p>&quot;Summarize this article.&quot;</p>
+</blockquote>
+<p>and:</p>
+<blockquote>
+<p>&quot;Write a three-sentence summary of this article, focusing on the main technical claims and their limitations.&quot;</p>
+</blockquote>
+<p>The first leaves length, focus, and structure entirely open. The second constrains all three. The model has far less ambiguity to resolve, and the resulting output is far more predictable.</p>
+<p>For agents, predictability is not a preference — it is a requirement. Agents parse responses programmatically. A response format that is consistent 80% of the time will break the code that processes it. Format constraints are a core engineering tool, not a stylistic preference.</p>
+<hr>
+<h2>Positive Instructions Outperform Negative Ones</h2>
+<p>&quot;Do X&quot; reliably outperforms &quot;don&#39;t do Y.&quot;</p>
+<p>The training data insight from Lecture 2.2 applies here: the model has seen far more examples of things being done than things being avoided. Negative instructions require the model to hold a constraint in mind during generation — a cognitively expensive operation that is more often violated.</p>
+<table>
+<thead>
+<tr>
+<th>Weaker (negative)</th>
+<th>Stronger (positive)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&quot;Don&#39;t give me a list.&quot;</td>
+<td>&quot;Write your response as a single paragraph.&quot;</td>
+</tr>
+<tr>
+<td>&quot;Don&#39;t be verbose.&quot;</td>
+<td>&quot;Keep your response under 100 words.&quot;</td>
+</tr>
+<tr>
+<td>&quot;Don&#39;t use jargon.&quot;</td>
+<td>&quot;Use plain language suitable for a non-technical reader.&quot;</td>
+</tr>
+</tbody></table>
+<p>The structural reason this works: a positive instruction defines what the output looks like. A negative instruction defines what to avoid, leaving the space of valid outputs large and underspecified. The model has more room to sample something that technically satisfies the constraint but misses the intent.</p>
+<p>An occasional &quot;do this, not that&quot; formulation is fine — but only paired with a concrete positive example. The positive is the actual constraint; the negative is just emphasis.</p>
+<hr>
+<h2>Constraints That Work</h2>
+<p>Four constraint types reliably improve compliance across model families:</p>
+<ul>
+<li><strong>Format</strong> — &quot;Respond with JSON matching this schema: <code>{...}</code>&quot; / &quot;Use a markdown table.&quot;</li>
+<li><strong>Length</strong> — &quot;In exactly three sentences.&quot; / &quot;Under 200 words.&quot;</li>
+<li><strong>Style</strong> — &quot;Formal academic tone.&quot; / &quot;Plain language, no technical jargon.&quot;</li>
+<li><strong>Scope</strong> — &quot;Only use information from the provided text. Do not speculate.&quot;</li>
+</ul>
+<p>Constraints work because they make the completion task more deterministic. The model has a smaller valid output space to sample from, and each token generated is more strongly conditioned by the prior context.</p>
+<hr>
+<h2>Prompt Anti-Patterns</h2>
+<p>Four failure modes appear repeatedly in first-draft prompts and agent system prompts.</p>
+<p><strong>Conflicting guidance.</strong> &quot;Be concise but thorough&quot; or &quot;be creative but precise&quot; creates irresolvable tension. The model resolves it by splitting the difference — and produces something that is neither. Each instruction should have one clear goal.</p>
+<p><strong>Instruction overload.</strong> A system prompt with 40 behavioral rules is worse than one with 10. The model&#39;s attention is finite. Critical instructions buried in a long list are violated more often than the same instructions standing alone. The goal is a focused, minimal prompt — not the most comprehensive one you can write.</p>
+<p><strong>Buried key information.</strong> Research on long-context attention shows that LLMs attend most strongly to the beginning and end of the context window. Content in the middle receives systematically less attention. Critical instructions belong at the top of a system prompt, not in paragraph eight of a long document.</p>
+<p><strong>Assuming shared context.</strong> What is obvious to the developer is not automatically obvious to the model. Decisions made earlier in a conversation attenuate as the conversation grows. If a decision made three turns ago needs to govern the current response, restate it. This is especially important in agents, where sessions grow long and early context degrades.</p>
+<hr>
+<h2>Counteracting Training Biases</h2>
+<p>Lecture 2.2 covered the behavioral side effects of RLHF (Reinforcement Learning from Human Feedback) — the training phase that shapes how models respond, not just what they know. The biases it introduces are real and systematic. Prompt design is the first line of defense.</p>
+<table>
+<thead>
+<tr>
+<th>Bias</th>
+<th>Counter-instruction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Verbosity</strong></td>
+<td>&quot;Keep your response under 150 words. Do not add explanation beyond what was asked.&quot;</td>
+</tr>
+<tr>
+<td><strong>Sycophancy</strong></td>
+<td>&quot;Do not agree with me if I am wrong. Correct me directly.&quot;</td>
+</tr>
+<tr>
+<td><strong>Over-engineering</strong></td>
+<td>&quot;Implement the simplest solution that works. No extra abstractions.&quot;</td>
+</tr>
+<tr>
+<td><strong>Hedging</strong></td>
+<td>&quot;State your answer directly. Do not qualify unless the uncertainty is material.&quot;</td>
+</tr>
+</tbody></table>
+<p>These counter-instructions work because they explicitly override statistical priors established during training. They are not tricks — they are corrections applied at the prompt level to behavior that was baked in during model development.</p>
+<p>Over-engineering is particularly important to address in coding agents. Without an explicit simplicity constraint, models trained on blog posts and open-source repositories tend to produce heavily abstracted code with extensive error handling, type annotations, and design patterns the task does not require.</p>
+<hr>
+<h2>XML Tags for Clear Delineation</h2>
+<p>As prompts grow more complex — containing instructions, context, examples, and user input simultaneously — the model must infer which part of the prompt is which. XML tags make these boundaries explicit.</p>
+<pre><code class="language-xml">&lt;instructions&gt;
+You are a code reviewer. Identify bugs and style violations.
+&lt;/instructions&gt;
+
+&lt;code&gt;
+def get_user(id):
+    return db.query(&quot;SELECT * FROM users WHERE id=&quot; + id)
+&lt;/code&gt;
+</code></pre>
+<p>Without tags, the model must infer the boundary between instruction and content. With tags, it is explicit. In an agent system prompt, where a single message may contain tool documentation, behavioral rules, few-shot examples, and dynamically injected context, explicit delineation is load-bearing — not cosmetic.</p>
+<p>The tags do not need to be valid XML. There is no schema requirement. Short, descriptive tag names are sufficient: <code>&lt;instructions&gt;</code>, <code>&lt;context&gt;</code>, <code>&lt;example&gt;</code>, <code>&lt;user_input&gt;</code>. Anthropic&#39;s training specifically reinforces XML-tagged structure, but the principle generalizes to any model.</p>
+<hr>
+<h2>Markdown Signals Structure</h2>
+<p>Headers, bullet lists, and code blocks are not just visual formatting — they signal structure the model was trained to recognize. A system prompt written as organized markdown sections is more reliably followed than the same content written as prose paragraphs.</p>
+<ul>
+<li><strong>Headers (<code>#</code>, <code>##</code>)</strong> indicate section boundaries and help the model scope which instructions apply where.</li>
+<li><strong>Bullet lists</strong> imply each item is independent and equally weighted — appropriate for requirement lists.</li>
+<li><strong>Code blocks</strong> signal literal content that should not be interpreted or paraphrased.</li>
+</ul>
+<p>The markdown is semantic. The model has been trained on vast amounts of markdown-formatted content and treats structural markers as signals about intent — not just about visual appearance.</p>
+<hr>
+<h2>Chain-of-Thought Prompting</h2>
+<h3>The Mechanism</h3>
+<p>To understand why chain-of-thought (CoT) prompting works, it helps to recall what &quot;autoregressive next-token predictor&quot; means in practice. The model generates one token at a time. Each token it produces is appended to the context, and that extended context becomes the input for generating the next token. The model is, in a sense, reading its own output as it writes.</p>
+<p>Without CoT, the model must produce a correct answer directly. All reasoning is implicit — compressed into the final answer tokens in one shot. For a simple question, this is fine. For a multi-step problem, any error in an implicit intermediate step propagates silently to the answer.</p>
+<p>When you instruct the model to reason step by step, it first outputs a plan — a sequence of intermediate reasoning steps. Those tokens become part of the context for all subsequent generation. The model is conditioning each answer token not just on the original prompt, but on an explicit, visible reasoning trace. For multi-step problems, this dramatically improves accuracy: errors at step N are in context when generating step N+1, rather than hidden.</p>
+<p>This is why CoT helps. It does not make the model more capable — it gives the model its own reasoning as context, so each step can build correctly on the last.</p>
+<h3>When to Use It</h3>
+<p><strong>Use CoT when:</strong></p>
+<ul>
+<li>The task involves multi-step reasoning — math, logic, planning</li>
+<li>Intermediate steps catch errors before they compound</li>
+<li>The reasoning process is itself part of the output you want</li>
+</ul>
+<p><strong>Skip CoT when:</strong></p>
+<ul>
+<li>The answer is direct — simple retrieval, classification, format conversion</li>
+<li>The task runs at high frequency in an agent loop — CoT on every tool call accumulates fast</li>
+<li>The model performs reliably without it</li>
+</ul>
+<h3>Token Cost</h3>
+<p>CoT adds real tokens. In an agent with 50 tool calls per session, 50 tokens of reasoning per call adds 2,500 tokens to context per session. At 10 sessions per day, that is 25,000 tokens daily — 750,000 per month. The benefit is real; so is the cost. Use CoT for tasks where intermediate reasoning visibly reduces errors, and measure before committing.</p>
+<h3>Extended Thinking</h3>
+<p>Claude&#39;s extended thinking mode applies the same mechanism: the model generates intermediate reasoning tokens before the final answer, but those tokens appear in a hidden block rather than inline in the response. The principle is identical; the difference is whether the reasoning is visible in the output.</p>
+<hr>
+<h2>Prompt Templates and Version Control</h2>
+<p>A prompt template is a reusable prompt structure with placeholders for variable content:</p>
+<pre><code class="language-python">REVIEW_TEMPLATE = &quot;&quot;&quot;
+&lt;instructions&gt;
+Review the following code for bugs, style violations, and security issues.
+Return a JSON array of findings with keys: type, severity, line, description.
+&lt;/instructions&gt;
+
+&lt;code&gt;
+{code}
+&lt;/code&gt;
+&quot;&quot;&quot;
+</code></pre>
+<p>Templates enforce consistency across agent runs. They make prompts reviewable: a template in a <code>.py</code> file is diffable, testable, and version-controllable in ways that a hardcoded string is not.</p>
+<p><strong>Treat prompts as code.</strong> Store them in version control. When a prompt change improves results, commit it with a descriptive message — the same way you would a code change. When a prompt change causes regressions, revert it. The prompts powering an agent are arguably as important as the agent code itself: a model that behaves incorrectly because of a bad prompt produces incorrect outputs without raising an exception.</p>
+<hr>
+<h2>Common Questions</h2>
+<p><strong>Do XML tags need to be valid XML?</strong> No. The tags are delimiters, not a schema. Short, descriptive labels in angle brackets are sufficient. The model does not validate the XML — it uses the tag names as structural signals.</p>
+<p><strong>How long should a system prompt be?</strong> Every token in the system prompt is re-sent on every API call. A 2,000-token system prompt adds 2,000 input tokens per turn. The goal is the minimum system prompt that produces the behavior you need — not the most thorough one you can write. Lecture 5.2 covers system prompt token budgeting directly.</p>
+<p><strong>Does chain-of-thought make the model smarter?</strong> No. CoT improves performance on tasks that benefit from explicit intermediate reasoning, but it does not increase the model&#39;s underlying capability. On simple tasks, CoT adds noise, not signal. The improvement is largest on math and multi-step logical reasoning, where intermediate steps catch compounding errors.</p>
+<p><strong>Are XML tags specific to Claude?</strong> Anthropic&#39;s training specifically reinforces XML-tagged structure, so the technique is particularly effective with Claude. The underlying principle — explicit structure reduces parsing ambiguity — generalizes to other models, though specific techniques may need tuning.</p>
+</div>
+</body>
+</html>

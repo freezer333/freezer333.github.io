@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompting Principles and Techniques — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Prompting Principles and Techniques</h1>
+<p><strong>Module 5, Lecture 5.1 | Section 3: Prompt and Context Engineering</strong></p>
+<p>Modules 2–4 built a mental model of how LLMs work: next-token predictors, trained on internet text, shaped by RLHF. This lecture puts that model to work. Prompting is not a collection of magic phrases — it is an applied discipline grounded in how models process context. The principles covered here — clarity, positive framing, structure, chain-of-thought, and treating prompts as versioned code — apply directly to agent development, where prompt failures are not annoyances but bugs.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-05-01.mp4" type="video/mp4">
+</video>
+
+<h2>Additional Resources</h2>
+<ul>
+<li><a href="slides.html">Lecture slides</a></li>
+</ul>
+<p><strong>Prompting (General)</strong></p>
+<ul>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices">Claude Prompting Best Practices — Anthropic Docs</a> — Anthropic&#39;s authoritative prompting reference covering clarity, XML structure, output formatting, and agentic use. Direct complement to this lecture.</li>
+<li><a href="https://github.com/anthropics/prompt-eng-interactive-tutorial">Prompt Engineering Interactive Tutorial — Anthropic (GitHub)</a> — Anthropic&#39;s 9-chapter hands-on tutorial with exercises for students who want to practice beyond the lecture.</li>
+</ul>
+<p><strong>Chain-of-Thought</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2201.11903">Chain-of-Thought Prompting Elicits Reasoning in Large Language Models — Wei et al., 2022</a> — The original CoT paper. Demonstrates that step-by-step reasoning dramatically improves performance on math, commonsense, and symbolic reasoning benchmarks.</li>
+<li><a href="https://arxiv.org/abs/2205.11916">Large Language Models are Zero-Shot Reasoners — Kojima et al., 2022</a> — Establishes that &quot;Let&#39;s think step by step&quot; works zero-shot, with no few-shot examples required.</li>
+<li><a href="https://platform.claude.com/docs/en/docs/build-with-claude/extended-thinking">Extended Thinking — Anthropic Docs</a> — Claude&#39;s extended thinking API — the same CoT mechanism with a hidden reasoning block. Directly relevant for students building agents with Claude.</li>
+<li><a href="https://www.promptingguide.ai/techniques/cot">Chain-of-Thought — Prompt Engineering Guide</a> — Accessible overview of standard CoT, zero-shot CoT, and Auto-CoT. Good first read alongside the original papers.</li>
+</ul>
+<p><strong>XML</strong></p>
+<ul>
+<li><a href="https://www.w3schools.com/xml/xml_whatis.asp">What is XML? — W3Schools</a> — One-page intro: what XML is, what tags are, and how elements are structured. Good first read for students who haven&#39;t encountered XML before.</li>
+<li><a href="https://www.w3schools.com/xml/xml_syntax.asp">XML Syntax Rules — W3Schools</a> — Covers proper nesting, closing tags, case sensitivity, and well-formedness — the mechanics that matter for understanding XML-style tags in prompts.</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/XML/Guides/XML_introduction">XML Introduction — MDN Web Docs</a> — Mozilla&#39;s authoritative XML intro for students who want more depth.</li>
+</ul>
+<p><strong>Markdown</strong></p>
+<ul>
+<li><a href="https://www.markdownguide.org/basic-syntax/">Basic Syntax — Markdown Guide</a> — The most thorough beginner reference for Markdown, covering headers, lists, code blocks, and links with rendered examples.</li>
+<li><a href="https://www.markdownguide.org/cheat-sheet/">Cheat Sheet — Markdown Guide</a> — Compact one-page summary of all common Markdown syntax. Best as a quick lookup during the lab.</li>
+<li><a href="https://commonmark.org/help/">CommonMark Help</a> — Interactive reference for CommonMark, the standardized Markdown spec used by GitHub and others.</li>
+</ul>
+</div>
+</body>
+</html>

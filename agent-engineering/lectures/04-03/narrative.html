@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token-Efficient Tool Design — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 4.3</a></div></nav>
+<div class="page_content"><h1>Lecture 4.3: Token-Efficient Tool Design</h1>
+<p><strong>Module 4, Lecture 4.3 | Section 2: Working with LLMs in Practice</strong></p>
+<hr>
+<h2>Overview</h2>
+<p>Lectures 4.1 and 4.2 established a reactive approach to context management: measure context growth, then apply strategies — sliding window, selective preservation, compaction — when the budget threshold is crossed. This lecture is about prevention. Tool design is the single biggest lever for controlling context size, and it operates proactively rather than after the fact.</p>
+<p>The key principle: every tool result enters the conversation history and stays there for every subsequent API call. A file read on step 3 is still in context on step 30. If that file was 500 lines, those 500 lines — roughly 2,000 tokens — are re-sent with every subsequent API call for the rest of the session.</p>
+<hr>
+<h2>Why Tool Design Matters</h2>
+<p>When tool-calling emerged as a core capability, the first generation of agent tools were often adapted from existing REST APIs and developer interfaces. These were designed for humans: return everything, let the caller decide what to use. That design philosophy is the wrong fit for LLM agents.</p>
+<p>The difference is fundamental. A human developer calling a REST API reads the response, extracts what they need, and discards the rest. An LLM agent cannot discard anything — every tool result becomes part of the conversation context and is re-sent on every subsequent API call. A verbose tool that was designed to be convenient for humans becomes an expensive liability for an agent.</p>
+<p>Three properties make tool results especially costly in agentic contexts:</p>
+<ul>
+<li><strong>Append-only</strong> — once a result is in context, it stays until explicitly managed</li>
+<li><strong>Cumulative</strong> — the agent may call the same tool multiple times; each result accumulates</li>
+<li><strong>Proportional cost</strong> — a 2,000-token tool result multiplies across every future API call in the session</li>
+</ul>
+<p>Tool results account for 50–70% of tokens in a typical agent session (established in Lecture 4.1). That means tool design is the most impactful variable under the agent engineer&#39;s control — more impactful than system prompt length, more impactful than response verbosity.</p>
+<hr>
+<h2>The Core Problem: Naive Tool Design</h2>
+<p>Consider a standard <code>read_file</code> tool:</p>
+<pre><code class="language-python"># Naive design — returns the entire file
+def read_file(path):
+    return open(path).read()
+    # A 500-line file → ~2,000 tokens in context
+</code></pre>
+<p>When an agent calls <code>read_file(&quot;parser.py&quot;)</code>, it gets the entire file. If the agent was only trying to find references to a specific column name, it received 490 lines of irrelevant content along with the 10 it needed.</p>
+<p>Scale this across a realistic session: three files read, two reads each, plus some log files — the context can accumulate 12,000+ tokens of raw file content within the first handful of agent steps. Most of those tokens are never referenced again, but they remain in every subsequent API call.</p>
+<hr>
+<h2>Progressive Disclosure: The Core Pattern</h2>
+<p>The solution is to split one verbose tool into two focused tools that let the agent ask for exactly what it needs.</p>
+<p><img src="tool-result-focus.png" alt="Focused tool design vs naive read_file"></p>
+<pre><code class="language-python"># Tool 1: search_file — returns matching line numbers and snippets
+def search_file(path, query):
+    matches = []
+    for i, line in enumerate(open(path), 1):
+        if query in line:
+            matches.append(f&quot;Line {i}: {line.strip()}&quot;)
+    return &quot;\n&quot;.join(matches)
+    # Returns 5 matches → ~50 tokens
+
+# Tool 2: read_lines — returns a specific line range
+def read_lines(path, start, end):
+    lines = open(path).readlines()
+    return &quot;&quot;.join(lines[start-1:end])
+    # Returns 20 lines → ~80 tokens
+</code></pre>
+<p>With these two tools, the agent workflow becomes:</p>
+<ol>
+<li>Call <code>search_file(&quot;parser.py&quot;, &quot;password_hash&quot;)</code> — receives line numbers and snippets (~50 tokens)</li>
+<li>Call <code>read_lines(&quot;parser.py&quot;, 12, 18)</code> — receives the specific code section (~80 tokens)</li>
+</ol>
+<p>Total: ~130 tokens, versus the ~2,000 tokens of the naive <code>read_file</code>. The agent no longer has access to <code>read_file</code> at all — the tool design forces it to be precise about what it needs.</p>
+<p>This pattern is called <strong>progressive disclosure</strong>: reveal information in layers, with detailed content available on demand after the agent has identified what it needs.</p>
+<p><img src="tool-result-funnel.png" alt="Progressive disclosure funnel"></p>
+<p>The pattern generalizes beyond file reading:</p>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>Metadata tool</th>
+<th>Content-on-demand tool</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Files</td>
+<td><code>search_file(path, query)</code> → line numbers</td>
+<td><code>read_lines(path, start, end)</code></td>
+</tr>
+<tr>
+<td>Database</td>
+<td><code>describe_table(table)</code> → columns + row count</td>
+<td><code>query_rows(table, filter, limit)</code></td>
+</tr>
+<tr>
+<td>API</td>
+<td><code>search_records(query)</code> → IDs + titles</td>
+<td><code>get_record(id)</code></td>
+</tr>
+<tr>
+<td>Filesystem</td>
+<td><code>list_directory(path)</code> → names + sizes</td>
+<td><code>read_file(path, start, end)</code></td>
+</tr>
+</tbody></table>
+<p>In each case: return metadata first, let the agent decide what specific content to request.</p>
+<p>This is also closely related to the Unix philosophy of small, orthogonal tools with well-defined purposes. Good tool design for agents and good tool design in general share the same principles — do one thing well, avoid side effects, return only what was asked for.</p>
+<hr>
+<h2>Pagination</h2>
+<p>When a tool could return hundreds or thousands of results, return a fixed page instead:</p>
+<pre><code class="language-python"># search_codebase(query, page=1, per_page=10)
+# Returns 10 results at a time — not all 200
+</code></pre>
+<p>The agent receives the first page and decides whether it needs more. In practice, the answer is usually in the first few results. If the agent needs subsequent pages, it makes another call — adding only the next 10 results to context, not all 200 at once.</p>
+<p>Pagination is the correct design for any search or listing tool. Returning unbounded results — &quot;find all files matching *.py&quot; on a large codebase — is a single tool call that can consume thousands of tokens and provide no more value than returning the first ten matches.</p>
+<hr>
+<h2>Summarized Results</h2>
+<p>Return a verdict instead of raw output:</p>
+<pre><code class="language-python"># run_tests() → summarized result
+# &quot;8 passed, 2 failed: test_auth_login, test_auth_refresh&quot;
+# Not: 200 lines of test output
+</code></pre>
+<p>The agent needs to know whether tests passed or failed. It does not need the complete output of every passing test. If it needs detail on a specific failure, it can call a separate tool: <code>get_test_output(&quot;test_auth_login&quot;)</code>.</p>
+<p>This applies broadly:</p>
+<ul>
+<li>Test runners: pass/fail counts and failure names, not full output</li>
+<li>Log analysis: error counts and error types, not full log contents  </li>
+<li>Compilation output: success/failure and error messages, not the full build log</li>
+<li>Database queries: aggregated statistics before raw rows</li>
+</ul>
+<p>The pattern is the same as progressive disclosure — give the agent enough to make its next decision, and let it request detail only when needed.</p>
+<hr>
+<h2>Practical Implications</h2>
+<p><strong>More tool calls, smaller context.</strong> Splitting <code>read_file</code> into <code>search_file</code> + <code>read_lines</code> means the agent makes two calls instead of one. But each call carries a smaller result, and the total context footprint is a fraction of the naive approach. The apparent overhead of extra API calls is generally offset by lower cost and better quality on all subsequent calls.</p>
+<p><strong>Tool descriptions guide behavior.</strong> When you define <code>search_file</code> and <code>read_lines</code> as the available tools, the LLM naturally uses the search-then-read pattern. The tool definitions constrain what the agent can ask for. A tool named <code>read_file</code> that returns entire files invites verbose reads; a tool named <code>read_lines</code> with start/end parameters invites precise reads. Tool design shapes agent behavior.</p>
+<p><strong>Rule-based summarization is usually sufficient.</strong> Summarizing test output, formatting line numbers from search results, returning row counts from database queries — these can be done with simple logic, not an extra LLM call. The LLM-based compaction from Lecture 4.2 is for compacting the full conversation; tool-level summarization is a straightforward engineering task.</p>
+<hr>
+<h2>Key Takeaways</h2>
+<ol>
+<li><strong>Tool results are the biggest context lever</strong> — 50–70% of tokens, and tool design is entirely under the engineer&#39;s control.</li>
+<li><strong>Progressive disclosure</strong> — metadata first, specific content on demand. Split broad tools into focused tools that return less by default.</li>
+<li><strong>Pagination and summarization</strong> — return the minimum the model needs to make its next decision. Detailed results are available on demand.</li>
+</ol>
+</div>
+</body>
+</html>

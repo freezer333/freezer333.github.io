@@ -1,0 +1,351 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 4 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 4: Extend Your Coding Agent</h1>
+<p><strong>Section 3 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~3 hours
+<strong>Prerequisites:</strong> Labs 1-3 + Modules 5-6 (Lectures 5.1 through 6.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>In Module 5 you built the system prompt. In Module 6 you built the agent loop, implemented the tools, added a tool registry, and instrumented token usage. You have a working coding agent with three tools: <code>list_files</code>, <code>read_file</code>, and <code>edit_file</code>.</p>
+<p>This lab extends that agent in three directions:</p>
+<ol>
+<li><strong>New tools</strong> — Replace the naive <code>read_file</code> with token-efficient <code>search_file</code> + <code>read_lines</code>. Add <code>delete_file</code> (with confirmation) and <code>mkdir</code>.</li>
+<li><strong>Safety enforcement</strong> — Implement an approved-folders map so all file operations are restricted to explicitly allowed directories.</li>
+<li><strong>Real workload measurement</strong> — Use the agent to build a multi-file Node.js application from a specification, then measure context growth across the full session.</li>
+</ol>
+<p>The deliverable is your extended agent code, a context growth analysis, and a comparison of token usage between naive and efficient tool designs.</p>
+<hr>
+<h2>What You&#39;ll Produce</h2>
+<ol>
+<li><strong>Extended agent code</strong> (<code>agent.py</code>) — Your coding agent with the new tools, approved-folders enforcement, and token tracking from Lecture 6.3</li>
+<li><strong>Context growth analysis</strong> (<code>analysis.md</code>) — Token usage data, growth curves, and cost estimates comparing naive vs. efficient tool design</li>
+<li><strong>Generated application</strong> — The Node.js/Express project your agent built (in a <code>workspace/</code> directory)</li>
+</ol>
+<hr>
+<h2>Part 1: New Tools (~50 minutes)</h2>
+<h3>1.1 Replace <code>read_file</code> with <code>search_file</code> + <code>read_lines</code></h3>
+<p>The naive <code>read_file</code> returns entire file contents — every token enters the context and stays there for every subsequent API call. Lecture 4.3 introduced the progressive disclosure pattern. Now implement it.</p>
+<p><strong><code>search_file(filename, pattern)</code></strong></p>
+<p>Search a file for lines matching a pattern. Return matching line numbers and a snippet of context around each match.</p>
+<p>Requirements:</p>
+<ul>
+<li><code>filename</code> (str): Path to the file to search</li>
+<li><code>pattern</code> (str): Text or regex pattern to search for</li>
+<li>Returns a string with matching lines in the format: <code>line_number: content</code></li>
+<li>Include 1 line of context before and after each match</li>
+<li>If no matches found, return &quot;No matches for &#39;{pattern}&#39; in {filename}&quot;</li>
+<li>If the file doesn&#39;t exist, return an appropriate error</li>
+</ul>
+<p><strong><code>read_lines(filename, start, end)</code></strong></p>
+<p>Read a specific range of lines from a file.</p>
+<p>Requirements:</p>
+<ul>
+<li><code>filename</code> (str): Path to the file</li>
+<li><code>start</code> (int): Starting line number (1-based, inclusive)</li>
+<li><code>end</code> (int): Ending line number (1-based, inclusive)</li>
+<li>Returns the specified lines with line numbers prefixed</li>
+<li>If the range is out of bounds, clamp to file boundaries and note it in the output</li>
+<li>If the file doesn&#39;t exist, return an appropriate error</li>
+</ul>
+<p><strong>Update your system prompt</strong> to describe the new tools and their workflow:</p>
+<ul>
+<li>Remove <code>read_file</code> from the tool descriptions</li>
+<li>Add <code>search_file</code> and <code>read_lines</code> descriptions</li>
+<li>Add workflow guidance: &quot;To understand a file&#39;s contents, first use search_file to find relevant sections, then use read_lines to read the specific lines you need.&quot;</li>
+</ul>
+<p>Keep <code>read_file</code> in your codebase (but unregistered) — you&#39;ll need it for the comparison in Part 3.</p>
+<h3>1.2 <code>delete_file</code> with Confirmation</h3>
+<p>Implement the confirmation pattern from Lecture 6.1.</p>
+<p><strong><code>delete_file(path, confirmed)</code></strong></p>
+<p>Requirements:</p>
+<ul>
+<li><code>path</code> (str): Path to the file to delete</li>
+<li><code>confirmed</code> (bool, default False): Whether the user has confirmed deletion</li>
+<li>If <code>confirmed</code> is False, return a warning message asking for confirmation — do NOT delete the file</li>
+<li>If <code>confirmed</code> is True, delete the file and return a success message</li>
+<li>The tool must go through <code>validate_path</code> — no deleting files outside approved directories</li>
+</ul>
+<p>Add the tool to your system prompt with a behavioral note: &quot;Always show the user what you&#39;re about to delete and wait for confirmation before calling with confirmed=True.&quot;</p>
+<h3>1.3 <code>mkdir</code></h3>
+<p><strong><code>mkdir(path)</code></strong></p>
+<p>Requirements:</p>
+<ul>
+<li><code>path</code> (str): Path of the directory to create</li>
+<li>Creates the directory (and any parent directories) within the approved folder tree</li>
+<li>Returns a success or error message</li>
+<li>Must pass <code>validate_path</code> — no creating directories outside approved areas</li>
+</ul>
+<hr>
+<h2>Part 2: Approved-Folders Map (~30 minutes)</h2>
+<h3>2.1 The Concept</h3>
+<p>In Lecture 6.1, <code>validate_path</code> enforced that all paths resolve within the current working directory. This lab extends that to an <strong>approved-folders map</strong> — a set of directories the agent is allowed to access.</p>
+<p>Why a map instead of a single root?</p>
+<ul>
+<li>The agent might need to read files in one directory and write to another</li>
+<li>Different tools might have different access levels (read-only vs. read-write)</li>
+<li>In production, agents are often restricted to specific workspace directories, not the entire project</li>
+</ul>
+<h3>2.2 Implementation</h3>
+<p>Create an <code>ApprovedFolders</code> class:</p>
+<pre><code class="language-python">class ApprovedFolders:
+    &quot;&quot;&quot;Manages a set of approved directories for agent file operations.&quot;&quot;&quot;
+
+    def __init__(self):
+        self.folders = {}  # path -&gt; {&quot;read&quot;: bool, &quot;write&quot;: bool}
+
+    def approve(self, path, read=True, write=True):
+        &quot;&quot;&quot;Add a directory to the approved set.&quot;&quot;&quot;
+        resolved = os.path.realpath(path)
+        self.folders[resolved] = {&quot;read&quot;: read, &quot;write&quot;: write}
+
+    def validate(self, path, operation=&quot;read&quot;):
+        &quot;&quot;&quot;Validate that a path falls within an approved directory.
+        
+        Returns the resolved absolute path.
+        Raises ValueError if access is denied.
+        &quot;&quot;&quot;
+        resolved = os.path.realpath(path)
+        for approved, permissions in self.folders.items():
+            if resolved.startswith(approved + os.sep) or resolved == approved:
+                if not permissions.get(operation, False):
+                    raise ValueError(
+                        f&quot;Access denied: {operation} not permitted in {approved}&quot;
+                    )
+                return resolved
+        raise ValueError(f&quot;Access denied: {path} is outside approved directories&quot;)
+</code></pre>
+<p>Replace the <code>validate_path</code> function from Lecture 6.1 with calls to your <code>ApprovedFolders</code> instance. Configure it at agent startup:</p>
+<pre><code class="language-python">folders = ApprovedFolders()
+folders.approve(&quot;./workspace&quot;, read=True, write=True)
+folders.approve(&quot;./reference&quot;, read=True, write=False)  # Read-only
+</code></pre>
+<h3>2.3 Testing</h3>
+<p>Verify your implementation handles these cases:</p>
+<ul>
+<li>Reading a file in an approved directory → succeeds</li>
+<li>Writing a file in a read-only directory → fails with clear error</li>
+<li>Accessing a file outside all approved directories → fails with clear error</li>
+<li>Path traversal attempt (<code>../../../etc/passwd</code>) → fails with clear error</li>
+<li>Creating a subdirectory inside an approved writable directory → succeeds</li>
+</ul>
+<hr>
+<h2>Part 3: The Test Workload (~80 minutes)</h2>
+<h3>3.1 The Task Manager API Specification</h3>
+<p>Your agent will build the following Node.js/Express application from scratch. Create a <code>workspace/</code> directory as the approved write directory for this task.</p>
+<p><strong>Application: Task Manager REST API</strong></p>
+<p>A simple REST API for managing tasks (to-do items) with categories. The application should be split across multiple files following standard Express project conventions.</p>
+<p><strong>Required file structure:</strong></p>
+<pre><code>workspace/
+├── package.json
+├── server.js          # Express app setup, middleware, listen
+├── routes/
+│   ├── tasks.js       # Task CRUD routes
+│   └── categories.js  # Category CRUD routes
+├── models/
+│   ├── task.js        # Task data model (in-memory array)
+│   └── category.js    # Category data model (in-memory array)
+└── middleware/
+    └── logger.js      # Request logging middleware
+</code></pre>
+<p><strong>Task model fields:</strong> <code>id</code> (auto-increment), <code>title</code> (string), <code>description</code> (string), <code>categoryId</code> (integer), <code>completed</code> (boolean, default false), <code>createdAt</code> (ISO timestamp)</p>
+<p><strong>Category model fields:</strong> <code>id</code> (auto-increment), <code>name</code> (string)</p>
+<p><strong>Required endpoints:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td>/api/tasks</td>
+<td>List all tasks</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/api/tasks/:id</td>
+<td>Get a single task</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/api/tasks</td>
+<td>Create a task</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>/api/tasks/:id</td>
+<td>Update a task</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/api/tasks/:id</td>
+<td>Delete a task</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/api/tasks?category=:id</td>
+<td>Filter tasks by category</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/api/categories</td>
+<td>List all categories</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/api/categories</td>
+<td>Create a category</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/api/categories/:id</td>
+<td>Delete a category (fail if tasks exist)</td>
+</tr>
+</tbody></table>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Use Express 5 with <code>express.json()</code> middleware</li>
+<li>Each model manages its own in-memory array and provides CRUD functions</li>
+<li>Routes should validate required fields and return appropriate HTTP status codes (400 for missing fields, 404 for not found)</li>
+<li>The logger middleware should print method, path, and status code for every request</li>
+<li>Seed the data with 2 categories (&quot;Work&quot;, &quot;Personal&quot;) and 3 sample tasks on startup</li>
+</ul>
+<h3>3.2 Baseline Run (Naive Tools)</h3>
+<p><strong>Before switching to efficient tools</strong>, temporarily re-register <code>read_file</code> (the naive whole-file version) and unregister <code>search_file</code>/<code>read_lines</code>.</p>
+<p>Give the agent the specification above and let it build the application. Your <code>TokenTracker</code> from Lecture 6.3 should be running.</p>
+<p>Record:</p>
+<ul>
+<li>Total API calls made</li>
+<li>Input tokens per API call (the growth curve)</li>
+<li>Total input and output tokens</li>
+<li>Peak input token count</li>
+<li>Approximate cost at Sonnet pricing</li>
+</ul>
+<p>Save this data — you&#39;ll compare it against the efficient run.</p>
+<h3>3.3 Efficient Run</h3>
+<p>Switch back to <code>search_file</code> + <code>read_lines</code> (unregister <code>read_file</code>). Delete the <code>workspace/</code> directory and start fresh.</p>
+<p>Give the agent the same specification. Record the same metrics.</p>
+<h3>3.4 Modification Requests</h3>
+<p>After the agent builds the application (using the efficient tools), make these additional requests in the same session — <strong>do not restart the agent</strong>. This tests context growth across a multi-turn session.</p>
+<ol>
+<li><p><strong>&quot;Add a PATCH /api/tasks/:id/toggle endpoint that flips the completed status of a task.&quot;</strong> — Requires reading the tasks route file, understanding the existing pattern, and adding a new route.</p>
+</li>
+<li><p><strong>&quot;Add input validation to the POST /api/tasks endpoint: title must be non-empty and under 100 characters, categoryId must reference an existing category.&quot;</strong> — Requires reading both the task routes and the category model.</p>
+</li>
+<li><p><strong>&quot;The logger middleware should also log the response time in milliseconds.&quot;</strong> — Requires reading and editing the middleware.</p>
+</li>
+</ol>
+<p>Record token usage for each modification request. Note how context grows as the session continues.</p>
+<hr>
+<h2>Part 4: Analysis (~30 minutes)</h2>
+<h3>4.1 Context Growth Report</h3>
+<p>Create <code>analysis.md</code> with the following:</p>
+<p><strong>Token usage comparison table:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Naive (<code>read_file</code>)</th>
+<th>Efficient (<code>search_file</code> + <code>read_lines</code>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total API calls</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Total input tokens</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Total output tokens</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Peak input tokens</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Estimated cost (Sonnet)</td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<p><strong>Context growth data:</strong></p>
+<p>For the efficient run (build + modifications), create a table showing input tokens per API call across the full session. Identify:</p>
+<ul>
+<li>Where the biggest jumps occur and why (which tool calls caused them)</li>
+<li>The growth rate during the initial build vs. during modifications</li>
+<li>Whether any tool calls could have been avoided</li>
+</ul>
+<p><strong>Analysis questions</strong> (answer each in 2-3 sentences):</p>
+<ol>
+<li>What percentage of input tokens were saved by using <code>search_file</code> + <code>read_lines</code> instead of <code>read_file</code>?</li>
+<li>During the modification phase, where did most of the context growth come from — the accumulated history, the tool results, or the system prompt?</li>
+<li>At what point (if any) did the agent&#39;s behavior degrade — forgetting earlier context, repeating work, or producing lower-quality edits?</li>
+<li>Based on your token data, estimate the cost of a 30-minute coding session with 15 user messages. Is this sustainable for regular use?</li>
+<li>What context management strategy from Module 4 would be most effective for reducing the growth you observed? Why?</li>
+</ol>
+<hr>
+<h2>Submission</h2>
+<p>Submit the following files:</p>
+<ul>
+<li><code>agent.py</code> — Your extended agent with all new tools, registry, approved-folders, and token tracking</li>
+<li><code>analysis.md</code> — Your context growth report with data tables and analysis</li>
+<li><code>workspace/</code> — The generated Node.js application (from the efficient run)</li>
+<li>Any supporting scripts you wrote for data collection or visualization</li>
+</ul>
+<hr>
+<h2>Grading Rubric</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Weight</th>
+<th>Criteria</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New tools implementation</td>
+<td>25%</td>
+<td><code>search_file</code>, <code>read_lines</code>, <code>delete_file</code> (with confirmation), <code>mkdir</code> all work correctly with proper error handling</td>
+</tr>
+<tr>
+<td>Approved-folders enforcement</td>
+<td>15%</td>
+<td>Path validation works for all operations; traversal attacks fail; read/write permissions enforced</td>
+</tr>
+<tr>
+<td>Token tracking and data collection</td>
+<td>20%</td>
+<td>Complete token data for both runs and modification phase; data is presented clearly</td>
+</tr>
+<tr>
+<td>Analysis quality</td>
+<td>25%</td>
+<td>Comparison is data-driven; growth sources identified; cost estimates reasonable; Module 4 connection made</td>
+</tr>
+<tr>
+<td>Code quality</td>
+<td>15%</td>
+<td>Clean registry pattern; error messages are informative; code is well-organized</td>
+</tr>
+</tbody></table>
+</div>
+</body>
+</html>

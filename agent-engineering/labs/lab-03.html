@@ -1,0 +1,389 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 3 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Lab 3: The Booking Agent</h1>
+<p><strong>Section 3 Lab | Agent Engineering</strong>
+<strong>Duration:</strong> ~2.5 hours
+<strong>Prerequisites:</strong> Module 5 (Lectures 5.1–5.3)</p>
+<hr>
+<h2>Overview</h2>
+<p>In this lab you will apply the prompting principles from Module 5 to a concrete, observable problem: a scheduling agent that manages calendars for a small team.</p>
+<p>The agent loop and all tools are already implemented. Your only job is to write the system prompt in <code>system_prompt.md</code>. The quality of your prompt determines everything — whether the agent checks before booking, respects team preferences, sends properly formatted emails, or ignores most of the rules entirely.</p>
+<p>You will start with a deliberately poor system prompt, observe its failures, write a better one, and run the same scripted test both times to compare results. You will then analyze what changed — not just in score, but in <strong>token usage</strong> — and form a view on where the sweet spot between prompt quality and efficiency sits.</p>
+<hr>
+<h2>What You&#39;re Given</h2>
+<p>All files are in <code>labs/lab03/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>agent.py</code></td>
+<td>Interactive agent — test your prompt manually</td>
+</tr>
+<tr>
+<td><code>test_script.py</code></td>
+<td>Automated 8-turn test with scoring (11 pts total)</td>
+</tr>
+<tr>
+<td><code>reset.py</code></td>
+<td>Resets all calendars and logs to initial state</td>
+</tr>
+<tr>
+<td><code>tools.py</code></td>
+<td>Tool implementations — do not modify</td>
+</tr>
+<tr>
+<td><code>system_prompt.md</code></td>
+<td><strong>The only file you edit</strong></td>
+</tr>
+<tr>
+<td><code>bad_prompt.md</code></td>
+<td>The starting bad prompt (reference copy)</td>
+</tr>
+<tr>
+<td><code>good_prompt.md</code></td>
+<td>A well-written reference prompt — do not open until after your own attempt</td>
+</tr>
+<tr>
+<td><code>calendar_ada.md</code></td>
+<td>Ada&#39;s calendar</td>
+</tr>
+<tr>
+<td><code>calendar_alan.md</code></td>
+<td>Alan&#39;s calendar</td>
+</tr>
+<tr>
+<td><code>calendar_emmy.md</code></td>
+<td>Emmy&#39;s calendar</td>
+</tr>
+<tr>
+<td><code>email_log.txt</code></td>
+<td>All emails logged by the agent</td>
+</tr>
+<tr>
+<td><code>trace.log</code></td>
+<td>Full tool call trace</td>
+</tr>
+</tbody></table>
+<p>The agent uses <strong>Claude Haiku</strong> (<code>claude-haiku-4-5-20251001</code>). This is intentional. A weaker model exposes prompt weaknesses much more visibly than a frontier model would — making the impact of your improvements concrete and measurable.</p>
+<hr>
+<h2>Setup</h2>
+<p>From <code>labs/lab03/</code>:</p>
+<pre><code class="language-bash">pip install -r requirements.txt
+</code></pre>
+<p>Your Anthropic API key must be in a <code>.env</code> file in the <code>labs/lab03/</code> directory. The lab code loads it automatically.</p>
+<hr>
+<h2>The Scenario</h2>
+<p>You manage the schedule for a three-person team: <strong>Ada</strong>, <strong>Alan</strong>, and <strong>Emmy</strong>. Their calendars are markdown files in the lab directory. The agent handles booking, cancellation, availability checks, and email notification.</p>
+<h3>The Six Tools</h3>
+<p>The agent has six tools. Understanding what each tool does — and when the agent should use it — is essential for writing a good system prompt. A prompt that does not tell the agent <em>when</em> and <em>in what order</em> to call tools will produce inconsistent, incorrect behavior.</p>
+<hr>
+<p><strong><code>list_people()</code></strong></p>
+<p>Returns the list of team members and their current scheduling preferences. Takes no arguments.</p>
+<p>This tool exists because preferences are not static — they may change. A prompt that hardcodes preference information is a prompt that becomes stale. The right design is to instruct the agent to call this tool at the start of every booking turn so preferences are always retrieved from the authoritative source.</p>
+<p><em>What it returns (currently):</em></p>
+<pre><code>Team members and their scheduling preferences:
+- Ada: No scheduling restrictions.
+- Alan: Prefers no meetings before 10:00am.
+- Emmy: Prefers group meetings only (3 or more attendees). Do not book 1:1 meetings with Emmy.
+</code></pre>
+<hr>
+<p><strong><code>read_calendar(person, date)</code></strong></p>
+<p>Returns a person&#39;s full schedule for a given date, formatted as a list of appointments with start/end times and titles. Use this when you need to understand someone&#39;s full day — for example, when searching for a free slot for a group meeting.</p>
+<hr>
+<p><strong><code>check_availability(person, date, time, duration_minutes)</code></strong></p>
+<p>Checks whether a specific person is free at a given time for a given duration. Returns <code>&quot;available&quot;</code> or a description of the conflicting appointment.</p>
+<p>This tool should be called for <strong>every attendee</strong> before booking any meeting — including when the agent believes it already knows the schedule from earlier in the conversation. Memory is not a substitute for a tool call.</p>
+<p>This same principle applies when declining a booking due to a conflict: the agent should call <code>check_availability</code> to confirm the conflict exists before refusing. Do not decline based on recall alone.</p>
+<hr>
+<p><strong><code>book_appointment(attendees, date, time, duration_minutes, title)</code></strong></p>
+<p>Writes an appointment to all attendees&#39; calendar files simultaneously. Should only be called <strong>after</strong> <code>check_availability</code> confirms every attendee is free. Must include all attendees.</p>
+<hr>
+<p><strong><code>send_email(to, subject, body)</code></strong></p>
+<p>Logs an email to <code>email_log.txt</code>. A confirmation email should be sent after every successful booking; a notification email should be sent after every cancellation.</p>
+<p>The subject line format matters. A well-designed prompt specifies:</p>
+<ul>
+<li>Booking confirmations: <code>Confirmed: [title] on [day] at [time]</code></li>
+<li>Cancellation notifications: <code>Cancelled: [title] on [day]</code></li>
+</ul>
+<p>For group booking emails, the email body should name all attendees.</p>
+<hr>
+<p><strong><code>cancel_appointment(person, date, time)</code></strong></p>
+<p>Removes an existing appointment from a person&#39;s calendar by matching the start time. After cancelling, send the person a notification email.</p>
+<hr>
+<h3>Business Rules</h3>
+<p>In addition to correct tool usage, the agent must follow these rules:</p>
+<p><strong>15-minute buffer rule.</strong> Never book a meeting that starts within 15 minutes of another meeting ending for the same person. If a meeting ends at 12:00pm, the earliest the next meeting for that person can start is 12:15pm.</p>
+<p><strong>Working hours.</strong> Only book meetings between 9:30am and 4:30pm.</p>
+<p><strong>Group meeting protocol.</strong> When no time is specified for a multi-person meeting, the agent must read all attendees&#39; calendars, compute free windows for each person (applying the buffer rule), find the earliest common window, then check availability and book.</p>
+<hr>
+<h2>The Test Script</h2>
+<p><code>test_script.py</code> runs an 8-turn scripted conversation against your system prompt and scores each turn. It resets all state automatically at startup — you do not need to run <code>reset.py</code> before running the test.</p>
+<p><strong>Scoring: 11 points total</strong></p>
+<table>
+<thead>
+<tr>
+<th>Turn</th>
+<th>User Request</th>
+<th>What Is Tested</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Book a 1:1 with Ada on Monday at 11am</td>
+<td>Check before booking; detect conflict; do NOT book</td>
+<td>2</td>
+</tr>
+<tr>
+<td>2</td>
+<td>OK, book it at 10am instead</td>
+<td>Check; book; send email with <code>Confirmed:</code> in subject</td>
+<td>1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Schedule an hour-long team meeting with Ada, Alan, Emmy on Monday</td>
+<td>Read all 3 calendars; respect buffer rule; book all 3; email body names all attendees</td>
+<td>2</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Book a 15-minute catch-up with just Emmy on Monday at 2pm</td>
+<td>Call <code>list_people</code>; recognize Emmy&#39;s preference; refuse the 1:1</td>
+<td>2</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Book a catch-up with Alan at the same time as the team meeting</td>
+<td>Call <code>check_availability</code>; detect conflict; do NOT book</td>
+<td>1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Ada&#39;s weekly sync has been cancelled — remove it and notify her</td>
+<td>Cancel the appointment; send email with <code>Cancelled:</code> in subject</td>
+<td>1</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Find a 30-minute slot for Ada and Alan before the team meeting and book it</td>
+<td>Find valid slot respecting buffer; book both; email both</td>
+<td>1</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Send the agenda to all three team meeting attendees</td>
+<td>Email Ada, Alan, AND Emmy</td>
+<td>1</td>
+</tr>
+</tbody></table>
+<p>Each turn, the script prints:</p>
+<ul>
+<li>The tool calls made (in order)</li>
+<li>The agent&#39;s response (truncated to 300 chars)</li>
+<li>Token counts for that turn</li>
+<li>A per-check PASS / PARTIAL / FAIL verdict</li>
+<li>Points earned</li>
+</ul>
+<p>At the end, you get a final scorecard with a visual bar for each turn and total tokens used.</p>
+<p><strong>Reading failures.</strong> The verdict lines tell you exactly what went wrong. A <code>[FAIL] check_availability NOT called</code> means the agent booked (or refused) without verifying. A <code>[FAIL] Email subject does NOT contain &#39;Confirmed:&#39;</code> means the email format rule was not specified clearly enough. Use these messages as a checklist for what to add to your prompt.</p>
+<hr>
+<h2>Activity 1: Diagnose the Bad Prompt (20 min)</h2>
+<p><code>system_prompt.md</code> starts with the bad prompt. Run the test:</p>
+<pre><code class="language-bash">cd labs/lab03
+python test_script.py
+</code></pre>
+<p>Watch each turn carefully. For each failure or partial, record:</p>
+<ol>
+<li>What the agent did wrong</li>
+<li>Which anti-pattern from the lectures explains it — vague role, missing constraints, no tool sequencing, no output format requirements, etc.</li>
+<li>What specific instruction or rule would have fixed it</li>
+</ol>
+<p>Some failures are obvious (the agent books without checking). Others are subtle (the email subject doesn&#39;t follow any format, so the subject check fails). The bad prompt fails both kinds.</p>
+<p><strong>Tip:</strong> Also look at which turns <em>pass</em> despite the bad prompt. The model&#39;s general intelligence fills in some gaps on simple tasks. Your goal in Activity 2 is to close the gap on the harder ones — particularly Emmy&#39;s preference and the email format rules, which require explicit instruction to pass.</p>
+<hr>
+<h2>Activity 2: Write an Improved System Prompt (60 min)</h2>
+<p>Edit <code>system_prompt.md</code>. Apply the system prompt architecture from Lecture 5.2:</p>
+<p><strong>1. Identity and role.</strong> Who is this agent? What is its purpose? What does it manage?</p>
+<p><strong>2. Tool reference.</strong> For each tool: what it does, when to call it, and any constraints on sequencing. The tool descriptions in the agent schema already provide basic information — your system prompt is where you add usage rules. For example: &quot;Call <code>check_availability</code> for every attendee before booking — even if you recall the schedule from earlier in this conversation.&quot;</p>
+<p><strong>3. Business rules.</strong> Each rule as a named, explicit block. Don&#39;t bury the 15-minute buffer rule in a sentence — give it a heading and state it precisely. Same for working hours and group meeting protocol.</p>
+<p><strong>4. Team preferences.</strong> This is the part most students underestimate. Emmy does not accept 1:1 meetings. Alan does not take early-morning meetings. These facts are <strong>not</strong> obvious to the model — they must be stated explicitly. The <code>list_people</code> tool returns current preferences, but your prompt needs to instruct the agent to call that tool and what to do with the result. Telling the model to call <code>list_people</code> and then also stating the current rules is not redundant — the tool call is what ensures the agent always works from current data, not stale prompt text.</p>
+<p><strong>5. Output format.</strong> Email subject line conventions. Response format after booking, after cancellation, after a conflict. If you don&#39;t specify these, the model will invent a format and the email content checks will fail.</p>
+<p><strong>6. Protocol.</strong> A step-by-step sequence for each action type. Booking: (1) call <code>list_people</code>, (2) call <code>check_availability</code> for every attendee, (3) if available, call <code>book_appointment</code>, (4) call <code>send_email</code> with proper subject. Group scheduling: read all calendars first, find free windows, then run the booking protocol. Cancellation: cancel, then email.</p>
+<h3>Testing as you go</h3>
+<p>Use <code>agent.py</code> for fast interactive iteration:</p>
+<pre><code class="language-bash">python agent.py
+</code></pre>
+<p>Try these cases manually before running the full test:</p>
+<ul>
+<li>&quot;Book a 1:1 with Ada on Monday at 11am&quot; — does it check first? Does it report the conflict and suggest alternatives?</li>
+<li>&quot;Book a 1:1 with Emmy on Tuesday&quot; — does it refuse and explain why?</li>
+<li>&quot;Set up a team meeting with everyone on Monday, find a time&quot; — does it read all three calendars?</li>
+</ul>
+<p>When you think the prompt is ready, run the full test:</p>
+<pre><code class="language-bash">python test_script.py
+</code></pre>
+<p>The test resets state automatically. Iterate on the failures and re-run until your score plateaus. It&#39;s fine to run the test 5-10 times as you iterate.</p>
+<h3>On the <code>list_people</code> tool</h3>
+<p>Turn 4 specifically tests whether the agent calls <code>list_people</code> before acting on a 1:1 request. This is one of the harder points to earn because the model will often read the preference directly from your prompt text and skip the tool call. To force the tool call, your prompt needs to make the mandate explicit and give the model a reason: preferences are subject to change and the tool is the only authoritative source.</p>
+<p>This is a good example of a general principle: <strong>telling the model what to do is not enough when the model can shortcut it</strong>. You have to explain <em>why</em> the tool call is required — that the in-prompt knowledge may be stale.</p>
+<hr>
+<h2>Activity 3: Measure and Compare (30 min)</h2>
+<p>Run the test with the bad prompt, then with your improved prompt. Record the per-turn scores and token counts from both runs.</p>
+<pre><code class="language-bash"># Run 1: bad prompt (saves your work first)
+cp system_prompt.md my_prompt.md
+cp bad_prompt.md system_prompt.md
+python test_script.py
+
+# Run 2: restore your prompt
+cp my_prompt.md system_prompt.md
+python test_script.py
+</code></pre>
+<p>The test prints per-turn token counts and totals. Fill in both tables:</p>
+<p><strong>Scoring table:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Turn</th>
+<th>Bad Prompt</th>
+<th>Your Prompt</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1 — Conflict detection (Ada 11am)</td>
+<td>/2</td>
+<td>/2</td>
+</tr>
+<tr>
+<td>2 — Check + book + Confirmed: email</td>
+<td>/1</td>
+<td>/1</td>
+</tr>
+<tr>
+<td>3 — Group scheduling (3-person)</td>
+<td>/2</td>
+<td>/2</td>
+</tr>
+<tr>
+<td>4 — Emmy 1:1 preference</td>
+<td>/2</td>
+<td>/2</td>
+</tr>
+<tr>
+<td>5 — Conflict detection (Alan team meeting)</td>
+<td>/1</td>
+<td>/1</td>
+</tr>
+<tr>
+<td>6 — Cancel + Cancelled: email</td>
+<td>/1</td>
+<td>/1</td>
+</tr>
+<tr>
+<td>7 — Find slot + book Ada &amp; Alan</td>
+<td>/1</td>
+<td>/1</td>
+</tr>
+<tr>
+<td>8 — Agenda email to all 3</td>
+<td>/1</td>
+<td>/1</td>
+</tr>
+<tr>
+<td><strong>Total score</strong></td>
+<td><strong>/11</strong></td>
+<td><strong>/11</strong></td>
+</tr>
+</tbody></table>
+<p><strong>Token table (from the scorecard at the end of each run):</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Bad Prompt</th>
+<th>Your Prompt</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total input tokens</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Total output tokens</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Total tokens</td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<p>Now open <code>good_prompt.md</code> and read it carefully. It is intentionally thorough. Note what it does that yours does not.</p>
+<h3>Token analysis</h3>
+<p>Once you have both runs&#39; data, go deeper. The test script prints per-turn token counts — record them individually for both runs.</p>
+<p>Think about what drives the token counts:</p>
+<ol>
+<li><p><strong>System prompt length.</strong> Every API call includes the full system prompt. A longer prompt adds tokens to every single turn of the conversation. The system prompt is not free.</p>
+</li>
+<li><p><strong>Tool call loops.</strong> Each time the agent calls a tool, the API is called again — with the same (growing) conversation history plus the tool result. A turn that requires 3 tool calls makes 3 API calls. Each one costs input tokens for the entire history so far.</p>
+</li>
+<li><p><strong>Iteration and recovery.</strong> When the agent makes a wrong decision and the user corrects it, that correction becomes part of the conversation history. Every subsequent turn carries the cost of that detour. A prompt that prevents wrong decisions saves tokens over time — not on the turn where the mistake happens, but on every turn that follows.</p>
+</li>
+<li><p><strong>The <code>list_people</code> overhead.</strong> The good prompt calls <code>list_people</code> on every booking turn. That is an extra tool call and an extra API round-trip. In this 8-turn test, that adds meaningful token cost. Is the added cost justified? Consider what Turn 4 tests: a model that skips <code>list_people</code> and reads Emmy&#39;s preference directly from the prompt will fail the turn if the tool call is required for credit. In a production system, a model that relies on stale prompt text instead of calling the tool would eventually schedule a meeting that violates a changed preference. The tool call is insurance. You are deciding how much insurance is worth.</p>
+</li>
+</ol>
+<p>With this in mind, answer: is there a version of your prompt that achieves a comparable score at lower token cost? Try stripping out sections that don&#39;t affect the score and re-running. Where does the score drop first?</p>
+<hr>
+<h2>Activity 4: Reflection (20 min)</h2>
+<p>Write a short report covering the following. Be specific — reference your data, not general impressions.</p>
+<h3>Required sections</h3>
+<p><strong>1. Failure analysis</strong>
+For the bad prompt run, describe each failing turn. What did the agent do? What was missing from the prompt that caused the failure? Quote the failure verdict line from the test output.</p>
+<p><strong>2. Prompt changes and their impact</strong>
+For your best-scoring prompt, identify the two or three changes that had the largest effect on accuracy. Why did those specific changes work? Reference the prompting principles from the lectures.</p>
+<p><strong>3. Token usage analysis</strong></p>
+<p>Include both token tables (score + token counts per turn for bad and good runs).</p>
+<p>Then answer:</p>
+<ul>
+<li>Which turns consumed the most tokens in each run, and why?</li>
+<li>Did the more accurate prompt use more or fewer total tokens than the bad prompt? Was this what you expected?</li>
+<li>The system prompt is included in every API call. Given that, what&#39;s the cost of adding 500 more words to a prompt that runs thousands of conversations per day?</li>
+<li>Is there a version of your prompt that scores 9/11 or better but uses significantly fewer tokens than <code>good_prompt.md</code>? Describe what you kept and what you cut.</li>
+<li>What is your assessment of the sweet spot between prompt quality and token efficiency for this agent?</li>
+</ul>
+<p><strong>4. Comparison with <code>good_prompt.md</code></strong>
+What does <code>good_prompt.md</code> do that your prompt does not? Is the gap a missing rule, a missing tool instruction, or a missing output format requirement? Which principle from Lectures 5.1–5.2 explains why the reference prompt includes it?</p>
+<hr>
+<h2>Deliverables</h2>
+<p>Submit:</p>
+<ul>
+<li>Your final <code>system_prompt.md</code></li>
+<li>Your lab report (as <code>lab-03-report.md</code>) containing all four sections above</li>
+</ul>
+<hr>
+<h2>Tips</h2>
+<p><strong>Start from failures, not from theory.</strong> Each test failure tells you exactly what instruction is missing. The verdict messages are specific — use them as a checklist. Fix one thing, re-run, move on.</p>
+<p><strong>Positive instructions outperform prohibitions.</strong> &quot;Call <code>check_availability</code> for every attendee before booking&quot; is more reliable than &quot;never book without checking.&quot; The first tells the model what to do; the second just tells it what not to do.</p>
+<p><strong>Tool descriptions are part of your prompt.</strong> The model sees the tool schema descriptions when it decides whether to call a tool. Put usage rules in the system prompt as well — the model needs to know the sequence, not just the definition.</p>
+<p><strong>Mandatory tool calls require justification.</strong> If you want the model to call a tool even when it thinks it already knows the answer, you need to explain why the tool call is required. &quot;Preferences may change — the tool is the authoritative source&quot; gives the model a reason to call <code>list_people</code> instead of reading from the prompt.</p>
+<p><strong>The email format is invisible until it isn&#39;t.</strong> Turns 2 and 6 test specific subject line content. The model will invent a reasonable-sounding subject that happens to fail the check. The only fix is to specify the format explicitly. This is a good example of why output format specifications belong in the system prompt, not left to inference.</p>
+<p><strong>Distinguish memory from verification.</strong> A well-prompted agent calls <code>check_availability</code> even when it remembers a conflict from earlier in the conversation. This is a testable requirement (Turn 5). The model needs an explicit instruction — and a reason — to call the tool rather than rely on its context.</p>
+<p><strong>Don&#39;t over-engineer.</strong> The token analysis in Activity 3 is meant to push back on the assumption that more prompt is always better. Some instructions in <code>good_prompt.md</code> only affect one or two turns. Are they worth their token cost at scale? That&#39;s a real engineering tradeoff, not a gotcha — and the lab is asking you to think through it.</p>
+</div>
+</body>
+</html>

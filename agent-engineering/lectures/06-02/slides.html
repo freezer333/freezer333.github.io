@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Implementing Tools and Safety — Agent Engineering</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../../styles/slides.css">
+</head>
+<body>
+    <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Implementing Tools and Safety
+
+???
+~20 minutes. Replace stubs from 6.1 with real filesystem tools. Add directory safety and the confirmation pattern.
+
+---
+
+# The Tool Contract
+
+Every tool follows one rule:
+
+**Accept arguments → return a string.**
+
+The string becomes a `tool_result` in the next API call. The model reads it.
+
+| Outcome | What the tool returns |
+|---|---|
+| Success | `"Created hello.py"`, `"Edited utils.py"` |
+| File contents | The raw text (enters context, stays there) |
+| Error | `"Error: file not found: missing.py"` |
+
+.callout[Error handling is communication with the model. A clear error string is actionable. A vague error wastes a tool call. A crash gives the model nothing.]
+
+???
+60 seconds. This contract applies to every tool students will ever write.
+
+---
+
+# list_files
+
+.small-code[
+```python
+def list_files(path):
+    """List files and directories at the given path."""
+*   path = validate_path(path)
+    try:
+        entries = os.listdir(path)
+        lines = []
+        for entry in sorted(entries):
+            full = os.path.join(path, entry)
+            kind = "dir" if os.path.isdir(full) else "file"
+            lines.append(f"{entry}  [{kind}]")
+        return "\n".join(lines) if lines else "(empty directory)"
+    except FileNotFoundError:
+        return f"Error: directory not found: {path}"
+    except PermissionError:
+        return f"Error: permission denied: {path}"
+```
+]
+
+- Sorted output → deterministic results
+- Type annotations (`[file]`/`[dir]`) → model can decide what to explore
+- Errors as return values → model reads them, not the Python runtime
+
+???
+60 seconds. The `validate_path` call is explained in the directory safety section.
+
+---
+
+# read_file
+
+```python
+def read_file(filename):
+    """Read the complete contents of a file."""
+    filename = validate_path(filename)
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"Error: file not found: {filename}"
+    except PermissionError:
+        return f"Error: permission denied: {filename}"
+*   except UnicodeDecodeError:
+*       return f"Error: file is not readable as text: {filename}"
+```
+
+This is the **naive design** — entire file contents enter context.
+
+Lab 4 replaces it with `search_file` + `read_lines`.
+
+The `UnicodeDecodeError` catch matters: without it, reading a binary file crashes the tool and the error never reaches the model.
+
+???
+60 seconds. Flag the naive design explicitly. Students will measure the token cost in Lab 4.
+
+---
+
+# edit_file
+
+.small-code[
+```python
+def edit_file(path, old_str, new_str):
+    """Create or edit a file using string replacement."""
+    path = validate_path(path)
+    if old_str == "":
+        dir_name = os.path.dirname(path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_str)
+        return f"Created {path}"
+    else:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                contents = f.read()
+        except FileNotFoundError:
+*           return f"Error: file not found: {path}. Read the file first."
+        if old_str not in contents:
+            return f"Error: text not found in {path}"
+*       updated = contents.replace(old_str, new_str, 1)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(updated)
+        return f"Edited {path}"
+```
+]
+
+???
+90 seconds. Two highlighted lines: the error message reinforces "read first" at the exact moment the model needs it. `replace(..., 1)` prevents accidental multi-site edits.
+
+---
+
+# The Path Traversal Problem
+
+The system prompt says: *"Only access files within the current project directory."*
+
+What happens when the user says: `"read ../../etc/passwd"`?
+
+.split-left[
+**Without tool enforcement:**
+
+The model *might* refuse based on the prompt constraint.
+
+Or it might not. Prompt compliance is **probabilistic**.
+]
+
+.split-right[
+**With tool enforcement:**
+
+`validate_path` resolves the path and checks it.
+
+Access denied. **Deterministic**.
+]
+
+<div class="clear"></div>
+
+.warning[Prompt-level constraints are behavioral guidance, not access control. Tool-level enforcement is the actual security boundary.]
+
+???
+60 seconds. This is a security principle. Prompts are policies; tools are access controls.
+
+---
+
+# validate_path
+
+```python
+ALLOWED_DIR = os.path.realpath(os.getcwd())
+
+def validate_path(path):
+    """Resolve a path and verify it falls within the allowed directory."""
+*   resolved = os.path.realpath(os.path.join(ALLOWED_DIR, path))
+*   if not resolved.startswith(ALLOWED_DIR + os.sep) and resolved != ALLOWED_DIR:
+        raise ValueError(f"Access denied: {path} is outside the project directory")
+    return resolved
+```
+
+Three details:
+
+1. **`os.path.realpath`** — resolves symlinks and `..` components
+2. **`+ os.sep`** — prevents `/home/project-backup` passing the check for `/home/project`
+3. **Raises `ValueError`** — default is denial; dispatch_tool catches it and returns the error as a string
+
+???
+90 seconds. Walk through what happens with `../../etc/passwd`: join → realpath resolves to `/etc/passwd` → prefix check fails → ValueError.
+
+---
+
+# Defense in Depth
+
+.center[<img src="defense-in-depth.png" style="max-width:55%;">]
+
+| Layer | What it does | Reliability |
+|---|---|---|
+| System prompt | "Stay within the project directory" | Probabilistic |
+| `validate_path` in each tool | Resolves and checks every path | Deterministic |
+| `dispatch_tool` catch-all | Catches any unhandled exception | Fail-safe |
+
+Both the prompt and the tool enforcement matter. The prompt prevents the model from *trying* most of the time — saving a wasted tool call. The tool catches the cases where it tries anyway.
+
+???
+60 seconds. Three layers, each serving a different purpose.
+
+Image prompt for `defense-in-depth.png`: "Three concentric rounded rectangles (like nested boxes), viewed from above. Outermost box labeled 'System prompt constraint' in light blue. Middle box labeled 'validate_path()' in teal. Innermost box labeled 'dispatch_tool catch-all' in darker teal. An arrow from the outside points inward, labeled 'File access request'. Clean flat design, sans-serif labels, white background."
+
+---
+
+# The Confirmation Pattern
+
+Some operations are destructive. The tool should ask before acting:
+
+```python
+def delete_file(path, confirmed=False):
+    """Delete a file. Requires confirmation."""
+    path = validate_path(path)
+    if not confirmed:
+*       return ("About to delete " + path +
+*               ". Call delete_file again with confirmed=True to proceed.")
+    os.remove(path)
+    return f"Deleted {path}"
+```
+
+The loop handles the back-and-forth automatically:
+
+1. Model calls `delete_file(path="important.py")` → `confirmed=False`
+2. Tool returns warning → tool_result in messages
+3. Model surfaces warning to user → end_turn
+4. User confirms → new outer loop iteration
+5. Model calls `delete_file(path="important.py", confirmed=True)` → deleted
+
+???
+90 seconds. The elegance: no special "confirmation mode" — the existing loop structure carries it. Lab 4 implements this.
+
+---
+
+# Key Takeaways
+
+1. **Tools return strings, always** — success, content, and errors all enter the model's context the same way
+2. **Error messages are prompts** — clear errors let the model self-correct; vague errors waste calls
+3. **`validate_path`** — `os.path.realpath` + prefix check = deterministic directory safety
+4. **Prompt constraints are advisory; tool enforcement is authoritative**
+5. **Confirmation pattern** — return a warning instead of acting; let the loop handle it
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script>
+        var slideshow = remark.create({
+            ratio: '16:9',
+            highlightStyle: 'github',
+            highlightLines: true,
+            countIncrementalSlides: false,
+            navigation: { scroll: false }
+        });
+    </script>
+</body>
+</html>

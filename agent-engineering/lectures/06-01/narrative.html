@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Agent Loop — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 6.1</a></div></nav>
+<div class="page_content"><h1>The Agent Loop</h1>
+<p>Lecture 5.3 introduced the agent loop while building the coding agent system prompt. This lecture goes deeper — not to introduce new tools or prompting techniques, but to fully internalize the architecture that makes tool-calling agents work. The two-loop structure is the skeleton of every agent you will ever build; understanding it clearly removes a lot of confusion that shows up later when agents behave unexpectedly.</p>
+<hr>
+<h2>Why Two Loops?</h2>
+<p>The naive mental model of an agent is a single loop: ask the user for input, call the LLM, print the result, repeat. That works for a chatbot. It breaks for an agent.</p>
+<p>The problem is that an agent&#39;s work happens at two different timescales. From the user&#39;s perspective, one exchange is one turn: they type a request and eventually receive a response. But inside that single turn, the LLM may decide it needs to call three tools before it can answer. Each tool call requires a round-trip to the LLM: call the API, get a tool request, execute the tool, send the result back, call the API again. The user is unaware of this; they&#39;re waiting. The agent is running.</p>
+<p>A single loop cannot express both concerns cleanly. You&#39;d end up with a mess of flags and conditionals tracking whether you&#39;re in the &quot;getting user input&quot; phase or the &quot;handling tool calls&quot; phase. The two-loop design names these concerns and separates them:</p>
+<p><strong>The outer loop</strong> runs once per user message. It gets input, appends it to the messages array, delegates everything else to the inner loop, and then surfaces the final reply. One iteration of the outer loop is one visible exchange.</p>
+<p><strong>The inner loop</strong> runs once per API call. It calls the LLM, inspects the response, and branches on <code>stop_reason</code>. If the model requested tools, execute them and loop again. If the model is done, break out to the outer loop. Multiple inner loop iterations are invisible to the user — they&#39;re the conversation between the agent code and the model.</p>
+<p>In pseudocode:</p>
+<pre><code># Outer loop: one iteration per user message
+while True:
+    get user input
+    append to messages
+    run inner loop      ← invisible to user
+    print reply
+
+# Inner loop: one iteration per API call
+while True:
+    call API
+    check stop_reason
+    if tool_use  → execute tools, loop
+    if end_turn  → surface reply, break
+</code></pre>
+<p>This separation also maps directly onto what researchers call the ReAct pattern (Reasoning + Acting). The model reasons about what to do, acts by requesting a tool, observes the result, and reasons again. The inner loop is the mechanism that makes this cycle possible.</p>
+<hr>
+<h2>stop_reason Is the Entire Control Flow</h2>
+<p>The inner loop has exactly one decision point: <code>response.stop_reason</code>. There are two values that matter:</p>
+<ul>
+<li><strong><code>&quot;tool_use&quot;</code></strong> — the model is not done. It has issued one or more structured tool requests. Execute them, package the results, send them back.</li>
+<li><strong><code>&quot;end_turn&quot;</code></strong> — the model is done. Extract the text reply, break out of the inner loop.</li>
+</ul>
+<p><img src="../../images/agent-loop-state-machine.png" alt="Agent loop state machine"></p>
+<p>Two states. One branch. That is the entire agent. Every agent built on the Anthropic API — from a 200-line teaching script to Claude Code — uses this exact structure.</p>
+<p>Students sometimes expect agent loops to be elaborate. The insight is that the core is trivially simple. The complexity lives in the tools, the system prompt, and the context management around the loop — not in the loop itself.</p>
+<hr>
+<h2>Walking Through the Code</h2>
+<p>The complete implementation for this lecture is in <code>agent.py</code>. The system prompt and tool schemas are carried over unchanged from Lecture 5.3. For now, the tool implementations are stubs — they return strings like <code>&quot;(stub) reading filename&quot;</code> rather than actually touching the filesystem. The stubs are intentional: they let the loop run correctly and be verified before real filesystem operations add any complexity.</p>
+<h3>The Outer Loop</h3>
+<pre><code class="language-python">def run_agent():
+    messages = []
+    print(&quot;Coding Agent — type your request. Empty line to quit.\n&quot;)
+
+    while True:
+        user_input = input(&quot;You: &quot;).strip()
+        if not user_input:
+            print(&quot;Goodbye.&quot;)
+            break
+
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_input})
+
+        # inner loop runs here
+</code></pre>
+<p>The outer loop maintains the <code>messages</code> array across the entire session. Each new user message gets appended before the inner loop runs. When the inner loop returns, the outer loop goes back to <code>input()</code> and waits for the next message.</p>
+<h3>The Inner Loop</h3>
+<pre><code class="language-python">        while True:
+            response = client.messages.create(
+                model=&quot;claude-sonnet-4-6&quot;,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                tools=TOOLS,
+                messages=messages
+            )
+            messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: response.content})
+
+            if response.stop_reason == &quot;tool_use&quot;:
+                tool_results = []
+                for block in response.content:
+                    if block.type == &quot;tool_use&quot;:
+                        result = dispatch_tool(block.name, block.input)
+                        tool_results.append({
+                            &quot;type&quot;: &quot;tool_result&quot;,
+                            &quot;tool_use_id&quot;: block.id,
+                            &quot;content&quot;: result
+                        })
+                messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: tool_results})
+            else:
+                for block in response.content:
+                    if block.type == &quot;text&quot;:
+                        print(f&quot;\nAssistant: {block.text}\n&quot;)
+                break
+</code></pre>
+<p>Five lines drive everything meaningful here. Each one deserves attention.</p>
+<p><strong><code>messages.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: response.content})</code></strong></p>
+<p><code>response.content</code> is a list of content blocks — it may contain <code>tool_use</code> blocks, <code>text</code> blocks, or both. The entire list goes into the messages array as the assistant turn, not just the text. This is critical: on the next API call, the model needs to see its own tool requests in the history. If you only preserved the text, the model would lose track of what it asked for.</p>
+<p><strong><code>if response.stop_reason == &quot;tool_use&quot;</code></strong></p>
+<p>The only branch. Everything else follows from this.</p>
+<p><strong><code>&quot;tool_use_id&quot;: block.id</code></strong></p>
+<p>Each tool result is tagged with the ID of the tool call that requested it. The model may issue multiple tool calls in a single response — it might want to read three files at once. The IDs allow the model to match each result to the request that generated it. Without IDs, a response with three tool results would be ambiguous.</p>
+<p><strong><code>messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: tool_results})</code></strong></p>
+<p>Tool results enter the conversation as <code>role: &quot;user&quot;</code>. This surprises people. The reason is the API&#39;s view of the world: there are only two speakers — the user and the assistant. Tool results come from outside the model (the agent code ran them), so they re-enter from the user side. The model did not produce these results; the external world did.</p>
+<p><strong><code>break</code></strong></p>
+<p>The only exit from the inner loop. The loop runs until <code>stop_reason</code> is not <code>&quot;tool_use&quot;</code>. In principle, a model could keep requesting tools indefinitely. Production agents set an iteration limit (typically 25–50 tool calls per user message); if the limit is hit, the agent surfaces an error rather than looping forever. This lecture&#39;s implementation omits the limit for clarity; Lecture 6.4 adds instrumentation and discusses failure modes.</p>
+<h3>Error Handling in Tools</h3>
+<p>A common question is why tool errors are returned as strings rather than raised as exceptions. The answer is that the model needs to read the error. If a tool throws an uncaught exception that crashes the agent, the model never learns what went wrong. By returning an error string — <code>&quot;Error: file not found: main.py&quot;</code> — the error enters the conversation as a <code>tool_result</code>, and the model can report it to the user, try an alternative approach, or ask for clarification.</p>
+<p>The full <code>agent.py</code> for this lecture is at <code>agent.py</code>. Real tool implementations — with filesystem operations and proper error handling — replace the stubs in Lecture 6.2.</p>
+<hr>
+<h2>Tracing the Messages Array</h2>
+<p>Reading the code is one thing; watching the messages array grow through an actual exchange makes the mechanics concrete.</p>
+<h3>Single Tool Call</h3>
+<p>User: <em>&quot;Create hello.py with a hello world function&quot;</em></p>
+<pre><code>[0] role: user       &quot;Create hello.py with a hello world function&quot;
+[1] role: assistant  [tool_use: edit_file(path=&quot;hello.py&quot;, old_str=&quot;&quot;, ...)]
+[2] role: user       [tool_result: &quot;Created hello.py&quot;]
+[3] role: assistant  [text: &quot;Done — created hello.py.&quot;]
+</code></pre>
+<p>The inner loop ran twice. First iteration: the model requested a tool (entry <code>[1]</code>). Second iteration: the model produced the final reply (entry <code>[3]</code>). The user sees only <code>[0]</code> and <code>[3]</code>. Entries <code>[1]</code> and <code>[2]</code> are the internal conversation between the agent code and the model.</p>
+<h3>Multi-Tool Exchange</h3>
+<p>User: <em>&quot;Add a main block to hello.py&quot;</em></p>
+<p>The model needs to read the file before it can edit it:</p>
+<pre><code>[0] role: user       &quot;Add a main block to hello.py&quot;
+[1] role: assistant  [tool_use: read_file(filename=&quot;hello.py&quot;)]
+[2] role: user       [tool_result: &quot;def hello():\n    print(&#39;Hello!&#39;)&quot;]
+[3] role: assistant  [tool_use: edit_file(path=&quot;hello.py&quot;, ...)]
+[4] role: user       [tool_result: &quot;Edited hello.py&quot;]
+[5] role: assistant  [text: &quot;Done — added a main block.&quot;]
+</code></pre>
+<p>The inner loop ran three times. The model on its third API call can see the file contents from <code>[2]</code> and the edit confirmation from <code>[4]</code>. The user sees only <code>[0]</code> and <code>[5]</code>.</p>
+<p>This is the read-before-edit pattern from Lecture 5.3, now visible in the messages array. The model isn&#39;t following the rule because of willpower — it follows it because the messages array gives it all the information it needs to do the right thing, and the system prompt reinforces the behavior.</p>
+<hr>
+<h2>Messages Are the Memory</h2>
+<p><img src="../../images/context-growth-sketch.png" alt="Context growth over API calls"></p>
+<p>Each API call sends the <strong>complete</strong> messages array. The model has no persistent state between calls — it reads the full array fresh on every iteration of the inner loop.</p>
+<p>The consequence is monotonic growth. Every tool result appended in iteration N is still present in iteration N+5. A <code>read_file</code> that returns 2,000 tokens of file contents adds 2,000 tokens to every subsequent API call in the session. The system prompt and tool schemas are a fixed overhead on every call; the messages array grows on top of that.</p>
+<p>This is the context growth problem introduced in Module 4, now visible in the code that produces it. The inner loop creates the problem. Context management strategies — sliding window, compaction, progressive disclosure — are the solutions. Lecture 6.4 instruments this growth with real token counts. Section 4 of the course addresses it systematically.</p>
+<hr>
+<h2>Parallel Tool Calls</h2>
+<p>A single API response can contain multiple <code>tool_use</code> blocks when the model determines the calls are independent:</p>
+<pre><code>[1] role: assistant  [tool_use: read_file(&quot;utils.py&quot;),
+                      tool_use: read_file(&quot;tests.py&quot;)]
+[2] role: user       [tool_result id=tu_004: &quot;...&quot;,
+                      tool_result id=tu_005: &quot;...&quot;]
+</code></pre>
+<p>The <code>for block in response.content</code> loop in the agent handles this naturally — it collects every <code>tool_use</code> block in the response, executes each, and packages all results into a single user turn. Both results re-enter as one message.</p>
+<p>The <code>tool_use_id</code> field becomes especially important here. The agent may execute tools sequentially or in parallel; the order in which results are added to <code>tool_results</code> may not match the order the model requested them. The IDs allow the model to sort it out regardless of ordering.</p>
+<p>With three simple tools, parallel calls are uncommon. As agents gain more tools and take on more complex tasks, the model issues parallel calls frequently to minimize round-trips.</p>
+<hr>
+<h2>Key Takeaways</h2>
+<ol>
+<li><strong>Two loops</strong> — outer manages conversation, inner manages tool execution. These are separate concerns at separate timescales.</li>
+<li><strong><code>stop_reason</code></strong> — the only decision point in the inner loop. <code>&quot;tool_use&quot;</code> means keep going; <code>&quot;end_turn&quot;</code> means break.</li>
+<li><strong>Messages array</strong> — shared state that grows monotonically. Every API call reads the full array. Tool results that entered early stay in context for every subsequent call.</li>
+<li><strong>Tool results as <code>role: &quot;user&quot;</code></strong> — they come from outside the model, so they re-enter from the user side of the conversation.</li>
+<li><strong><code>tool_use_id</code></strong> — ties each result to its request. Required when the model issues multiple tool calls in one response.</li>
+<li><strong>The loop is trivially simple</strong> — the complexity lives in the tools, the system prompt, and context management. Not here.</li>
+</ol>
+<p>Lecture 6.2 replaces the stub tools in <code>agent.py</code> with real filesystem implementations and adds directory safety enforcement.</p>
+</div>
+</body>
+</html>
