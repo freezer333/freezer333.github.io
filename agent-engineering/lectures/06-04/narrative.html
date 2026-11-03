@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Step Behavior and Instrumentation — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 6.4</a></div></nav>
+<div class="page_content"><h1>Multi-Step Behavior and Instrumentation</h1>
+<p>This lecture closes Module 6 by connecting everything we have built — the agent loop, real tools, the tool registry — to the subject of the next section: context management. Once an agent can call tools, its real work happens in long, multi-step cycles of tool calls. Understanding how that behavior emerges, how it fails, and how to measure its cost is what prepares us to manage context in Module 7.</p>
+<h2>Multi-Step Tasks and Emergent Behavior</h2>
+<p>Consider a task that no single tool can satisfy: <em>&quot;Find all the Python files in this directory and add a one-line docstring to any function that doesn&#39;t have one.&quot;</em> Nothing in the system prompt tells the agent how to do this. It describes three tools and a rule or two. Yet the agent works through it: it lists the directory to discover the files, reads each Python file, identifies the functions that lack docstrings, and edits them one by one before moving to the next file.</p>
+<p>It is tempting to say the model &quot;made a plan.&quot; It did not. The essential thing to understand about an LLM in an agent loop is that <strong>it does not generate a plan for itself unless you ask it to — it generates the next tool call.</strong> At each turn of the inner loop the model sees the full conversation so far (the user&#39;s request, every previous tool call, every tool result) and produces the single most likely next action given that context. The loop executes that action, appends the result, and the model predicts again from the updated context.</p>
+<p>What makes the multi-step behavior possible is that <strong>tool results re-enter the context.</strong> When the agent calls <code>list_files</code>, the directory listing becomes a new input. On the next turn the model reads the original request <em>and</em> that listing, and only now can it decide which file to read first. One tool call at a time, each result feeding the next decision, the agent walks through the task.</p>
+<p>The effect is an <em>emergent</em> chain of tool calls. It looks as though the model designed an elaborate plan up front, but that is an illusion. There is no persistent plan object and no task queue. The &quot;plan&quot; exists only in the pattern of tool calls the model produces, step by step, from its context.</p>
+<p>This emergent quality is a strength as much as a property to be aware of. Because the model decides each step fresh, it can <strong>improvise</strong>: when a tool returns something unexpected, the agent adapts and chooses a different next call rather than blindly executing a pre-committed script. A program that planned everything in advance could not respond that way.</p>
+<p>It also has a limitation hiding inside it. Because the plan is implicit rather than stored, the model can <em>lose</em> it. On a long task, earlier reasoning scrolls toward the edges of the context window, attention spreads thin, and the agent can forget what it was doing. The plan was never written down anywhere durable — so when the context degrades, the plan degrades with it.</p>
+<h3>A note on parallel tool calls</h3>
+<p>The chain is not strictly one-call-at-a-time in every case. A single API response can contain several <code>tool_use</code> blocks when the model judges the calls to be independent — for example, reading two unrelated files. The dispatch code from the previous lectures already handles this, because it iterates over every content block in the response and executes each tool call it finds. What remains sequential is the <em>API calls themselves</em>: you cannot send the next request until you have processed the current response and appended its results.</p>
+<h2>When Things Go Wrong</h2>
+<p>The moment an agent has an inner loop that calls tools, three characteristic failure modes appear. Naming them gives you a diagnostic vocabulary for the problems you will hit immediately in Lab 4.</p>
+<h3>Failure Mode 1: The Infinite Loop</h3>
+<p>The model calls the same tool, with the same arguments, over and over. It may be stuck on an error it does not know how to recover from, or it may be waiting for a result that signals &quot;done&quot; that never arrives. Whatever the cause, the loop does not terminate on its own.</p>
+<p>This matters because <strong>you pay for every API call.</strong> A single tool call might cost a fraction of a cent, but an infinite loop runs that cost without bound. For this reason, nearly every production agent puts a cap on the inner loop:</p>
+<pre><code class="language-python">MAX_TOOL_ITERATIONS = 25
+
+iteration = 0
+while True:
+    iteration += 1
+    if iteration &gt; MAX_TOOL_ITERATIONS:
+        print(&quot;\n[Agent hit iteration limit — forcing stop]&quot;)
+        messages.append({
+            &quot;role&quot;: &quot;user&quot;,
+            &quot;content&quot;: &quot;You have reached the maximum number of tool calls. &quot;
+                       &quot;Please summarize what you&#39;ve accomplished and stop.&quot;
+        })
+        response = client.messages.create(...)  # one final summary call
+        break
+
+    response = client.messages.create(...)
+    # ... rest of inner loop
+</code></pre>
+<p>The iteration limit is a safety valve, not a design constraint. Good tool descriptions, clear instructions, and informative tool results all reduce how often the agent gets confused — but because the model is genuinely making it up as it goes, you almost always want the cap as a backstop. If your agent <em>regularly</em> hits the limit, that is a signal the task is too large for one user message or the tools are returning poor information.</p>
+<h3>Failure Mode 2: Premature Stop</h3>
+<p>The opposite problem: the model produces <code>end_turn</code> and replies with text before the work is actually finished. It edited one file and declared success without checking the others; or the task was too vague — <em>&quot;clean up this code&quot;</em> has no completion criteria — so the model decided arbitrarily that it was done.</p>
+<p>The fix lives in the system prompt. You cannot rely on users to phrase tasks well, but you <em>can</em> give the agent good completion criteria and behavioral guidance, such as <em>&quot;When completing multi-file tasks, verify you&#39;ve handled all files before reporting completion.&quot;</em> What you should <strong>not</strong> do is impose an artificial floor like &quot;you must call at least five tools&quot; — there is no correct minimum number of turns. The goal is to help the agent judge, from what is in its context, whether it has genuinely satisfied the request.</p>
+<h3>Failure Mode 3: Context Exhaustion</h3>
+<p>This is the most common failure, and the one that bridges into the next module. The context window — whether 200,000 tokens or a million — fills up, and <strong>tool calls make it fill faster.</strong> Every file the agent reads, every tool call and result, stays in the context for the remainder of the session. As it grows:</p>
+<ul>
+<li>the model&#39;s output quality degrades, because attention is spread across too much text;</li>
+<li>the model forgets earlier decisions and may repeat work it has already done;</li>
+<li>eventually the API rejects the request outright because it exceeds the token limit.</li>
+</ul>
+<p>We will spend the next section implementing real strategies to manage this — sliding window, selective preservation, compaction — in Module 7. But before writing any of that code, you have to be able to <em>see</em> the problem. That is what instrumentation is for.</p>
+<h2>Mitigation: Make the Plan Explicit</h2>
+<p>The three failure modes share a root cause: the plan is implicit, and implicit plans drift. A lightweight countermeasure is to make the plan explicit — and this is exactly the chain-of-thought technique from Lecture 5.1, now applied <em>inside</em> the agent loop.</p>
+<p>Recall that the model only reasons in tokens that actually exist in its context. If you instruct it, in the system prompt, to <strong>outline its steps before calling any tools and to output that outline as part of its response</strong>, the plan becomes real text in the conversation. From that point on, every subsequent step is conditioned on the written plan — the model is reading its own roadmap as it works.</p>
+<p>This is, in a sense, &quot;tricking&quot; the model into committing its strategy to the context where it can serve as an anchor. It directly counters the failure modes:</p>
+<ul>
+<li><strong>Premature stops</strong> become less likely, because a written plan (&quot;edit all three files&quot;) makes incomplete work obvious. If one tool result comes back vague or partial, the agent still knows there are more steps to take.</li>
+<li><strong>Lost plans on long tasks</strong> are mitigated, because the plan is anchored as explicit text rather than buried in the implicit pattern of tool calls, so it survives longer as the context grows.</li>
+<li>You can even fold loop-avoidance into the instruction — <em>&quot;make a plan, and if you stop making progress against it, stop.&quot;</em></li>
+</ul>
+<p>It is worth being clear about what this is and is not. Explicit planning is <strong>not required</strong> for emergent tool chaining to work — the agent will chain tools without it. It is an optional reliability tool, and it carries the same tradeoff described in Lecture 5.1: planning tokens cost context, and on a simple one-step task they add noise without benefit. Use explicit planning for genuinely multi-step work; skip it when a single tool call will do.</p>
+<p>This also answers a natural question — <em>is there a way to give the model a plan up front?</em> There are two ways. You can hand the model a plan in the user message (&quot;first list files, then read each <code>.py</code> file, then edit the functions without docstrings&quot;), or you can ask the model to <em>produce</em> the plan itself before acting, as described above. Both put the plan in the context. Handing the plan over constrains the model more — predictable, but rigid — while having the model plan first preserves more of its ability to improvise. The choice is the explicit-planning/emergent-planning tradeoff again.</p>
+<h2>Instrumenting Context Growth</h2>
+<p>Counting tokens is not the model&#39;s job; it is <strong>your</strong> job as the developer of the agent harness. Fortunately the data is already there. Every response from the Anthropic API carries a <code>usage</code> object:</p>
+<pre><code class="language-python">response = client.messages.create(...)
+
+print(f&quot;  Input tokens:  {response.usage.input_tokens}&quot;)
+print(f&quot;  Output tokens: {response.usage.output_tokens}&quot;)
+</code></pre>
+<p><code>input_tokens</code> is the size of everything you sent: the system prompt, the tool schemas, and the entire messages array. <code>output_tokens</code> is what the model generated this turn. Because every inner-loop iteration carries the full history, <code>input_tokens</code> grows on each call — and tracking it over time draws the context-growth curve.</p>
+<h3>A token tracker</h3>
+<p>A small class is enough to start. It records the usage from each response and reports a summary:</p>
+<pre><code class="language-python">class TokenTracker:
+    &quot;&quot;&quot;Track token usage across the agent session.&quot;&quot;&quot;
+
+    def __init__(self):
+        self.calls = []           # (input_tokens, output_tokens) per API call
+        self.turn_boundaries = []  # indices where new user messages start
+
+    def record(self, response):
+        self.calls.append((
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+        ))
+
+    def mark_turn(self):
+        self.turn_boundaries.append(len(self.calls))
+
+    def report(self):
+        total_input = sum(c[0] for c in self.calls)
+        total_output = sum(c[1] for c in self.calls)
+        print(f&quot;\n--- Token Usage ---&quot;)
+        print(f&quot;API calls:    {len(self.calls)}&quot;)
+        print(f&quot;Total input:  {total_input:,} tokens&quot;)
+        print(f&quot;Total output: {total_output:,} tokens&quot;)
+        print(f&quot;Peak input:   {max(c[0] for c in self.calls):,} tokens&quot;)
+</code></pre>
+<p>You will extend this class through the rest of the course. A more sophisticated version takes an initial context budget and exposes methods like &quot;am I at 85% of my limit?&quot; — a threshold that can trigger context-management actions.</p>
+<p>There is a particularly interesting move available here: <strong>expose the token tracker to the model as a tool.</strong> Just as <code>list_files</code> or <code>read_file</code> are tools, you can register a tool that returns the current token count. The model can then <em>request</em> its own context usage and decide what to do with that information — for instance, summarizing and wrapping up as it approaches the limit. This turns instrumentation from something the harness merely observes into something the agent can reason about. We will return to ideas like this when we implement context management.</p>
+<h3>Reading the numbers — and the cost</h3>
+<p>Run the docstring task and watch the input token count climb on each call:</p>
+<pre><code>Call 1:  1,240 in / 45 out      ← list_files
+Call 2:  1,340 in / 520 out     ← read_file (file contents enter context)
+Call 3:  2,100 in / 85 out      ← edit_file
+Call 4:  2,240 in / 78 out      ← edit_file (second function)
+Call 5:  2,380 in / 490 out     ← read_file (second file)
+Call 6:  3,100 in / 92 out      ← edit_file
+Call 7:  3,250 in / 65 out      ← final text reply
+</code></pre>
+<p>The pattern is unmistakable: <strong>input tokens grow monotonically</strong>, because every call carries the full history. The largest jumps come on <code>read_file</code> calls — a file&#39;s contents enter the context and remain for every subsequent call. This is the abstract &quot;context growth&quot; problem from Module 4 made concrete, and it shows exactly why token-efficient tools matter. In Lab 4 you will measure the dramatic difference when <code>read_file</code> is replaced by <code>search_file</code> + <code>read_lines</code>.</p>
+<p>This is also where instrumentation answers a practical question — <em>how do I tell whether my agent is stuck or just doing a lot of work?</em> Print each tool call as it happens (the dispatch logging from Lecture 6.3 does this). If you see the same call repeated with identical arguments, it is stuck; if you see different calls progressing through the task, it is working.</p>
+<p>The cost is real and worth keeping in front of you. At the Sonnet pricing in effect when this was recorded — roughly $3 per million input tokens and $15 per million output tokens — the seven-call example above costs only about $0.07. But a realistic session of twenty user messages over larger files reaches $2–5 easily, and an organization running a hundred such sessions a day is spending several hundred dollars a day. In that light, context management is not an optimization you do if you have time; it is an economic necessity.</p>
+<h2>Summary</h2>
+<p>By the end of Module 6 you should have a solid mental model of what happens inside an agent&#39;s inner loop and how it differs from the outer loop where the human participates.</p>
+<ul>
+<li><strong>Emergent behavior is real.</strong> The model chains tool calls autonomously to accomplish complex tasks — that is what makes agents useful.</li>
+<li><strong>The plan is implicit.</strong> There is no plan object; the &quot;plan&quot; is the pattern of tool calls the model produces from its context. That is the source of both its flexibility and its fragility, and the inner loop is the part that most easily gets out of control.</li>
+<li><strong>Three failure modes to watch for:</strong> the infinite loop (cap the iterations), the premature stop (write clear completion criteria into the system prompt), and context exhaustion (instrument first, manage later).</li>
+<li><strong>Make the plan explicit when it helps.</strong> Prompting the agent to outline its steps first — chain-of-thought from Lecture 5.1, applied inside the loop — keeps multi-step tasks on track.</li>
+<li><strong>Instrument before you optimize.</strong> Track token usage per API call, watch the growth curve, and remember that counting tokens is the harness developer&#39;s responsibility, not the model&#39;s.</li>
+</ul>
+<p>Context grows monotonically, tool calls accelerate that growth, and eventually it breaks the agent. Seeing the problem clearly is the whole point of this lecture — and managing it is the subject of Module 7.</p>
+<blockquote>
+<p>Streaming responses, which improve the user experience during long tool-calling sequences, were introduced at the API level in Lecture 3.1. Wiring streaming into the agent loop changes only the user experience, not the loop&#39;s logic, so it appears as an optional implementation task in Lab 4 rather than as a separate topic here.</p>
+</blockquote>
+</div>
+</body>
+</html>

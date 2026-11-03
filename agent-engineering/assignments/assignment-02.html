@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lab 4 — Agent Engineering</title>
+    <title>Assignment 2 — Agent Engineering</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
     <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
-<div class="page_content"><h1>Lab 4: Extend Your Coding Agent</h1>
-<p><strong>Section 3 Lab | Agent Engineering</strong>
+<div class="page_content"><h1>Assignment 2: Coding Agent Build-Out</h1>
+<p><strong>Module 6 Assignment | Agent Engineering</strong>
 <strong>Duration:</strong> ~3 hours
-<strong>Prerequisites:</strong> Labs 1-3 + Modules 5-6 (Lectures 5.1 through 6.3)</p>
+<strong>Prerequisites:</strong> Labs 1–2 + Modules 5–6 (Lectures 5.1 through 6.3)</p>
 <hr>
 <h2>Overview</h2>
 <p>In Module 5 you built the system prompt. In Module 6 you built the agent loop, implemented the tools, added a tool registry, and instrumented token usage. You have a working coding agent with three tools: <code>list_files</code>, <code>read_file</code>, and <code>edit_file</code>.</p>
-<p>This lab extends that agent in three directions:</p>
+<p>This assignment extends that agent in three directions:</p>
 <ol>
 <li><strong>New tools</strong> — Replace the naive <code>read_file</code> with token-efficient <code>search_file</code> + <code>read_lines</code>. Add <code>delete_file</code> (with confirmation) and <code>mkdir</code>.</li>
 <li><strong>Safety enforcement</strong> — Implement an approved-folders map so all file operations are restricted to explicitly allowed directories.</li>
@@ -87,7 +87,7 @@
 <hr>
 <h2>Part 2: Approved-Folders Map (~30 minutes)</h2>
 <h3>2.1 The Concept</h3>
-<p>In Lecture 6.1, <code>validate_path</code> enforced that all paths resolve within the current working directory. This lab extends that to an <strong>approved-folders map</strong> — a set of directories the agent is allowed to access.</p>
+<p>In Lecture 6.1, <code>validate_path</code> enforced that all paths resolve within the current working directory. This assignment extends that to an <strong>approved-folders map</strong> — a set of directories the agent is allowed to access.</p>
 <p>Why a map instead of a single root?</p>
 <ul>
 <li>The agent might need to read files in one directory and write to another</li>
@@ -301,6 +301,43 @@ folders.approve(&quot;./reference&quot;, read=True, write=False)  # Read-only
 <li>Based on your token data, estimate the cost of a 30-minute coding session with 15 user messages. Is this sustainable for regular use?</li>
 <li>What context management strategy from Module 4 would be most effective for reducing the growth you observed? Why?</li>
 </ol>
+<hr>
+<h2>Part 5: Streaming (Optional, ~30 minutes)</h2>
+<p>Lecture 3.1 introduced streaming at the API level — responses arriving incrementally instead of all at once. This part wires streaming into your agent loop. It&#39;s optional and changes only the UX, not the agent&#39;s logic, so save it for after the required parts are working.</p>
+<h3>5.1 Why Stream</h3>
+<p>Without streaming, the user sees nothing while the model generates. For a one-line reply the wait is 1–3 seconds, but a multi-step tool-calling sequence can be 10–25 seconds of silence — the user can&#39;t tell whether the agent is working, stuck, or crashed. Streaming surfaces progress as it happens.</p>
+<h3>5.2 Swap <code>create()</code> for <code>stream()</code></h3>
+<p>The Anthropic SDK exposes streaming through <code>client.messages.stream()</code>. Inside the inner loop, replace the <code>client.messages.create(...)</code> call with the streaming context manager:</p>
+<pre><code class="language-python">with client.messages.stream(
+    model=&quot;claude-sonnet-4-6&quot;,
+    max_tokens=4096,
+    system=SYSTEM_PROMPT,
+    tools=TOOLS,
+    messages=messages,
+) as stream:
+    # Stream events to the terminal as they arrive
+    for event in stream:
+        if getattr(event, &quot;type&quot;, None) == &quot;content_block_start&quot;:
+            if event.content_block.type == &quot;text&quot;:
+                print(&quot;\nAssistant: &quot;, end=&quot;&quot;, flush=True)
+            elif event.content_block.type == &quot;tool_use&quot;:
+                print(f&quot;\n[calling {event.content_block.name}...]&quot;, flush=True)
+        elif getattr(event, &quot;type&quot;, None) == &quot;content_block_delta&quot;:
+            if hasattr(event.delta, &quot;text&quot;):
+                print(event.delta.text, end=&quot;&quot;, flush=True)
+
+    # get_final_message() returns the same response object as create()
+    response = stream.get_final_message()
+</code></pre>
+<p>The key insight: <code>get_final_message()</code> returns the <strong>same</strong> response object you already handle — <code>response.stop_reason</code>, <code>response.content</code>, and <code>response.usage</code> are all there. The rest of your inner loop (branching on <code>stop_reason</code>, dispatching tools, appending <code>tool_result</code> messages, recording tokens with <code>TokenTracker</code>) is unchanged.</p>
+<h3>5.3 What to Verify</h3>
+<ul>
+<li>Text replies appear character by character instead of all at once.</li>
+<li>Each tool call prints a status line the moment the model issues it.</li>
+<li>Token counts in your <code>TokenTracker</code> are identical to the non-streaming run — streaming is a transport-level feature, not a model-level one, so it costs the same.</li>
+</ul>
+<h3>5.4 What to Submit</h3>
+<p>If you complete this part, note in <code>analysis.md</code> that streaming is enabled and confirm that token usage is unchanged versus the non-streaming run.</p>
 <hr>
 <h2>Submission</h2>
 <p>Submit the following files:</p>

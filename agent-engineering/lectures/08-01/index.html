@@ -10,18 +10,22 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>RAG as Context Engineering</h1>
-<p><strong>Lecture 8.1</strong></p>
-<ul>
-  <li>The problem: context windows are finite, knowledge isn't</li>
-  <li>RAG defined: retrieve external information, inject into context, generate</li>
-  <li>Context engineering applied to knowledge — not model modification</li>
-  <li>The contrast with fine-tuning: fine-tuning changes model weights; RAG changes what's in the context. Same underlying model.</li>
-  <li>The pipeline at a glance: get information → put it in context → generate</li>
-  <li>Important framing: RAG ≠ vector databases. Vectors are one common implementation; the broader concept is retrieval, returned to in 8.3.</li>
-</ul>
+<p><strong>Module 8, Lecture 8.1 | Retrieval-Augmented Generation (RAG)</strong></p>
+<p>Modules 4 and 7 managed context after it accumulated; this lecture asks where useful information comes from in the first place. A model does not know recent events, private knowledge such as a codebase or a company&#39;s product manuals, or high-precision facts it saw only in compressed form during training. Putting everything into the context fails, because the window is finite, every token is paid for on every call, and quality degrades with length. Retrieval-augmented generation (RAG) supplies only what the current query needs: retrieve relevant information, augment the context with it, and generate. The model itself is unchanged; only its context is. The lecture separates the setup phase, which prepares a knowledge source for retrieval, from the query phase that runs on every request, and compares two ways to wire retrieval: the developer&#39;s code retrieves before the model call (classic RAG), or the model calls a search tool, as Claude Code does with glob and grep. It contrasts RAG with fine-tuning, which changes model weights and suits style and format, and closes on the framing for the rest of Module 8: RAG is a category, and vector search is one implementation alongside web search, database queries, file reads, and API calls.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-08-01.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://arxiv.org/abs/2005.11401">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</a> — Lewis et al., NeurIPS 2020. The original RAG paper, which introduced the term and the retrieve-then-generate pattern.</li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective context engineering for AI agents</a> — Anthropic, 2025. Covers just-in-time retrieval and agentic search versus pre-computed embeddings, and describes Claude Code&#39;s hybrid approach: CLAUDE.md loaded up front, glob and grep at runtime.</li>
+<li><a href="https://www.latent.space/p/claude-code">Claude Code: Anthropic&#39;s Agent in Your Terminal</a> — Latent Space podcast, 2025, with Boris Cherny and Cat Wu of the Claude Code team. Explains why the team moved from indexed RAG to agentic search, and the latency and token costs they accepted.</li>
+<li><a href="https://arxiv.org/abs/2312.05934">Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs</a> — Ovadia et al., 2023. Finds that RAG consistently outperforms unsupervised fine-tuning for adding factual knowledge, including knowledge the model has never seen.</li>
+<li><a href="https://arxiv.org/abs/2312.10997">Retrieval-Augmented Generation for Large Language Models: A Survey</a> — Gao et al., 2023. A widely cited survey of naive, advanced, and modular RAG; a map of the field beyond this module.</li>
+<li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a> — Yao et al., ICLR 2023. The model calls a Wikipedia API as an action while it reasons, an early form of retrieval as a tool.</li>
 </ul>
 </div>
 </body>

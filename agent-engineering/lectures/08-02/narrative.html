@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embeddings, Similarity, and Vector Storage — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 8.2</a></div></nav>
+<div class="page_content"><h1>Embeddings, Similarity, and Vector Storage</h1>
+<p>Lecture 8.1 defined RAG as a category: any mechanism that retrieves information and adds it to the model&#39;s context. This lecture covers the most common implementation, vector search, because it dominates production RAG systems and appears in nearly every discussion of LLM applications. The pieces are embeddings, which turn text into vectors; similarity, which compares vectors; vector databases, which store and search vectors at scale; and chunking, which prepares documents for embedding.</p>
+<p>The goal is to place vector search inside the agents this course builds. Vector databases are a separate technology with their own theory, and they predate LLMs. Because the two share some underlying ideas, they are often discussed as one thing. They are not, and the internals of a vector database are a subject for another course. What an agent engineer needs is a clear picture of what each piece does, where it sits in the pipeline, and when the approach fits.</p>
+<h2>The Canonical Use Case</h2>
+<p>Consider a company with a large customer support knowledge base: hundreds of help articles, product manuals, and years of support transcripts. That knowledge is private, so it is not in any model&#39;s training data. Fine-tuning a model on it is possible but rarely practical, as Lecture 8.1 discussed. The practical goal is to take a customer&#39;s question, find the pieces of the knowledge base that answer it, and put those pieces in the model&#39;s context.</p>
+<p>The difficulty is that both sides are unstructured. The knowledge base is loose prose. The customer&#39;s question is plain language, such as &quot;How do I reset my password?&quot; or &quot;I&#39;m locked out of my account,&quot; not a database query. Finding the right passages for an arbitrary question requires comparing what the question <em>means</em> with what each passage <em>means</em>. Vector search does this by encoding the meaning of each passage and of the question as vectors, then finding the passages whose vectors are closest to the question&#39;s.</p>
+<h2>Where the Vector Database Fits</h2>
+<p>The pipeline is the one from Lecture 8.1, with a vector database as the searchable source.</p>
+<p><img src="vector-rag-pipeline.png" alt="The vector RAG pipeline: help center articles are chunked, embedded, and stored in a vector database; at query time the question is embedded, the closest chunks are returned as text, and that text augments the context"></p>
+<p>In the <strong>setup phase</strong>, done once and repeated when the documents change, each article is split into chunks, each chunk is passed through an embedding model to produce a vector, and the vectors are stored in the database alongside their original text.</p>
+<p>In the <strong>query phase</strong>, the user&#39;s question is passed through the same embedding model. The database finds the stored vectors closest to the question&#39;s vector and returns the text of those chunks. That text is added to the context, and the model generates an answer grounded in it. This is the retrieve-first wiring from Lecture 8.1. The same search can also run as a tool, which is covered near the end of this lecture. The rest of the lecture explains each box in the diagram.</p>
+<h2>Embeddings</h2>
+<h3>One Idea, Two Uses</h3>
+<p>An <strong>embedding</strong> is a list of numbers that represents the meaning of a piece of text. The term appears in two different settings, which causes confusion.</p>
+<ul>
+<li><strong>Inside every LLM.</strong> Each token is converted to a vector before the model processes it. This is the &quot;text converted to numbers&quot; step from Lecture 2.1. These internal embeddings never leave the model.</li>
+<li><strong>In an embedding model.</strong> A separate model, much smaller and faster than an LLM, takes a whole passage and produces a single vector built for comparing meaning.</li>
+</ul>
+<p>The idea is the same and the technology is related, but the models and their jobs are different. RAG uses the second kind. An embedding model does not generate text; it only maps text to a vector. The LLM generates; the embedding model represents. For the same reason, an LLM is not the right tool for producing embeddings. Dedicated embedding models are cheaper, faster, and built specifically for comparison.</p>
+<h3>Text as a Vector</h3>
+<p>An embedding model takes text in and returns a fixed-length vector:</p>
+<pre><code>&quot;How do I reset my password?&quot;  →  [0.024, -0.183, 0.412, 0.091, ..., -0.057]
+                                   (1,024 numbers)
+</code></pre>
+<p>Current models produce vectors of roughly 768 to 3,072 dimensions. Each dimension is a feature the model learned during training, and together they encode meaning. The individual numbers are not interpretable. What matters is the relationship between vectors: texts with similar meanings produce vectors that are close to each other.</p>
+<p>A useful way to picture this is a map of everything text can be about. An embedding assigns each piece of text a position on that map. The map has hundreds or thousands of dimensions rather than two or three, so it cannot be visualized directly, but the principle is the same as on a street map: things that are about the same subject are located near each other.</p>
+<h3>How Embedding Models Are Trained</h3>
+<p>Embedding models are trained with <strong>contrastive objectives</strong>. The training data contains pairs of texts that should be similar, such as a question and its answer or two paraphrases of the same sentence, and pairs that should not. Training pushes the vectors of similar pairs closer together and the vectors of unrelated pairs farther apart. The result is a model whose vectors preserve semantic similarity: closeness in the vector space tracks closeness in meaning.</p>
+<h2>Similar Meanings, Similar Vectors</h2>
+<p>Every piece of text becomes a point in the embedding space, and points cluster by meaning.</p>
+<p><img src="semantic-space.png" alt="A two-dimensional picture of embedding space: password-related phrases cluster together, pricing phrases form a separate cluster, and "capital of France" sits far from both"></p>
+<p>&quot;How do I reset my password?&quot; and &quot;I forgot my password, how can I recover it?&quot; land near each other. &quot;How do I reset my password?&quot; and &quot;What is the capital of France?&quot; land far apart. Real embeddings have around a thousand dimensions; the two-dimensional picture is a projection that keeps the clustering.</p>
+<p>Retrieval follows directly from this picture: embed the user&#39;s query, find the stored vectors closest to the query vector, and return the text they came from.</p>
+<h3>Cosine Similarity</h3>
+<p>Closeness between two vectors is usually measured with <strong>cosine similarity</strong>, which measures the angle between them:</p>
+<pre><code>cos_sim(a, b) = (a · b) / (‖a‖ × ‖b‖)
+</code></pre>
+<p>It is the dot product of the two vectors divided by the product of their lengths. The result ranges from 1 (same direction, most similar) through 0 (unrelated) to -1 (opposite direction, which is rare for embeddings in practice).</p>
+<p>Cosine similarity is the standard measure for two reasons. It ignores vector length and depends only on direction, so a short passage and a long passage on the same topic can score as similar. And it is cheap: if every vector is normalized to length 1, the denominator is 1 and cosine similarity is simply the dot product. Many embedding APIs return vectors that are already normalized, so in practice cosine similarity and dot product are interchangeable for them. Use the dot product when vectors are normalized and the full cosine formula when they are not. Embedding libraries and vector databases compute this for you.</p>
+<h3>Why This Beats Keyword Search</h3>
+<p>Keyword search matches words. It fails when the query and the document use different words for the same idea:</p>
+<blockquote>
+<p>Query: &quot;Password reset&quot;
+Document title: &quot;Recovering account access&quot;
+Keyword match: none</p>
+</blockquote>
+<p>Techniques such as word stemming help at the margins, but a keyword search for &quot;password reset&quot; still needs the document to mention passwords. Embedding search compares meaning instead of words. Both the query and the document are mapped to vectors based on what they mean, so &quot;I&#39;m locked out of my account&quot; can retrieve an article about password resets without sharing a single word with it.</p>
+<p>This matters most in exactly the canonical use case. The developer controls neither what users type nor how the knowledge base was written. Handling paraphrases and synonyms is the practical reason embeddings dominate retrieval over unstructured text.</p>
+<h2>Embedding APIs</h2>
+<p>Most production systems use a hosted embedding model. The API call is simple: send text, receive a vector.</p>
+<ul>
+<li><strong>Voyage AI.</strong> Anthropic does not offer its own embedding model; its documentation points to Voyage AI.</li>
+<li><strong>OpenAI.</strong> <code>text-embedding-3-small</code> (1,536 dimensions) and <code>text-embedding-3-large</code> (3,072 dimensions).</li>
+<li><strong>Cohere.</strong> Strong multilingual support, with reranking models alongside.</li>
+</ul>
+<p>Open-source embedding models are also widely available and can run locally. Hosted embeddings cost roughly $0.02 to $0.13 per million tokens, far less than generating text with an LLM, because embedding models are small.</p>
+<p>Larger vectors tend to capture more nuance but cost more to store and search. Many current models let you shorten a vector by keeping only its first dimensions, trading some quality for storage. Start with the model&#39;s default size and change it only to fix a measured problem.</p>
+<h3>Pick One and Commit</h3>
+<p>Each embedding model builds its own map of meaning. Two models place the same concept at different coordinates, so a vector from one model cannot be compared with a vector from another. They do not share a coordinate system.</p>
+<p>Two rules follow. The corpus and the queries must be embedded with the same model. And the choice of model is <strong>sticky</strong>: switching models means re-embedding the entire corpus. Pick a model that fits your domain and budget, and keep it until you have a clear reason to change.</p>
+<h2>Vector Databases</h2>
+<h3>When a Dictionary Is Enough</h3>
+<p>For a small corpus, a vector store can be a Python dictionary that maps each chunk&#39;s text to its vector. Search is a linear scan: score the query vector against every stored vector, sort, and take the top <em>k</em>.</p>
+<pre><code class="language-python">import numpy as np
+
+def search(query_vec, store, k=3):
+    &quot;&quot;&quot;store maps chunk text -&gt; unit-length vector.&quot;&quot;&quot;
+    scores = {text: float(np.dot(query_vec, vec)) for text, vec in store.items()}
+    return sorted(scores, key=scores.get, reverse=True)[:k]
+</code></pre>
+<p>For a few hundred or a thousand chunks this is fast, simple, and easy to debug. A linear scan does not scale, however. With millions of vectors, every query must touch every vector, and search becomes too slow.</p>
+<h3>What Vector Databases Add</h3>
+<p>A <strong>vector database</strong> stores each vector with its original text and finds the vectors closest to a query. Common choices are ChromaDB, which runs locally with no infrastructure; FAISS, a fast library from Meta with no server; Pinecone, a managed service; and pgvector, an extension that adds vector search to PostgreSQL. They add three things a dictionary does not:</p>
+<ul>
+<li><strong>Indexing.</strong> Approximate nearest neighbor (ANN) algorithms such as HNSW find the closest vectors without comparing against every one. They give up a small amount of accuracy for a large gain in speed.</li>
+<li><strong>Persistence.</strong> Vectors live on disk, survive restarts, and can be backed up.</li>
+<li><strong>Metadata filtering.</strong> Each vector can carry metadata, such as its source document, date, or author, and searches can filter on metadata as well as similarity.</li>
+</ul>
+<p>Vector databases also make updates straightforward. Each chunk has an ID, so when a document changes, you delete its old chunks and add the new ones without re-embedding the rest of the corpus. A dictionary can do the same thing by hand.</p>
+<p>A vector database knows nothing about LLMs. It is a search index for vectors that returns stored text. It never communicates with the model.</p>
+<p>Use a dictionary while prototyping, for corpora under about a thousand chunks, and when nothing needs to persist between runs. Move to a vector database when the corpus grows to thousands of chunks or more, when the index must persist, or when searches need metadata filters. A common path is to prove that retrieval works with a dictionary first, then switch when scale or persistence requires it.</p>
+<h2>Chunking</h2>
+<h3>Why Chunk</h3>
+<p>Documents are usually too large to embed as a single vector. Embedding models accept limited input, and even within that limit, a single vector for a 50-page PDF averages everything in the document. The result matches poorly against any specific question. The more text a vector represents, the more topics it blends together.</p>
+<p>Chunking splits each document into smaller units, and each chunk is embedded separately. Retrieval then returns matching chunks rather than whole documents. This serves two purposes:</p>
+<ul>
+<li><strong>Granularity.</strong> A user&#39;s question is usually about one section of a document, not all of it.</li>
+<li><strong>Window fit.</strong> Retrieved chunks must fit in the context window, usually several at once alongside the conversation.</li>
+</ul>
+<p><img src="chunking.png" alt="A long document split into smaller chunks, with adjacent chunks sharing an overlapping region"></p>
+<h3>Three Common Strategies</h3>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>How</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Fixed-size</strong></td>
+<td>Split every N tokens (~500-1,000)</td>
+<td>Uniform corpora; the simplest to implement</td>
+</tr>
+<tr>
+<td><strong>Sentence/paragraph</strong></td>
+<td>Split on natural boundaries</td>
+<td>Prose and documentation</td>
+</tr>
+<tr>
+<td><strong>Semantic</strong></td>
+<td>Split where the topic changes</td>
+<td>Long-form content with clear topic shifts</td>
+</tr>
+</tbody></table>
+<p>Semantic chunking detects topic changes with embeddings or with an LLM, another case of using the same technology to prepare data for itself.</p>
+<p>Adjacent chunks usually <strong>overlap</strong> by 10 to 20 percent of their length. Overlap keeps an answer that falls near a boundary from being split across two chunks, neither of which contains all of it.</p>
+<p>Chunk size is a tradeoff. Larger chunks carry more context, so each retrieved chunk is more likely to be self-contained. Smaller chunks are more precise and use less of the context window. The symptoms show which way to adjust. If the model receives a chunk and still cannot answer because the chunk lacks surrounding context, the chunks may be too small. If retrieved chunks are mostly irrelevant material around a small useful part, they may be too large.</p>
+<h3>Practical Guidance</h3>
+<p>Chunking is the part of vector RAG that is most often over-engineered. Start with the default settings of an established text-splitting library, and tune chunking only after you observe a retrieval problem you can attribute to it. Weak embeddings, missing reranking, and poorly phrased queries are more common causes of bad retrieval than chunk boundaries.</p>
+<h2>Vector Search as a Tool</h2>
+<p>The pipeline at the start of this lecture runs the search before the model is called. As Lecture 8.1 described, the same search can instead be a tool that the model calls from inside the agent loop of Lecture 6.1.</p>
+<p><img src="rag-agent-loop.png" alt="Vector search as a tool in the agent loop: the model sends a search_docs tool call with a query string, the developer's code embeds the query, searches the vector database, and returns chunk text as a tool result"></p>
+<ol>
+<li>The agent sends the messages array to the model. The tool schemas include a <code>search_docs</code> tool.</li>
+<li>The model responds with a <code>tool_use</code> request, <code>search_docs(&quot;reset password&quot;)</code>, writing its own query string.</li>
+<li>The developer&#39;s code embeds the query string, searches the vector database, and returns the text of the top chunks as a <code>tool_result</code>. The loop sends the messages again.</li>
+<li>The model answers the user.</li>
+</ol>
+<p>The model never sees a vector, and it does not need to know a vector database exists. To the model, <code>search_docs</code> looks the same as <code>read_file</code>: a tool call goes out and text comes back. Embedding and similarity search happen entirely in the developer&#39;s code, on the other side of the tool call.</p>
+<p>Neither wiring is the correct one. Searching first is simple and predictable. A tool lets the model decide when to search and write a better query than the user&#39;s original wording. Many systems do both: they search first to seed the context and keep the tool available so the model can search again if the first results miss.</p>
+<h2>When Vector RAG Fits</h2>
+<p>Vector RAG fits well when:</p>
+<ul>
+<li><strong>The corpus is large and unstructured:</strong> documents, articles, knowledge bases, codebases.</li>
+<li><strong>Queries are semantic:</strong> the query and the documents use different words for the same idea.</li>
+<li><strong>Privacy matters:</strong> the data stays in your own vector store rather than going to an external search engine.</li>
+<li><strong>The corpus is queried repeatedly</strong>, so the up-front cost of embedding it is spread over many queries.</li>
+</ul>
+<p>It fits poorly when:</p>
+<ul>
+<li><strong>The data is structured.</strong> Use a relational database, and give the agent tools that run queries against it.</li>
+<li><strong>Information must be fresh by the second.</strong> New or changed content must be chunked and embedded before it can be found, so a vector index always lags its source. Live data, such as sports scores, belongs elsewhere.</li>
+<li><strong>The corpus is tiny.</strong> A dictionary, or simply including everything in the prompt, is simpler.</li>
+<li><strong>Queries need exact matches.</strong> Keyword search finds exact identifiers, error codes, and names more reliably.</li>
+</ul>
+<p>Vector search also has a cost. Every query runs the embedding model and a similarity search, which makes it slower and heavier than a keyword search over the same text. The poor-fit cases above are where the other retrieval mechanisms of Lecture 8.3 do better.</p>
+<h2>Takeaways</h2>
+<p><strong>Embeddings represent meaning as vectors.</strong> LLMs use embeddings internally, but RAG uses a separate, smaller embedding model that turns a passage into one vector. <strong>Similar meanings produce similar vectors</strong>, so retrieval embeds the query and finds the closest stored vectors, scored by cosine similarity, a normalized dot product. Embedding models are sticky: the corpus and queries must use the same model, and switching means re-embedding everything. <strong>Vector databases</strong> add ANN indexing, persistence, and metadata filtering; a dictionary is enough until scale or persistence demands more, and the database itself knows nothing about LLMs. <strong>Chunking</strong> gives retrieval its granularity and keeps results within the context window; library defaults are a sound starting point. Vector search can run before the model call or as a tool, and in both cases <strong>the LLM never sees a vector</strong>: retrieval returns text, and that text goes into the context.</p>
+</div>
+</body>
+</html>

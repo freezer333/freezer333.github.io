@@ -10,19 +10,19 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Implementing Selective Preservation</h1>
-<p><strong>Lecture 7.2</strong></p>
-<ul>
-  <li>When sliding window is too lossy: keep messages that matter regardless of age</li>
-  <li>Three categories worth preserving: structural anchors, decisions and goals, recent exchanges</li>
-  <li>Heuristic tagging: role and content patterns (first user message, mutating tool calls)</li>
-  <li>Explicit tagging: setting `important: True` at known checkpoints</li>
-  <li>Combining heuristics, explicit tags, and pair integrity in a single function</li>
-  <li>The limits of classification — what compaction handles that selection cannot</li>
-</ul>
+<p><strong>Module 7, Lecture 7.2 | Implementing Context Management</strong></p>
+<p>Sliding window is correct but blunt: it assumes only recent messages matter, so a constraint stated early — &quot;we deploy with Docker, not systemd&quot; — is silently dropped once the window slides, and the agent proceeds as if it was never said. Selective preservation fixes this by classifying messages and keeping the ones that matter regardless of age, organized around three categories: structural anchors (the first user message), decisions and goals (state-mutating tool calls and user constraints), and recent exchanges. The lecture covers two ways to tag importance — heuristics (the floor: first user message, mutating-tool calls like <code>edit_file</code>/<code>delete_file</code>, detected for free from message structure) and explicit tagging (the ceiling: an <code>important: True</code> flag set by the agent code at checkpoints, or by the model itself through a <code>mark_important</code> tool). The two API constraints from 7.1 still apply and trigger more often, since preservation pulls a non-contiguous subset: <code>find_pair_partner</code> keeps every <code>tool_use</code> with its <code>tool_result</code>, and the reused <code>ensure_alternating_roles</code> pass repairs same-role adjacencies. Selective preservation is more accurate than sliding window but is still a subsetting strategy — important messages accumulate over time and some information is spread across many messages, which is where compaction takes over in the next lecture.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-07-02.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="selective_preservation.py">selective_preservation.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective context engineering for AI agents</a> — Anthropic Engineering. Frames what to retain from a growing context and why deliberate curation beats raw accumulation — the conceptual basis for selecting which messages survive a truncation.</li>
+<li><a href="https://platform.claude.com/docs/en/docs/build-with-claude/tool-use/overview">Tool use with Claude</a> — Claude API docs. Grounds the two mechanisms central to this lecture: the <code>tool_use</code>/<code>tool_result</code> pairing that <code>find_pair_partner</code> enforces, and the tool-name lookup behind the mutating-tool heuristic.</li>
+<li><a href="https://arxiv.org/abs/2304.03442">Generative Agents: Interactive Simulacra of Human Behavior</a> — Park et al., 2023. The landmark paper on having an LLM assign importance scores to decide what to retain — the academic backbone for the <code>mark_important</code> tool and importance-based selection.</li>
 </ul>
 </div>
 </body>

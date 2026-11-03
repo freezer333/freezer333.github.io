@@ -10,19 +10,19 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Implementing Sliding Window</h1>
-<p><strong>Lecture 7.1</strong></p>
-<ul>
-  <li>Taking the sliding window strategy from Module 4 and writing real code</li>
-  <li>Where truncation runs in the agent loop (between inner-loop iterations)</li>
-  <li>The naive last-N implementation and why it breaks the API contract</li>
-  <li>The pair-integrity rule: `tool_use` and `tool_result` must stay together</li>
-  <li>Preserving the first user message as a task anchor</li>
-  <li>Testing: what gets dropped when the window is set aggressively low</li>
-</ul>
+<p><strong>Module 7, Lecture 7.1 | Implementing Context Management</strong></p>
+<p>Module 7 is the implementation module: each lecture takes a context-management strategy introduced conceptually in Module 4 and writes the real code, running against the agent and instrumentation built in Module 6. This lecture starts with the simplest strategy — the sliding window — which keeps the most recent messages and drops the rest once token usage crosses a threshold. The strategy is easy to describe but easy to get subtly wrong: a naive <code>messages[-n:]</code> slice silently breaks the agent because the messages array has structure a blind cut ignores. The lecture establishes the single safe hook point (the top of the inner loop, before each API call, when the array is in a complete state) and the two Messages API constraints every strategy must respect — pair integrity (a <code>tool_use</code> must keep its <code>tool_result</code>) and alternating roles. It then builds a pair-aware window that walks forward to a safe cut, prepends the first user message as a task anchor so the goal survives, and inserts a synthetic acknowledgment to keep roles alternating. Sliding window is effective at shrinking context but lossy: everything between the anchor and the recent tail is discarded — which sets up selective preservation in the next lecture.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-07-01.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="sliding_window.py">sliding_window.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective context engineering for AI agents</a> — Anthropic Engineering. The conceptual backdrop for the whole module: context as a finite resource, &quot;context rot&quot; as the window fills, and the long-horizon strategies (compaction, structured note-taking, sub-agents) that motivate why pruning the conversation is necessary in the first place.</li>
+<li><a href="https://platform.claude.com/docs/en/docs/build-with-claude/tool-use/overview">Tool use with Claude</a> — Claude API docs. Documents the <code>tool_use</code> and <code>tool_result</code> content blocks and the agentic loop. This is the source of the pair-integrity constraint the sliding window has to respect — cutting between a <code>tool_use</code> and its matching <code>tool_result</code> produces a 400 error.</li>
+<li><a href="https://platform.claude.com/docs/en/api/messages">Messages API reference</a> — Claude API docs. The full message-structure contract, including role alternation and content-block format. Both API constraints the lecture enforces — pair integrity and alternating roles — come directly from this reference.</li>
 </ul>
 </div>
 </body>

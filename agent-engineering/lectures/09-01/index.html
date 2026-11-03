@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Memory Problem and Conversation Memory — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>The Memory Problem and Conversation Memory</h1>
+<p><strong>Module 9, Lecture 9.1 | Memory Systems</strong></p>
+<p>An agent that a person returns to across many sessions starts each session with an empty context, so nothing from earlier sessions carries over. This lecture introduces memory as the answer: a durable store, kept on disk outside the prompt, whose relevant parts are injected into the context when needed. Context lasts one session and costs tokens on every call; memory persists across sessions and costs tokens only for what is injected. Every memory system writes, curates, and retrieves, and retrieval works like RAG over the agent&#39;s own past. The lecture names four kinds of memory (conversation, episodic, semantic, and procedural), then builds the simplest one: a notes file the agent manages through <code>save_note</code> and <code>read_notes</code> tools. A tutoring agent shows the pattern: it records what the student finished, where they struggled, and what comes next. The system prompt tells the model when to read, when to write, and what to keep, and the harness loads the notes at startup and asks for an update before the context is lost.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-09-01.mp4" type="video/mp4">
+</video>
+
+<h2>Additional Resources</h2>
+<ul>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective context engineering for AI agents</a> — Anthropic. Defines structured note-taking: the agent writes notes to memory outside the context window and pulls them back into the context later.</li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool">Memory tool</a> — Claude docs. A file-based memory tool; when it is enabled, the API adds a memory protocol to the system prompt: check memory first, and assume the context can be reset at any time.</li>
+<li><a href="https://code.claude.com/docs/en/memory">Claude Code memory</a> — Claude Code docs. <code>CLAUDE.md</code> files and auto memory: a <code>MEMORY.md</code> index loaded at the start of every session, with topic files read on demand.</li>
+<li><a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Effective harnesses for long-running agents</a> — Anthropic. A coding agent works across many sessions by keeping a progress file and a feature list, which each new session reads before starting work.</li>
+<li><a href="https://lilianweng.github.io/posts/2023-06-23-agent/">LLM Powered Autonomous Agents</a> — Lilian Weng, 2023. A widely cited survey of agent design; its Memory section maps sensory, short-term, and long-term memory onto agents.</li>
+<li><a href="https://arxiv.org/abs/2309.02427">Cognitive Architectures for Language Agents</a> — Sumers et al., 2023. The CoALA framework, which organizes language-agent memory into working, episodic, semantic, and procedural memory.</li>
+<li><a href="https://arxiv.org/abs/2310.08560">MemGPT: Towards LLMs as Operating Systems</a> — Packer et al., 2023. Manages memory tiers outside the context window, moving information in and out the way an operating system pages memory.</li>
+<li><a href="https://docs.langchain.com/oss/python/concepts/memory">Memory overview</a> — LangChain docs. Semantic, episodic, and procedural memory for agents, and the trade-off between writing memories during the conversation and in the background.</li>
+</ul>
+</div>
+</body>
+</html>

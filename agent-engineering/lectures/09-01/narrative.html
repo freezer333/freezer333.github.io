@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Memory Problem and Conversation Memory — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 9.1</a></div></nav>
+<div class="page_content"><h1>The Memory Problem and Conversation Memory</h1>
+<p>Modules 4 and 7 treated context management as a problem inside one session: the context grows, fills, and has to be trimmed or compacted. This module turns to a different problem. When a session ends, everything in its context is gone. An agent that a person returns to day after day needs some way to carry knowledge from one session to the next. That durable store is called memory. This lecture defines memory, separates it from context, names the main kinds of memory, and builds the simplest working form: a notes file the agent reads and writes.</p>
+<h2>Calls, Sessions, and Agents</h2>
+<p>A single LLM call is one transaction. The model receives one input and returns one response. A <strong>session</strong> groups many such calls: an agent loop sends the user&#39;s messages and the model&#39;s replies back to the model, turn after turn, usually on one topic. A chat window in a consumer app is a session. Keeping a session to one topic keeps its context coherent.</p>
+<p>Persistent agents work across many sessions. A person might talk to the same agent several times a day, every day for a month, through chat or through some other workflow. Each of those conversations is a new session with a new context window, and the model sees only what is in that window. Nothing from yesterday&#39;s session is there unless something puts it there.</p>
+<p>This gives an agent two separate ways to lose what it knew:</p>
+<ul>
+<li><strong>Within a session</strong>, the context grows until it fills. Module 7 handled this with sliding windows, selective preservation, and compaction.</li>
+<li><strong>Between sessions</strong>, the agent starts from zero. Module 7&#39;s techniques do nothing here, because the whole context is discarded when the session ends.</li>
+</ul>
+<p>Memory addresses the second problem.</p>
+<h2>Memory Versus Context</h2>
+<p>Context and memory differ on every axis that matters:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Context</th>
+<th>Memory</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Lifespan</td>
+<td>One session</td>
+<td>Across sessions</td>
+</tr>
+<tr>
+<td>Location</td>
+<td>In every API call</td>
+<td>On disk, outside the prompt</td>
+</tr>
+<tr>
+<td>Cost</td>
+<td>Every token, every call</td>
+<td>Only the parts injected into context</td>
+</tr>
+<tr>
+<td>Managed by</td>
+<td>Truncation and compaction</td>
+<td>Curation</td>
+</tr>
+<tr>
+<td>Failure mode</td>
+<td>Fills up and rots</td>
+<td>Grows and goes stale</td>
+</tr>
+</tbody></table>
+<p><strong>Context is the working set for one session. Memory is a durable store, and its relevant parts are copied into context when needed.</strong></p>
+<p>A large context window is not memory. A million-token window still disappears when the session ends, and every token in it is paid for on every call. Memory lives on disk or in a database, costs nothing to hold, and costs tokens only for the parts that are injected into a given call. The two solve different problems, and an agent needs both.</p>
+<h3>How Memory Reaches the Model</h3>
+<p>The model reads only its context. Memory has to be copied in. Every memory system therefore performs three operations:</p>
+<ol>
+<li><strong>Write:</strong> save something worth keeping.</li>
+<li><strong>Curate:</strong> remove stale, contradictory, and duplicate entries.</li>
+<li><strong>Retrieve:</strong> inject the relevant entries into context for the current task.</li>
+</ol>
+<p><img src="memory-vs-context.png" alt="Memory persists across sessions and is injected into the context of one session as needed"></p>
+<p>The retrieve step is RAG, as defined in Module 8: get external information into the context for one generation. Everything known about retrieval applies to memory. The difference is the source. A RAG system retrieves from documents someone else wrote. A memory system retrieves from a store the agent built for itself. Curation matters as much as retrieval, because a store that only grows fills with entries that are outdated or wrong. The last lecture of this module covers curation in detail.</p>
+<h2>Four Kinds of Memory</h2>
+<p>Memory systems usually distinguish four kinds of memory:</p>
+<ul>
+<li><strong>Conversation memory</strong> is a record of past dialogue. The simplest version saves every transcript to disk. Transcripts are large, so systems usually compress, summarize, or index them before using them. Module 7&#39;s compaction already produces a compressed record of the current conversation. The new step in this module is keeping that record beyond the end of the session.</li>
+<li><strong>Episodic memory</strong> stores specific events: what happened, when, and in what context. For a tutoring agent, one episode might read: &quot;Session 4: the student wrote <code>range(1, n)</code> and missed the last item; a hint about the end value fixed it.&quot;</li>
+<li><strong>Semantic memory</strong> stores facts distilled from many events, not tied to any one of them. Over several sessions, the tutoring agent might conclude: &quot;The student makes off-by-one errors in loops.&quot;</li>
+<li><strong>Procedural memory</strong> stores how to do a recurring task. It can record which step of a long workflow the agent has reached, so the agent can resume after its context is reset. It can also store the steps of a task the agent performs often. Skills, covered later in the course, are a form of procedural memory.</li>
+</ul>
+<p>The next two lectures cover episodic and semantic memory. The rest of this lecture covers the simplest durable memory, which needs none of this machinery.</p>
+<h2>The Simplest Memory: A Notes File</h2>
+<p>The simplest durable memory is a text file that the agent reads and writes, such as <code>NOTES.md</code>. Anthropic calls this pattern structured note-taking: the agent writes notes to a store outside the context window and reads them back into the context later.</p>
+<p>In a notes file, the agent records decisions, facts, open questions, and progress. The file lives outside the context window, so it survives truncation, compaction, and the end of the session. No embeddings, database, or retrieval scoring are involved.</p>
+<p>The agent works with the file through ordinary tools. Two are enough:</p>
+<ul>
+<li><code>save_note(content)</code> appends a note to the file.</li>
+<li><code>read_notes()</code> returns the file so its contents enter the context.</li>
+</ul>
+<p>An agent might add more, such as a tool that reads only one section of the file. The mechanism is the tool-calling loop from Module 6. Nothing new is needed.</p>
+<p>The value of the file depends on what the agent writes. A file that records everything is as hard to use as no file at all. Curation starts at the moment of writing: &quot;The user prefers tabs&quot; is worth keeping, and a dump of the project&#39;s file tree is not. As a rule, the agent should write something down if it must survive past the current session, or if the context might be truncated before the agent needs it again. Information that matters only for the next few turns can stay in the context.</p>
+<h3>Example: A Tutoring Agent</h3>
+<p>A tutoring agent that helps a student learn to program works with that student over many sessions. Each session starts with a new context. During a session, the agent calls <code>save_note</code> when something is worth keeping: the student finished a topic, struggled with a concept, or reached a natural stopping point. After a few sessions, the file might look like this:</p>
+<pre><code class="language-markdown"># NOTES.md
+
+## Finished
+- Loops and lists
+
+## Struggles
+- Off-by-one errors in loop bounds
+- Confuses append() and extend()
+
+## Next session
+- Start functions
+- Review range() first
+</code></pre>
+<p>When the student returns, the agent reads the notes and picks up where it left off. Without them, every session would begin with &quot;What have we covered so far?&quot; With them, the agent opens with the <code>range()</code> review the student needs. The file leaves things out on purpose. It holds no session transcript and no list of every exercise. It keeps only what changes how the agent teaches next time. In effect, the notes file is a distillation of the whole series of conversations: small, but built from all of them.</p>
+<h2>Prompting the Agent to Take Notes</h2>
+<p>A tool by itself does nothing. The model calls <code>save_note</code> only when something cues it to, and that cue comes from the prompt. The tutoring agent&#39;s system prompt already describes how to teach: guide the student instead of giving answers, and so on. One section of that prompt covers memory:</p>
+<pre><code class="language-markdown">## Memory
+
+You keep notes in NOTES.md. They persist between sessions.
+
+- Start every session by calling read_notes, before anything else.
+- Call save_note when the student finishes a topic, struggles with
+  a concept, or when you decide what to do next session.
+- Save one fact per note. Do not save the conversation itself.
+- Your context can be reset at any time. Anything not saved is lost.
+</code></pre>
+<p>The section tells the model when to read, when to write, what to keep, and why it matters. The line about what to keep does most of the curation. Without it, the model tends to save too much or too little. The last line follows Anthropic&#39;s memory tool, which automatically adds a similar warning to the system prompt: the context window &quot;might be reset at any moment,&quot; and progress that is not recorded in memory is lost.</p>
+<p>The tool description repeats the cue. The <code>save_note</code> description might read, &quot;Save a note that persists to future sessions.&quot; Models are good at this task. Given clear instructions, they pick out what matters from a conversation and leave useful notes for their own later sessions.</p>
+<h3>What the Harness Should Handle</h3>
+<p>Leaving every memory decision to the model has a weakness. The model cannot see when a session will end or when its context is about to be compacted. The harness, the code that runs the agent loop, can. Two jobs belong in the harness:</p>
+<ul>
+<li><strong>Load the notes at startup.</strong> The harness reads <code>NOTES.md</code> and places it in the system prompt before the first call. The model cannot forget to read its notes, because they are already in its context.</li>
+<li><strong>Ask for an update before context is lost.</strong> At the end of a session, or just before compaction, the harness sends one more turn: &quot;Update your notes before this session ends.&quot; The model then saves anything it learned late in the session.</li>
+</ul>
+<p>The division of labor is simple. <strong>The prompt tells the model what to remember. The harness makes sure it reads and writes at the right moments.</strong> Production systems work this way. Claude Code loads its memory index at the start of every session, and OpenClaw runs a silent memory turn just before it compacts the context. Both systems return in the last lecture of this module.</p>
+<h2>Limits of a Notes File</h2>
+<p>A notes file works well while it is small. As it grows, two problems appear. The agent can read the whole file or none of it, and loading all of it starts to crowd the context. And the file holds conclusions, such as &quot;struggles with off-by-one errors,&quot; while dropping the specific events behind them. A semester of tutoring produces far more history than one flat file can hold usefully.</p>
+<p>The next lecture addresses both problems with episodic memory: individual records of past events, and ways to choose which of them to bring into the context.</p>
+<h2>Takeaways</h2>
+<p><strong>Context lasts one session; memory persists across sessions.</strong> Memory reaches the model only when it is injected into the context, through a cycle of writing, curating, and retrieving that mirrors RAG. Memory comes in four kinds: conversation, episodic, semantic, and procedural. <strong>The simplest memory is a notes file</strong> that the agent reads and writes through two ordinary tools. <strong>The system prompt tells the model what to save,</strong> and the harness loads the notes at startup and asks for an update before context is lost.</p>
+</div>
+</body>
+</html>

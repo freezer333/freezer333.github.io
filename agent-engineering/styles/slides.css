@@ -169,6 +169,7 @@ blockquote {
 .small { font-size: 0.85em; }
 .smaller { font-size: 0.75em; }
 .small-code .remark-code { font-size: 0.75em; }
+.tight-code .remark-code { font-size: 0.6em; line-height: 1.35; }
 .dim { color: var(--text-light); }
 .accent { color: var(--accent); }
 

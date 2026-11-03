@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment 3 — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Assignment 3: Same Model, Different Harness</h1>
+<p><strong>Module 7 Assignment | Agent Engineering</strong>
+<strong>Due:</strong> End of Module 10
+<strong>Length:</strong> 4–6 pages of analysis, plus a data appendix
+<strong>Submission:</strong> <code>report.pdf</code> and an <code>experiments/</code> folder (prompt, token logs, verification output, both produced programs)
+<strong>Model:</strong> Claude Haiku — pinned for you in the provided scripts. Both agents must run the <strong>identical</strong> model.</p>
+<hr>
+<h2>Premise</h2>
+<p>By now you have built a coding agent from scratch (Module 6, Assignment 2) and given it real context management — a sliding window, selective deletion, and compaction (Module 7, Lab 3). It works — but it is small. A few hundred lines, three or four tools, a simple loop. The agents people actually use in production — Aider, Claude Code, SWE-agent — are far more elaborate: repository maps, structured edit formats, planning steps, sophisticated context strategies.</p>
+<p>It is tempting to assume the gap between your agent and a production agent is mostly the <em>model</em>. It is not. A coding agent is two things stacked together: the <strong>model</strong> (the LLM doing the reasoning) and the <strong>harness</strong> (everything wrapped around it — the prompt, the tools, how files are fed into context, how context is managed, how edits are applied). This assignment isolates the second.</p>
+<p>You will run <strong>two agents on the same task</strong> — your own coding agent from Assignment 2 and Lab 3 and <strong>Aider</strong>, a mature open-source coding agent — while holding the <strong>model and the prompt identical</strong> across both. Because the model and the prompt are the same, every difference you measure is attributable to the harness alone. Your job is to measure that difference and explain it.</p>
+<p>This is an analysis assignment, not a build assignment. You will not write a new agent. You will run two existing ones, measure carefully, and reason rigorously about <em>why a wrapper around the same model produces a different result</em>.</p>
+<hr>
+<h2>What Is Held Constant — and Why It Matters</h2>
+<p>The entire validity of this study rests on three controls. If any of them breaks, your measurements no longer mean what you claim.</p>
+<ol>
+<li><p><strong>The model.</strong> Both agents call the same Claude Haiku model. The provided Aider launcher pins both Aider&#39;s main model <strong>and its &quot;weak model&quot;</strong> (Aider uses a separate cheaper model for some calls by default — if you do not pin it, your token comparison is silently contaminated). Your own agent must be configured to call the same model id.</p>
+</li>
+<li><p><strong>The prompt.</strong> Both agents receive the <strong>exact same prompt</strong>, byte for byte, from a single <code>prompt.txt</code> file. You write this prompt and feed the same file to both agents — don&#39;t coach one and not the other. The <code>prompt.txt</code> you submit is the one both runs used.</p>
+</li>
+<li><p><strong>The information.</strong> Neither agent ever sees the tests. Both build the program from the specification alone. The test suite is the <em>grader&#39;s</em> ground truth, run from outside each agent&#39;s workspace. This keeps the comparison about <em>building the program</em>, not about looping against a test command.</p>
+</li>
+</ol>
+<p>Why Haiku and not Sonnet? Because the model is arbitrary here — the point is the harness — so we pick the cheap, fast one. A smaller model also leans <em>harder</em> on good scaffolding, which makes the harness differences larger and easier to see. Running both agents costs a few dollars at most.</p>
+<hr>
+<h2>The Task: Build a Small Library From a Specification</h2>
+<p>You will be given a specification (<code>spec.md</code>) for a <strong>medium-sized, pure-Python library</strong> — roughly six modules with interlocking rules (no web server, no network, no database; everything is deterministic and unit-testable). The exact specification ships with the assignment; at a high level it is an <strong>expense-sharing library</strong> (think a minimal Splitwise): users and groups, expenses split in several ways, balance computation, and a debt-settlement step, with a layer of validation rules throughout.</p>
+<p>It is deliberately large enough that a coding agent is genuinely exercised — many file reads and edits, real context accumulation across modules, real opportunities to lose track. A trivial one-file script would show nothing.</p>
+<p>Each agent&#39;s job is to produce a working implementation that passes as many of the provided tests as possible, <strong>from the specification alone.</strong></p>
+<hr>
+<h2>What You Will Measure</h2>
+<p>Exactly two things, for each agent.</p>
+<h3>1. Tests passed (accuracy)</h3>
+<p>The fraction of the provided pytest suite that passes against the program the agent produced. This is your objective success metric — it captures both correctness and how complete the build was. The provided <code>verify.py</code> runs the suite and reports <code>X / N passed</code>; it also confirms the agent did not tamper with the test files.</p>
+<h3>2. Tokens and cost (efficiency)</h3>
+<p>To produce that result, how much did each agent spend? Report, for each agent:</p>
+<ul>
+<li><strong>Total input tokens</strong> — the sum of <code>input_tokens</code> across every main-model API call.</li>
+<li><strong>Total output tokens</strong> — the sum of <code>output_tokens</code>.</li>
+<li><strong>Peak input tokens</strong> — the largest single request (your clearest single-number measure of how big the context got).</li>
+<li><strong>Estimated cost</strong> — at the provided Haiku pricing.</li>
+</ul>
+<p>The provided <code>collect.py</code> reads both agents&#39; logs and prints these in one comparison table. The headline of the whole assignment is the pair of numbers: <strong>tests passed, and tokens spent to get there.</strong></p>
+<p>We are intentionally <em>not</em> asking you to count tool calls or edit sizes separately. Those are just proxies for efficiency, which the token numbers already capture.</p>
+<hr>
+<h2>Procedure</h2>
+<p>The plumbing is provided so you can focus on running, measuring, and thinking. Everything ships in the <strong><code>assignment-03/</code> starter bundle</strong> — start by reading its <code>README.md</code>, which has the quickstart and a map of every file. The bundle includes: <code>spec.md</code>, the hidden <code>tests/</code>, <code>requirements.txt</code> (pins the exact Aider version), <code>run_aider.sh</code>, <code>reset.sh</code>, <code>verify.py</code>, <code>collect.py</code>, a one-page <code>AIDER-PRIMER.md</code>, <code>AIDER-SETUP.md</code>, a <code>STUDENT-AGENT-CHECKLIST.md</code> for configuring your own agent, and a ready-to-run reference agent in <code>student-agent/</code>.</p>
+<ol>
+<li><p><strong>Install.</strong> <code>pip install -r requirements.txt</code> (this pins Aider and pytest).</p>
+</li>
+<li><p><strong>Write the shared prompt.</strong> In <code>prompt.txt</code>, write the single prompt both agents will receive. Treat this as the one knob you control. (See the prompt-iteration loop below.)</p>
+</li>
+<li><p><strong>Configure your agent</strong> per the provided checklist: set its model to the pinned Haiku id, point it at a clean <code>workspace_mine/</code>, make sure it cannot see <code>tests/</code>, and have your <code>TokenTracker</code> from Assignment 2 export a <code>mine_tokens.csv</code>, and choose which context-management strategy from Lab 3 to run (the one knob from Lab 3 you carry in) (a one-line addition — schema is provided).</p>
+</li>
+<li><p><strong>Run each agent once</strong> on the final shared prompt: your agent into <code>workspace_mine/</code>, Aider into <code>workspace_aider/</code> via <code>run_aider.sh</code>. Use <code>reset.sh</code> to start each from a clean state.</p>
+</li>
+<li><p><strong>Measure.</strong> Run <code>verify.py</code> on each workspace (tests passed) and <code>collect.py</code> (token table).</p>
+</li>
+<li><p><strong>Write the report.</strong></p>
+</li>
+</ol>
+<h3>The prompt-iteration loop (this is the interesting part)</h3>
+<p>Your agent is weaker than Aider. Your first prompt will probably leave it far behind. <strong>Iterate the shared prompt</strong> — make the spec clearer, add structure, give better guidance — and re-run <em>your</em> agent until it performs as well as you can get it to. Then run <em>both</em> agents on that final prompt.</p>
+<p>The point is to discover where prompting helps and where it cannot. A better prompt may take your agent from 8 passing tests to 20 — but it may still not reach Aider&#39;s 28, because some of Aider&#39;s advantage is <em>structural to the harness</em> and no prompt can close it. Document this journey; it is one of the richest parts of your analysis.</p>
+<p>You only need <strong>one measured run per agent</strong> on the final prompt — because the prompt is fixed and identical, additional trials would only average over a variation you have deliberately removed. (If you observe meaningful run-to-run variance, note it; it is a bonus observation, not a requirement.)</p>
+<hr>
+<h2>What Your Report Must Contain</h2>
+<h3>1. Setup and Controls</h3>
+<p>State the model id both agents used, confirm Aider&#39;s weak-model was pinned to the same model, and include the final <code>prompt.txt</code> in your appendix — the single file you fed to both agents. A reader must be able to confirm your three controls held.</p>
+<h3>2. The Results</h3>
+<p>The comparison table from <code>collect.py</code> (tokens and cost) alongside the <code>verify.py</code> results (tests passed), for both agents. State the headline plainly: how many tests each passed, and how many tokens each spent.</p>
+<h3>3. The Shared Prompt and Its Evolution</h3>
+<p>Show how your prompt evolved and what each change bought you. At minimum:</p>
+<ul>
+<li>Your first prompt and your final prompt.</li>
+<li>The effect of your prompt changes on <strong>your agent&#39;s</strong> pass rate (a small before/after).</li>
+<li>An honest account of <strong>what prompting could not fix</strong> — the gap that remained no matter how you phrased the task, and your hypothesis for why it is structural rather than promptable.</li>
+</ul>
+<h3>4. The Harness Explanation</h3>
+<p>This is the analytical core. The model and prompt were identical, so explain the differences you measured by <strong>naming specific harness mechanisms.</strong> Use the provided <code>AIDER-PRIMER.md</code> and your own logs. Strong explanations look like:</p>
+<blockquote>
+<p>&quot;Aider used 60% fewer peak input tokens because its repo-map feeds the model a compressed symbol map of the codebase instead of reading whole files into context, the way my agent does.&quot;</p>
+</blockquote>
+<blockquote>
+<p>&quot;My agent ran out of usable context by the fifth module and began re-implementing functions it had already written, because my sliding window dropped the earlier files; Aider&#39;s repo-map kept a persistent summary, so it never lost the structure.&quot;</p>
+</blockquote>
+<p>Weak explanations name no mechanism (&quot;Aider is just better&quot;) or attribute the difference to the model (it cannot be — the model was identical).</p>
+<p>Cover both metrics: explain the <strong>token</strong> difference and the <strong>tests-passed</strong> difference, each tied to a concrete harness feature (Aider&#39;s or your own).</p>
+<h3>5. Synthesis</h3>
+<p>Tie it together in answer to the assignment&#39;s central question:</p>
+<ul>
+<li><strong>What does a coding-agent harness actually contribute when the model is held constant?</strong> Quantify it from your data.</li>
+<li><strong>If you could graft exactly one mechanism from Aider into your own agent, which one — and what would it buy you?</strong> Defend the choice with your measurements.</li>
+<li>Was there any axis where your minimal agent actually <em>won</em> (e.g., fewer wasted tokens on so small a project)? If so, defend it.</li>
+</ul>
+<hr>
+<h2>Asymmetric Results Are Valid</h2>
+<p>Your agent may lose badly. Aider may pass every test while yours passes half, on the same model and prompt. <strong>That is the lesson, not a failure</strong> — it is direct evidence of how much the harness contributes — and it earns full credit as long as you measure it cleanly and explain the harness reason. Likewise, a finding that prompting closed <em>most</em> of the gap is just as interesting as a finding that it closed almost none. The grader is looking for clean measurement and rigorous attribution, not for your agent to win.</p>
+<hr>
+<h2>Submission</h2>
+<pre><code>assignment-03/
+├── report.pdf
+└── experiments/
+    ├── prompt.txt              # the final shared prompt (identical for both agents)
+    ├── mine_tokens.csv         # your agent&#39;s per-call token log
+    ├── aider_llm.log           # Aider&#39;s raw call log (from run_aider.sh)
+    ├── collect_output.txt       # the token comparison table
+    ├── verify_mine.txt         # tests passed by your agent
+    ├── verify_aider.txt        # tests passed by Aider
+    ├── workspace_mine/         # the program your agent produced
+    └── workspace_aider/        # the program Aider produced
+</code></pre>
+<p>Your report must be self-contained — a reader should understand your findings without opening the appendix. The <code>experiments/</code> folder exists so a grader can verify your numbers.</p>
+<hr>
+<h2>Rubric (20 points)</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Points</th>
+<th>Criteria</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Setup &amp; control integrity</strong></td>
+<td>3</td>
+<td>Both agents ran on the identical model and the same submitted <code>prompt.txt</code>; tests were never exposed to the agents; data collected cleanly</td>
+</tr>
+<tr>
+<td><strong>Measurement &amp; data</strong></td>
+<td>4</td>
+<td>Both metrics reported correctly for both agents; token definitions correct; results clearly presented</td>
+</tr>
+<tr>
+<td><strong>Prompt evolution analysis</strong></td>
+<td>4</td>
+<td>Shows what prompting improved on your agent and gives an honest, reasoned account of what it could not fix</td>
+</tr>
+<tr>
+<td><strong>Harness attribution</strong></td>
+<td>6</td>
+<td>Explains both the token and tests-passed differences by naming <em>specific</em> harness mechanisms; never attributes a difference to the model; grounded in the logs and the primer</td>
+</tr>
+<tr>
+<td><strong>Synthesis</strong></td>
+<td>3</td>
+<td>Answers the central question quantitatively; defends a single highest-value mechanism to adopt; surfaces any axis where the minimal harness wins</td>
+</tr>
+</tbody></table>
+<p><strong>Total: 20 points.</strong></p>
+<p>A note on grading: the most common path to a low score is a broken control — different models (forgetting Aider&#39;s weak-model), or feeding the two agents different prompts — which invalidates the comparison. The most common path to a high score is <em>naming the mechanism</em>: tracing a measured difference to a specific, identifiable feature of the harness rather than waving at &quot;Aider is more advanced.&quot;</p>
+<hr>
+<h2>What You Will Learn</h2>
+<p>By the end of this assignment, you should be able to:</p>
+<ul>
+<li>Separate, in your own thinking, what a coding agent&#39;s <em>model</em> contributes from what its <em>harness</em> contributes.</li>
+<li>Design a controlled comparison in which the only thing that varies is the variable you care about.</li>
+<li>Read another agent&#39;s behavior (and a little of its architecture) well enough to explain <em>why</em> it spends tokens and succeeds the way it does.</li>
+<li>Judge how far prompt engineering can compensate for a weaker harness — and recognize the limits that are structural rather than promptable.</li>
+<li>Make an evidence-based decision about which engineering investment in your own agent would pay off most.</li>
+</ul>
+<p>These are the judgments you will rely on for the rest of the course, as you add RAG, memory, and skills to your agent — each of which is, fundamentally, another piece of harness wrapped around the same model.</p>
+</div>
+</body>
+</html>

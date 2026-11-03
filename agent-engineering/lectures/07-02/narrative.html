@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Selective Preservation — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 7.2</a></div></nav>
+<div class="page_content"><h1>Implementing Selective Preservation</h1>
+<p>The sliding window from the previous lecture is correct, but blunt. It rests on a single assumption: that the only messages worth keeping are the recent ones, plus the first message as an anchor. For many conversations that assumption is wrong, and the failure is severe.</p>
+<p>Consider a coding-agent session. Early on — at message three, say — the user states a constraint: &quot;we deploy with Docker, not systemd.&quot; The agent works for another twenty or thirty messages. Then the token budget crosses its threshold and the sliding window prunes the conversation back to its recent tail. The Docker constraint is gone, and it is <strong>irretrievable</strong> — nothing in the surviving messages records that the user ruled out systemd. The agent, asked to write deployment scripts, generates a systemd unit file. The whole point of context management is to let a user keep a long-lived conversation going indefinitely without exhausting the window; sliding window achieves that bound but throws away decisions that govern the rest of the session.</p>
+<p>Selective preservation addresses this by classifying messages and keeping the ones that matter <strong>regardless of age</strong>. Where sliding window says &quot;recent messages are important,&quot; selective preservation says &quot;a message is important based on its characteristics — and recency is only one of them.&quot;</p>
+<h2>What &quot;Important&quot; Means: Three Categories</h2>
+<p>Most of what a context manager should preserve falls into three categories.</p>
+<ol>
+<li><strong>Structural anchors.</strong> Messages that frame the whole session — above all, the first user message, which is the original task. This is the anchor from Lecture 7.1.</li>
+<li><strong>Decisions and goals.</strong> Messages where the user committed to a constraint (&quot;use psycopg2&#39;s pool, not SQLAlchemy&quot;) or where the agent took an action that changed the state of the world (an <code>edit_file</code> that modified code, an approved destructive operation).</li>
+<li><strong>Recent exchanges.</strong> The last few messages, regardless of content, for conversational continuity.</li>
+</ol>
+<p>Sliding window already handles category 3 — its entire mechanism is &quot;keep the recent tail.&quot; Selective preservation adds categories 1 and 2.</p>
+<h3>Selective Preservation Is Not a Complete Solution</h3>
+<p>There is an important caveat to state up front. Sliding window, however lossy, <em>always</em> bounds the context: keep the last N and the size is capped, forever. Selective preservation does not have this property. Over a long enough session, &quot;important&quot; messages <strong>accumulate</strong> — a session can produce dozens of decisions and constraints — and if you keep all of them, the preserved set eventually fills the window on its own. At that point you are back where you started.</p>
+<p>There are two responses. One is to <strong>cap</strong> the number of preserved important messages, dropping the oldest important ones first — which starts to feel like a sliding window over important messages. The other is to <strong>reach for compaction</strong>, a strategy that synthesizes rather than selects. Selective preservation works well when a session has a few dozen decisions scattered across hundreds of messages; it does not scale to sessions with hundreds of decisions. It is part of a strategy, not the whole strategy.</p>
+<h2>Heuristic Tagging: The Floor</h2>
+<p>How do you decide a message belongs to category 2? The cheapest approach is <strong>heuristic tagging</strong> — classifying a message from its structure alone, with no extra metadata. Three rules cover most cases.</p>
+<p><strong>The first user message</strong> is always preserved — the anchor rule, carried over from 7.1.</p>
+<p><strong>Assistant messages that called a mutating tool</strong> are preserved. A mutating tool is one that changes the state of the world: <code>edit_file</code>, <code>delete_file</code>, <code>mkdir</code>, <code>run_command</code>, <code>write_file</code>. Read-only calls like <code>read_file</code> and <code>list_files</code> are deliberately <em>not</em> preserved by this rule, because their results can be re-fetched cheaply if the agent needs them again — and keeping a <code>read_file</code> result in context is exactly the token cost that the progressive-disclosure tool design from Lecture 4.3 was built to avoid. This is the strongest heuristic signal: the state of the world changed at that message, and the agent will need to know it changed. The crucial enabling fact is that <em>you wrote the tools</em>, so you know which ones mutate — the classifier just looks up the requested tool name in a set you maintain:</p>
+<pre><code class="language-python">MUTATING_TOOLS = {&quot;edit_file&quot;, &quot;delete_file&quot;, &quot;mkdir&quot;, &quot;run_command&quot;, &quot;write_file&quot;}
+
+def is_mutating_assistant(msg):
+    &quot;&quot;&quot;Assistant message that called a state-changing tool.&quot;&quot;&quot;
+    if msg[&quot;role&quot;] != &quot;assistant&quot;:
+        return False
+    content = msg.get(&quot;content&quot;)
+    if not isinstance(content, list):
+        return False
+    for block in content:
+        if isinstance(block, dict) and block.get(&quot;type&quot;) == &quot;tool_use&quot;:
+            if block.get(&quot;name&quot;) in MUTATING_TOOLS:
+                return True
+    return False
+</code></pre>
+<p><strong>User messages that state constraints</strong> are the hardest case, because intent is not visible in structure. Pattern-matching on authoritative words — &quot;we use,&quot; &quot;we deploy,&quot; &quot;always,&quot; &quot;never,&quot; &quot;must&quot; — catches some of them. (A practical aside for working with agents: when you state a constraint in strong, explicit language, you make it more likely to be preserved by exactly this kind of heuristic. The first message and clearly-phrased constraints are the ones that survive.)</p>
+<p>But heuristics will miss things. A message like &quot;the new release uses Python 3.12&quot; matches no keyword pattern, yet it is a real constraint. A requirement buried in the middle of a long sentence slips through. Heuristics are a <strong>floor</strong>, not a ceiling: deterministic, cheap in both compute and dollars, good enough to catch obvious decisions — and not sufficient on their own. They can also over-preserve: an agent might call a mutating tool, then realize the action was a mistake, and the heuristic keeps it anyway.</p>
+<h2>Explicit Tagging: The Ceiling</h2>
+<p>The complement to heuristics is <strong>explicit tagging</strong> — marking a message as important at the moment it is created, by adding a flag to the message dictionary:</p>
+<pre><code class="language-python">messages.append({
+    &quot;role&quot;: &quot;user&quot;,
+    &quot;content&quot;: &quot;We deploy with Docker, not systemd.&quot;,
+    &quot;important&quot;: True,
+})
+</code></pre>
+<p>The Anthropic API ignores extra keys, so the flag is invisible to the model — it exists purely for the truncation function. Every message carries its own tag, the API contract is not broken, and when the context manager later curates the conversation it simply drops anything not marked important. There are two ways the flag gets set.</p>
+<p><strong>From the agent code, at known checkpoints.</strong> After a destructive operation succeeds, after the user confirms a plan, or after compaction completes (so the summary itself survives future truncations), the code sets <code>important: True</code> on the relevant message.</p>
+<p><strong>From the agent itself, through a tool.</strong> This is the more interesting option. Give the agent a <code>mark_important</code> tool whose description tells it to flag any message — the user&#39;s or its own — that matters for the rest of the conversation. When the model calls it, your code sets the flag on the most recent message. This is powerful precisely because the model is reasoning about importance <em>with the full conversation in front of it</em> — it is, by definition, the best-positioned classifier available, and it is the same model already running the session. The cost is real but modest: the tool description adds tokens to the system prompt, and each invocation is an extra round trip through the inner loop. For long-running sessions, that cost is easily worth it.</p>
+<p>Heuristics are the floor (automatic, free, coarse); the model-driven tool is the ceiling (precise, intelligent, slightly expensive). A practical agent combines them: heuristics catch mutating tool calls and the anchor; explicit tags handle constraints the code recognizes; the <code>mark_important</code> tool is reserved for sessions long enough to justify the overhead.</p>
+<h2>The Same Two API Constraints</h2>
+<p>Everything from Lecture 7.1 about the API contract still applies — pair integrity and alternating roles — but selective preservation triggers both more often, because it pulls a <strong>non-contiguous subset</strong> out of the conversation rather than a clean tail.</p>
+<p><strong>Pair integrity</strong> must now be enforced explicitly. If the keep set includes an assistant <code>tool_use</code> but not its matching <code>tool_result</code> (or vice versa), the request is invalid — the same orphaning problem a naive slice caused. The <code>find_pair_partner</code> helper makes the rule concrete: for any kept message that is half of a pair, find and keep its partner. An assistant <code>tool_use</code> pulls in the following user <code>tool_result</code>; a <code>tool_result</code> pulls in the preceding <code>tool_use</code>.</p>
+<pre><code class="language-python">for i in list(keep):
+    partner = find_pair_partner(messages, i)
+    if partner is not None:
+        keep.add(partner)
+</code></pre>
+<p><strong>Alternating roles</strong> is now the common case rather than an edge case. Sliding window kept a contiguous tail and only risked a role collision at the anchor join; selective preservation routinely places two same-role messages next to each other — for example, the anchor (user) immediately followed by an explicitly-tagged constraint (user), with the assistant turn between them dropped. The fix is the same <code>ensure_alternating_roles</code> pass from 7.1, inserting a brief synthetic acknowledgment of the opposite role between any adjacent same-role messages.</p>
+<p>Both helpers are <strong>imported from the 7.1 work, not reimplemented</strong>. The two constraints are properties of the messages array itself, not of any one strategy, so the infrastructure is shared; only the selection logic differs. (Lab 5 pulls <code>find_pair_partner</code> and <code>ensure_alternating_roles</code> into a single <code>context_management.py</code> module that every strategy imports.)</p>
+<h2>Putting It Together</h2>
+<p>The main function builds a set of indices to keep — recent N, then anchors, mutating decisions, and explicit tags — then expands the set to include every pair partner, and finally runs the alternating-roles repair:</p>
+<pre><code class="language-python">def selective_preserve(messages, keep_last_n=4):
+    keep = set()
+
+    # Recent N messages.
+    start_recent = max(0, len(messages) - keep_last_n)
+    for i in range(start_recent, len(messages)):
+        keep.add(i)
+
+    # Anchors, mutating decisions, explicit tags.
+    for i, msg in enumerate(messages):
+        if is_anchor(msg, i) or is_mutating_assistant(msg) or is_explicitly_tagged(msg):
+            keep.add(i)
+
+    # Pair integrity: every kept tool_use keeps its tool_result and vice versa.
+    for i in list(keep):
+        partner = find_pair_partner(messages, i)
+        if partner is not None:
+            keep.add(partner)
+
+    selected = [messages[i] for i in sorted(keep)]
+    return ensure_alternating_roles(selected)
+</code></pre>
+<p>The standalone demo in <code>selective_preservation.py</code> runs this on the same base conversation as the 7.1 sliding-window demo, with two user constraints explicitly tagged (a psycopg2 requirement at message 3 and an exception-safety requirement at message 10). Running it on the 14-message conversation with <code>keep_last_n=4</code> produces a 10-message result:</p>
+<pre><code>  [orig  0] user      | &#39;Refactor the database layer to use connection pooling.&#39;
+  [ack   ] assistant | &#39;Understood.&#39;
+  [orig  3] user      | &quot;Use psycopg2&#39;s pool — we don&#39;t want SQLAlchemy here.&quot; *important*
+  [orig  6] assistant | text(&#39;Adding the pool now.&#39;) + tool_use(edit_file, id=tu_003)
+  [orig  7] user      | tool_result(id=tu_003)
+  [ack   ] assistant | &#39;Understood.&#39;
+  [orig 10] user      | &#39;Make sure the pool is checked back in even on exception.&#39; *important*
+  [orig 11] assistant | tool_use(edit_file, id=tu_004)
+  [orig 12] user      | tool_result(id=tu_004)
+  [orig 13] assistant | &#39;Updated models/user.py to check connections back into the pool.&#39;
+</code></pre>
+<p>The kept set is the anchor <code>[0]</code>, the two explicit tags <code>[3]</code> and <code>[10]</code>, the two <code>edit_file</code> decisions <code>[6]</code> and <code>[11]</code> each with its <code>tool_result</code> pulled in by pair integrity (<code>[7]</code>, <code>[12]</code>), and the recent message <code>[13]</code>. Two synthetic acks restore role alternation at the joins. The contrast is the lesson: a sliding window of size 4 would have started at index 10, losing both the original task description <strong>and</strong> the psycopg2 constraint at message 3 — precisely the failure that motivated the strategy.</p>
+<h2>The Limits of Selection</h2>
+<p>Both sliding window and selective preservation are <strong>subsetting</strong> strategies: they keep some messages and drop others, but they never combine, summarize, or rephrase. That is fine when a session has a handful of important moments scattered through a long stretch of routine work. It breaks down in three situations:</p>
+<ul>
+<li>the set of important messages grows too large to keep within budget;</li>
+<li>important information is spread across many messages — a constraint assembled over a back-and-forth — so no single message captures it;</li>
+<li>a kept message depends on context that was dropped, and no longer makes sense on its own.</li>
+</ul>
+<p>When subsetting fails, the answer is <strong>synthesis</strong>: have the model read the conversation and write a single new message that captures what matters. Unlike selection, compaction produces wholly new text rather than choosing among existing messages. That is the subject of the next lecture.</p>
+<h2>Takeaways</h2>
+<p>Selective preservation keeps what matters regardless of age, organized around three categories: structural anchors, decisions and goals, and recent exchanges. <strong>Heuristics are the floor</strong> — the first user message and mutating tool calls, detected for free from message structure. <strong>Explicit tagging is the ceiling</strong> — an <code>important: True</code> flag set by the agent code at checkpoints or by the model itself through a <code>mark_important</code> tool, precise but requiring foresight or a round trip. The <strong>two API constraints from 7.1 still hold</strong>, and trigger more often: <code>find_pair_partner</code> enforces pair integrity over a non-contiguous selection, and the reused <code>ensure_alternating_roles</code> pass repairs the frequent same-role adjacencies. And selection has a ceiling of its own — when important content grows too large or depends on dropped context, the strategy gives way to compaction.</p>
+</div>
+</body>
+</html>

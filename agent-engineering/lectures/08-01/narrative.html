@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG as Context Engineering — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 8.1</a></div></nav>
+<div class="page_content"><h1>RAG as Context Engineering</h1>
+<p>Modules 4 and 7 dealt with context after it accumulates: how the messages array grows, and how to trim, select, or summarize it when it grows too large. This module asks the opposite question. Where does useful information come from in the first place, and how does it get into the context?</p>
+<p>Retrieval-augmented generation, or RAG, is the standard answer. The term has been prominent since the earliest LLM applications of 2022 and 2023, and it appears in almost any discussion of LLMs and agents. It comes late in this course on purpose. With context management and tool calling already in place, RAG reads as what it is: one form of context engineering, closely related to things the coding agent already does.</p>
+<h2>What the Model Doesn&#39;t Know</h2>
+<p>A model knows what it learned during training. Three categories of information fall outside that knowledge.</p>
+<p><strong>Recent information.</strong> Every model has a training cutoff. Anything that happened after it, from yesterday&#39;s weather to a major news event last month, is absent from the model&#39;s weights. The only way the model can use that information is if it appears in the context.</p>
+<p><strong>Private knowledge.</strong> A model knows nothing about information that was never public. For a coding agent, the most important private knowledge is the codebase itself: the agent cannot edit code it has never seen. Private knowledge also includes a company&#39;s internal documentation, its customer data, and its product manuals. An agent that helps a customer assemble furniture needs the assembly instructions for that company&#39;s products, and those instructions were not in any training set.</p>
+<p><strong>High-precision facts.</strong> Some facts may have appeared in training data but still cannot be reproduced reliably: exact API signatures, current prices, the schema of a particular database table. A model retains a compressed version of what it saw during training. Compression keeps general patterns well and exact details poorly, so even publicly available facts are often not recoverable with the precision an application needs.</p>
+<p>When a question depends on any of these, asking the model directly produces one of two failures: a confident wrong answer, or a refusal. The information has to be supplied in the context.</p>
+<h2>Why Not Put Everything in the Context?</h2>
+<p>The simplest way to supply information is to include all of it. A furniture company with 30 products could paste every instruction manual into the system prompt, and a model with a million-token window might hold them all. Some small applications work this way. As a general strategy, it fails for three reasons.</p>
+<ul>
+<li><strong>The window is finite.</strong> A company&#39;s full codebase, documentation, and data will not fit in any context window. And the window must also hold the conversation itself, which grows with every turn and every tool result.</li>
+<li><strong>Every token costs money on every call.</strong> The full context is sent on each API call. A knowledge base included in the system prompt is paid for again on every request.</li>
+<li><strong>Quality degrades with length.</strong> As Lecture 2.1 showed, models use long contexts unevenly and miss information buried in the middle. Irrelevant material makes the relevant material harder to use.</li>
+</ul>
+<p>Prompt caching reduces the cost of resending the same prefix, but it does not address the other two problems. A five-million-token knowledge base does not fit in a 200K window, cached or not. And a large window does not need to be filled. The design principle is selectivity: put in the context only what is relevant to the current request.</p>
+<h2>Retrieval-Augmented Generation</h2>
+<p>RAG is a three-step pattern for supplying relevant information:</p>
+<ol>
+<li><strong>Retrieve.</strong> Fetch information relevant to the current query from an external source.</li>
+<li><strong>Augment.</strong> Add the retrieved information to the model&#39;s context.</li>
+<li><strong>Generate.</strong> Call the model, which now answers with the retrieved content in view.</li>
+</ol>
+<p>The middle word in the name is precise. The model is not modified in any way. Its <em>context</em> is augmented. The same model, given a different context, produces a different answer. That is the whole mechanism.</p>
+<p>From the model&#39;s point of view, retrieved content is text in the prompt like any other text. The model knows the content came from retrieval only if the prompt says so. Production systems usually frame retrieved content explicitly, for example with a heading such as &quot;Retrieved documents&quot; or with XML tags around each source. This lets the model tell retrieved material apart from the user&#39;s words, cite where an answer came from, and say when the retrieved material does not answer the question. The retrieved content lives in the messages array for that call. The original source, such as a document store or a search engine, keeps the full content; the context holds only what was retrieved this time.</p>
+<h2>RAG and Tool Calling</h2>
+<p>This definition sounds much like tool calling, and the two overlap heavily. When the coding agent from Module 6 calls <code>read_file</code> and the file&#39;s contents come back as a tool result, the agent has retrieved information and augmented its context with it. That is retrieval-augmented generation, though the course did not call it that at the time.</p>
+<p>RAG is the broader of the two ideas, because it does not require the model to drive retrieval. RAG predates reliable tool calling. In its original form, the developer&#39;s code performs retrieval before the model is ever called: it takes the user&#39;s question, searches some knowledge source, adds the results to the prompt, and makes one model call. The model never asks for anything. Tool calling, by contrast, is the specific workflow in which the model responds with a request to run a tool.</p>
+<h2>The Pipeline: Setup and Query</h2>
+<p>A RAG system has two phases.</p>
+<p><img src="rag-pipeline.png" alt="The RAG pipeline: a setup phase that prepares a knowledge source, and a query phase that retrieves, augments, and generates"></p>
+<p>The <strong>setup phase</strong> runs once, and again whenever the source content changes. It takes the knowledge source (documents, web pages, a database) and prepares it so that relevant pieces can be found quickly. What &quot;prepare&quot; means depends on the implementation: splitting documents into chunks and indexing them, building a database, or simply configuring a connection to a search API.</p>
+<p>The <strong>query phase</strong> runs on every request: retrieve content relevant to the query, add it to the context, and generate.</p>
+<p>Students often picture RAG as a single action at query time. Most of the engineering effort, however, sits in the setup phase. Retrieval can only be as good as the preparation behind it. When the preparation is good, retrieving before the model call is efficient: one search and one model call produce a grounded answer. Building a knowledge base that reliably returns the right content for an arbitrary question is the hard part, and it is the subject of the next two lectures.</p>
+<h2>Two Ways to Wire Retrieval</h2>
+<p>The pipeline above runs retrieval before the model is called. That is one of two places to put the retrieval step.</p>
+<p><img src="rag-two-patterns.png" alt="Retrieve first, where the developer's code searches on every query, and retrieval as a tool, where the model decides whether and how to search"></p>
+<p>In the <strong>retrieve-first</strong> design, the developer&#39;s code decides. It searches on every query, uses the user&#39;s question as the search query, adds the results to the context, and calls the model once. This is the classic RAG design.</p>
+<p>In the <strong>retrieval-as-a-tool</strong> design, the model decides. It receives a search tool, the same kind of tool as <code>read_file</code> from Module 6. The model chooses whether to search, writes its own search query, and can search again if the first results are weak. Each search adds a model call.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Retrieve first</th>
+<th>Retrieval as a tool</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Who decides</strong></td>
+<td>Your code, on every query</td>
+<td>The model, when it needs information</td>
+</tr>
+<tr>
+<td><strong>Search query</strong></td>
+<td>The user&#39;s question as written</td>
+<td>Written by the model; can retry</td>
+</tr>
+<tr>
+<td><strong>LLM calls</strong></td>
+<td>One</td>
+<td>One more per search</td>
+</tr>
+<tr>
+<td><strong>Behavior</strong></td>
+<td>Same steps every time</td>
+<td>Varies by question</td>
+</tr>
+<tr>
+<td><strong>Fits</strong></td>
+<td>Q&amp;A over a fixed set of documents</td>
+<td>Agents, where many turns need no lookup</td>
+</tr>
+</tbody></table>
+<p>Retrieve-first has three weaknesses. It searches even when the question needs no lookup. It searches only once, so a poor first result cannot be corrected. And it searches with the user&#39;s wording, which is often a poor search query. The tool design fixes all three. The cost is extra model calls and behavior that varies from one question to the next. The developer also gives up control over how much the model searches, and an agent that searches freely can fill its context with results.</p>
+<p>The retrieve-first design keeps that control, at the price of more up-front work: the developer must build retrieval good enough to run blind on every query.</p>
+<p>The right choice depends on the application. A support bot over a fixed help center suits retrieve-first: nearly every question needs a lookup, and the documents change rarely. A coding agent suits retrieval as a tool: many turns need no lookup at all, and the model must choose between reading files, searching, and running commands. The team that built Claude Code reports exactly this path. Early versions used indexed RAG over the codebase; the team moved to agentic search, in which the model explores the code with glob and grep tools. They accepted more latency and more tokens in exchange, and no longer had to maintain an index that could fall out of sync with the code. Many production systems blend the two designs: Claude Code loads its <code>CLAUDE.md</code> project file into the context up front, and searches for everything else at runtime. Lecture 8.2 shows vector search wired as a tool in the agent loop.</p>
+<h2>Just-in-Time Knowledge</h2>
+<p>RAG applies the principle of Modules 4 and 7 to external knowledge: do not carry context you do not need.</p>
+<ul>
+<li>Do not preload everything into the system prompt.</li>
+<li>Pull in only what is relevant to the current query.</li>
+<li>Let it go when the query is done, because the next query may need different information.</li>
+</ul>
+<p>Each query is a separate retrieval problem. This also makes retrieved content a candidate for <strong>ephemeral context</strong>. An application may include retrieved material for the turn that needs it, then leave it out of the history it sends on later turns. Whether to keep retrieved content in the conversation is a design decision, and it interacts directly with the context management strategies of Module 7.</p>
+<h2>RAG vs. Fine-Tuning</h2>
+<p>RAG is often discussed alongside fine-tuning, sometimes as if they were alternatives for the same job. They change different things.</p>
+<p>Fine-tuning continues training a pre-trained model on additional data, which changes the model&#39;s weights. In principle, the furniture company could fine-tune a model on all of its instruction manuals, so that the model itself carries that knowledge into every conversation. In practice, this approach has serious limits. The model was trained on an enormous amount of data, so a small additional dataset has a limited effect; fine-tuning needs a substantial amount of data to make a difference. It requires a training run, which costs time and money, and it must be repeated when the content changes. Model licenses and provider terms also restrict which models can be fine-tuned and how.</p>
+<p>RAG leaves the weights alone and puts the information in the context instead.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Fine-tuning</th>
+<th>RAG</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>What changes</strong></td>
+<td>Model weights</td>
+<td>Context (per query)</td>
+</tr>
+<tr>
+<td><strong>Persistence</strong></td>
+<td>Permanent</td>
+<td>Per-call</td>
+</tr>
+<tr>
+<td><strong>Cost</strong></td>
+<td>Training run + inference</td>
+<td>Retrieval call + larger prompt</td>
+</tr>
+<tr>
+<td><strong>Update cycle</strong></td>
+<td>Re-train when content changes</td>
+<td>Re-index when content changes</td>
+</tr>
+<tr>
+<td><strong>Source attribution</strong></td>
+<td>None — knowledge fused into weights</td>
+<td>Yes — show which document supplied the answer</td>
+</tr>
+<tr>
+<td><strong>Best for</strong></td>
+<td>Style, format, domain language</td>
+<td>Facts, current info, source-attributable answers</td>
+</tr>
+</tbody></table>
+<p>The two tools suit different problems:</p>
+<ul>
+<li><strong>Use RAG</strong> when the information is factual, changes often, must be attributed to a source, or is too large to train on.</li>
+<li><strong>Use fine-tuning</strong> when the model must follow a particular style, output format, or specialized vocabulary that prompting cannot reliably produce. A model trained on many examples of a speaking style learns to produce that style; this shapes how the model responds rather than what facts it knows.</li>
+<li><strong>Use both</strong> when an application needs both. Many production systems fine-tune for style and use RAG for content.</li>
+</ul>
+<p>For most application work, RAG is the default and fine-tuning is a specialty tool. Whether retrieval runs before the model call or as a tool, it is the more effective way to give a model hard facts to reason about.</p>
+<h2>RAG Is a Category, Not a Technology</h2>
+<p>Most introductions to RAG present it together with vector embeddings and vector databases, often as if the three were one thing. Vector search is important, and it is the most common implementation, but it is only one way to find relevant information.</p>
+<ul>
+<li><strong>RAG</strong> is the pattern: retrieve information, put it in the context, generate.</li>
+<li><strong>Vector RAG</strong> is one way to do the retrieval, using embeddings and similarity search.</li>
+</ul>
+<p>Many other mechanisms retrieve information:</p>
+<ul>
+<li><strong>Web search:</strong> query a search engine and take the top results.</li>
+<li><strong>Database queries:</strong> fetch rows from a SQL database, including fuzzy text search over stored records.</li>
+<li><strong>File reads:</strong> load a known file from disk.</li>
+<li><strong>API calls:</strong> fetch data from any external service.</li>
+</ul>
+<p>Each of these brings external information into the model&#39;s context, and each is a valid RAG implementation for the right problem. Calling a search API and adding the results to the prompt is RAG, with no special technology involved. In agents, these mechanisms usually run as tools that the model calls. In the classic design, the developer&#39;s code runs them before the model call.</p>
+<p>Lecture 8.2 covers the vector approach in depth, because it is the most common and the one most often meant by &quot;RAG.&quot; Lecture 8.3 covers the other mechanisms and how to choose among them.</p>
+<h2>Takeaways</h2>
+<p>RAG solves the <strong>knowledge gap</strong>: recent, private, and high-precision information that the model does not have. It <strong>augments the context and leaves the model unchanged</strong>: the same model, given different context, gives a different answer. It is <strong>just-in-time knowledge</strong>: pull in what the current query needs rather than preloading everything, because context is finite, costs money on every call, and degrades with length. Retrieval can be <strong>wired two ways</strong>: the developer&#39;s code retrieves before the model call, or the model calls a retrieval tool; agents usually do the second, and many systems blend both. RAG <strong>differs from fine-tuning</strong>, which changes weights and suits style and format, while RAG changes context and suits facts. And RAG is <strong>a category, not a technology</strong>: vector search is one implementation, and web search, database queries, file reads, and API calls are others.</p>
+</div>
+</body>
+</html>

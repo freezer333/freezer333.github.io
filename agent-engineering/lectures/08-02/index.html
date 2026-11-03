@@ -10,21 +10,24 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Embeddings, Similarity, and Vector Storage</h1>
-<p><strong>Lecture 8.2</strong></p>
-<ul>
-  <li>The most common RAG implementation, treated as one specific approach</li>
-  <li>Embeddings as semantic representation</li>
-  <li>Geometric intuition: similar meanings → similar vectors</li>
-  <li>Using embedding APIs (Voyage, OpenAI)</li>
-  <li>Cosine similarity: a normalized dot product</li>
-  <li>Vector databases (ChromaDB, FAISS): what they add (persistence, indexing, scale, metadata filtering)</li>
-  <li>When dict-based storage suffices vs. when to use a vector database</li>
-  <li>Chunking subsection: why chunk, the three common strategies (fixed, sentence/paragraph, semantic), use library defaults until you have a reason not to</li>
-  <li>When this approach fits: large unstructured corpus where semantic similarity matters</li>
-</ul>
+<p><strong>Module 8, Lecture 8.2 | Retrieval-Augmented Generation (RAG)</strong></p>
+<p>Vector search is the most common way to implement RAG, and this lecture places each of its pieces in the pipeline from Lecture 8.1, using a customer support knowledge base as the running example. An embedding model is a separate, smaller model from the LLM: it turns a passage into one vector, trained with contrastive objectives so that similar meanings produce nearby vectors. Retrieval embeds the user&#39;s question and finds the closest stored vectors by cosine similarity, a normalized dot product, which is why &quot;I&#39;m locked out of my account&quot; can find an article on password resets that keyword search would miss. Embedding APIs from Voyage AI, OpenAI, and Cohere are cheap, but the choice is sticky: vectors from different models cannot be compared, so switching means re-embedding the corpus. A Python dictionary with a linear scan is enough for a small corpus; vector databases add approximate nearest neighbor indexing such as HNSW, persistence, and metadata filtering, and know nothing about LLMs. Chunking splits documents for granularity and window fit, and library defaults are a sound start. The lecture closes by wiring vector search as a tool in the agent loop, where the model sends a query string and gets back text without ever seeing a vector, and by naming where vector RAG fits and where the retrieval methods of Lecture 8.3 do better.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-08-02.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/embeddings">Embeddings</a> — Anthropic docs. Anthropic does not offer its own embedding model; this guide covers Voyage AI&#39;s models, their dimensions, and shortening vectors to save storage.</li>
+<li><a href="https://developers.openai.com/api/docs/guides/embeddings">Vector embeddings</a> — OpenAI docs. Default dimensions for <code>text-embedding-3-small</code> and <code>text-embedding-3-large</code>, shortening vectors with the <code>dimensions</code> parameter, and a worked cosine-similarity search.</li>
+<li><a href="https://arxiv.org/abs/2004.04906">Dense Passage Retrieval for Open-Domain Question Answering</a> — Karpukhin et al., EMNLP 2020. A dense retriever trained on question-passage pairs beats BM25 keyword search by 9–19 points in top-20 accuracy; the evidence behind embedding search over keyword search.</li>
+<li><a href="https://arxiv.org/abs/2210.07316">MTEB: Massive Text Embedding Benchmark</a> — Muennighoff et al., 2022. Finds that no single embedding model wins on every task, and is the basis of the public leaderboard used to compare models.</li>
+<li><a href="https://arxiv.org/abs/1603.09320">Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs</a> — Malkov and Yashunin. The HNSW paper: the layered-graph index behind approximate nearest neighbor search in most vector databases.</li>
+<li><a href="https://www.anthropic.com/news/contextual-retrieval">Introducing Contextual Retrieval</a> — Anthropic, 2024. Shows how chunks lose context once split from their documents, and how adding that context back before embedding cuts retrieval failures by 35–67%.</li>
+<li><a href="https://www.pinecone.io/learn/chunking-strategies/">Chunking Strategies for LLM Applications</a> — Pinecone, 2025. Fixed-size, sentence and paragraph, and semantic chunking, with guidance on choosing and evaluating chunk sizes.</li>
+<li><a href="https://docs.trychroma.com/">Chroma documentation</a> — An open-source vector database that runs locally, stores documents with metadata, and supports metadata filtering.</li>
 </ul>
 </div>
 </body>

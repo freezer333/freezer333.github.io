@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Memory Consolidation — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Memory Consolidation
+
+???
+~15 minutes, conceptual. Two points: memory degrades unless it is curated, and curation usually runs as a separate job between sessions. Case studies: Claude Code's unreleased AutoDream (the four phases) and OpenClaw's documented dreaming.
+
+---
+
+# What Goes Wrong as Memory Grows?
+
+- **Contradictions:** "we use Redis" and "we removed Redis" both exist
+- **Stale references:** entries point to deleted files or reversed decisions
+- **Relative dates:** "yesterday we chose PostgreSQL" means nothing a month later
+- **Duplicates:** the same fact stored three times, each taking space in the index
+
+As with context in Module 4, more is not better. A short index of current facts beats a long one full of conflicts.
+
+.callout[Stale memory is worse than no memory. The model trusts a stored fact. Without one, it reads the current source.]
+
+???
+90 seconds. Connect to Module 4's quality-over-quantity argument. It applies to memory the same way. The callout is the line to emphasize.
+
+---
+
+# When Should Memory Be Curated?
+
+Curating during a session has costs:
+
+- The agent is in the middle of a task; reorganizing memory slows it down
+- A contradiction often shows up only in a later session
+- Curation tokens compete with the task for context
+
+Many systems split the work: **append** during sessions, **consolidate** between them, as a separate background job.
+
+.callout[Consolidation turns episodic memory into semantic memory: many timestamped events become a few current facts.]
+
+???
+90 seconds. The key idea of the lecture. Students assume memory is maintained as the agent works. Good systems curate in the background, between sessions, with the full history available. The brain does something similar during sleep, which is why OpenClaw and Anthropic both call this "dreaming."
+
+---
+
+# How Is a Memory Store Organized?
+
+.split-left[
+**Index** (always loaded)
+One line per memory. Claude Code loads the first 200 lines or 25KB of `MEMORY.md` at startup.
+
+**Topic files** (on demand)
+The details. Read only when relevant to the task.
+
+**Raw transcripts** (search only)
+Full session logs. Searched, never loaded whole.
+]
+
+.split-right[
+<img src="memory-three-layer.png" style="width:100%; margin-top:0.5em;"/>
+]
+
+<div class="clear"></div>
+
+This is progressive disclosure from Lecture 4.3, applied to memory.
+
+???
+90 seconds. A small index is always in context; details load on demand; raw data is only searched. Same pattern as token-efficient tool design. Claude Code's auto memory is documented: MEMORY.md is the index and each memory is its own topic file. Session transcripts are stored on disk separately. Consolidation keeps the index under its cap.
+
+Image prompt for `memory-three-layer.png`: "A vertical stack of three boxes, flat design, teal/navy on white. TOP box (smallest) labeled 'Index — always loaded' with a small tag '≤200 lines'. MIDDLE box labeled 'Topic files — on demand'. BOTTOM box (widest) labeled 'Raw transcripts — search only'. On the right: an arrow and 'loaded at startup' by the top box, an arrow and 'on demand' by the middle box, a magnifying-glass icon by the bottom box. Clean sans-serif labels, little empty space around the stack."
+
+---
+
+# What Does Consolidation Do?
+
+<img src="autodream-phases.png" style="width:80%; display:block; margin:0 auto;"/>
+
+1. **Orient:** read the index and topic files to see what exists
+2. **Gather signal:** search recent sessions for corrections, decisions, and explicit saves
+3. **Consolidate:** convert relative dates to absolute, delete contradicted facts, merge duplicates
+4. **Prune and index:** keep the index under its cap; drop pointers to deleted files
+
+.info[These phases come from reports on AutoDream, an unreleased Claude Code feature found through code analysis.]
+
+???
+75 seconds, about 15 seconds per phase. Gather signal is targeted: it searches for what probably matters instead of rereading everything, so consolidation itself stays cheap. Consolidate is the step students could implement in their own agent. Be clear that AutoDream is not documented by Anthropic; the phases are a useful model regardless.
+
+Image prompt for `autodream-phases.png`: "A horizontal four-stage pipeline, flat design, teal/navy on white. Four rounded rectangles connected by arrows, left to right: 'Orient', 'Gather Signal', 'Consolidate', 'Prune & Index'. Under each, a one-word caption: 'understand', 'search', 'fix', 'bound'. A small crescent-moon icon at the left of the first stage. Clean sans-serif labels, little empty space above and below."
+
+---
+
+# Who Does the Consolidation?
+
+An LLM. Deciding which of two notes is current, or whether two notes say the same thing, takes judgment that plain code cannot supply.
+
+The harness runs the job between sessions:
+
+.small-code[
+```python
+def consolidate(session):
+    notes = open("NOTES.md").read()
+    episodes = load_since(last_run())        # episodes.jsonl
+    prompt = CONSOLIDATE.format(session=session, notes=notes,
+                                episodes=as_text(episodes))
+*   new_notes = llm(prompt)                  # one call, no tools
+    shutil.copy("NOTES.md", "NOTES.md.bak")  # keep the old version
+    open("NOTES.md", "w").write(new_notes)
+```
+]
+
+.callout[The prompt decides what to keep. The harness decides when the job runs and what it can change.]
+
+???
+75 seconds. Plain code can find exact duplicates. It cannot tell that a later episode resolves "confuses append() and extend()." The harness does what code does well: it picks the time (every few sessions, or nightly), passes only the episodes since the last run, keeps a backup, and writes only the memory file. This is the split from 9.1 again. For one notes file, one call that returns the whole file is enough. A store with many topic files needs an agent loop with file tools limited to the memory directory; AutoDream reportedly works that way. Anthropic's Dreams takes the backup idea further: it writes a new store and leaves the input unchanged for review.
+
+---
+
+# What Does a Consolidation Prompt Say?
+
+.small-code[
+```markdown
+You maintain the memory of a tutoring agent. Below are the
+current notes and the episodes recorded since the last update.
+Rewrite the notes so they are correct after session {session}.
+
+- Keep only what changes how you will teach this student:
+  finished topics, repeated struggles, fixes that worked,
+  and plans for the next session.
+- If an episode contradicts a note, keep the newer fact.
+- Merge notes that say the same thing.
+- Delete notes that no longer apply, such as plans already done.
+- Use session numbers, never "last time" or "yesterday".
+- Keep the file under 30 lines.
+
+<notes>{notes}</notes>
+<episodes>{episodes}</episodes>
+
+Return only the new NOTES.md.
+```
+]
+
+.info[The rules follow the four phases: read what exists, keep what matters, fix conflicts and duplicates, and stay under a size cap.]
+
+???
+90 seconds. Walk each rule and name its phase. Orient: the current notes come in whole. Gather signal: "keep only what changes how you will teach" is the filter; without it the model copies every episode into the notes. Consolidate: newer fact wins, merge duplicates, delete finished plans, replace relative time with session numbers. Prune: the line cap. "Keep the newer fact" works only because each episode carries a session number, which is why 9.2 stored one. The XML tags separate data from instructions, as in Module 5. Students adapt this prompt by changing the first line and the "keep only" list for their own agent.
+
+---
+
+# What Comes Out?
+
+.split-left[
+**Before** (`NOTES.md` from Lecture 9.1)
+.small-code[
+```markdown
+## Finished
+- Loops and lists
+
+## Struggles
+- Off-by-one errors in loop bounds
+- Confuses append() and extend()
+
+## Next session
+- Start functions
+- Review range() first
+```
+]
+
+- "Start functions" is done: removed
+- Two loop episodes: merged into one struggle
+- append() vs. extend() resolved: moved to Finished
+]
+
+.split-right[
+**After** session 6
+.small-code[
+```markdown
+## Finished
+- Lists, including append() vs.
+  extend() (session 4)
+
+## In progress
+- Functions: return instead of
+  print (5); define before call (6)
+- Recursion: start with the base case
+
+## Struggles
+- Off-by-one loop bounds (sessions
+  4, 5). Works: range() stops before
+  its end; trace the loop on paper.
+
+## Next session
+- Review range() bounds first
+- Recursive function, base case first
+```
+]
+]
+
+<div class="clear"></div>
+
+???
+75 seconds. Point to each change and name the rule that caused it. The output is from one real run of this prompt on Haiku, wrapped and trimmed to fit; it will vary from run to run, which is one reason the harness keeps a backup. The model added an "In progress" section that the prompt did not ask for. That is acceptable here; a stricter prompt could fix the headings.
+
+---
+
+# How Does OpenClaw Consolidate?
+
+.split-left[
+OpenClaw keeps all memory in Markdown files on disk.
+
+- **During a session:** observations go into the day's notes, `memory/YYYY-MM-DD.md`
+- **Before compaction:** a silent turn writes anything durable to the day's notes
+- **Every night:** a dreaming job reviews recent notes and sessions, and promotes facts that pass its checks into `MEMORY.md`
+- **Next session:** `MEMORY.md` loads at startup, along with today's and yesterday's notes
+]
+
+.split-right[
+<img src="openclaw.png" style="width:45%; display:block; margin:1em auto 0;"/>
+]
+
+<div class="clear"></div>
+
+.callout[The daily notes are episodic. `MEMORY.md` is semantic. Dreaming turns one into the other.]
+
+???
+90 seconds. We saw OpenClaw in Lecture 4.2 for compaction. Walk the day in order: append during the session, save before compaction, consolidate overnight, load the result next time. That is the pattern from earlier in this lecture: append during sessions, consolidate between them. Dreaming is documented and on by default. It runs at 3 a.m. by default in three phases (light, REM, deep). Only the deep phase writes: it scores candidates and promotes the ones that pass minimum score, recall count, and query-diversity checks. It also writes a summary to DREAMS.md for a human to review. The flush runs a soft threshold (4,000 tokens by default) before compaction and appends only to the daily note. Anthropic offers the same idea as an API: Dreams, in Claude Managed Agents (research preview), reads a memory store plus up to 100 session transcripts and produces a new, cleaned-up store, leaving the original unchanged.
+
+---
+
+# Key Takeaways
+
+1. Memory degrades without curation: contradictions, stale references, relative dates, duplicates
+2. Consolidation runs as a separate job, usually between sessions
+3. An LLM does the curation: the harness sends memory and new episodes with a consolidation prompt, then writes back the result
+4. Keep a small index loaded, read details on demand, and only search raw transcripts
+5. Do not store what the agent can read from the source
+6. OpenClaw appends daily notes during sessions and consolidates them into `MEMORY.md` every night
+
+### Next: skills, a form of procedural memory.
+
+???
+30 seconds. Close the module. The final project adds conversation or episodic memory to the coding agent; these lectures cover what students need for it.
+
+    </textarea
+        >
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Sliding Window — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 7.1</a></div></nav>
+<div class="page_content"><h1>Implementing Sliding Window</h1>
+<p>Module 4 introduced context management as a set of concepts. Module 6 built an agent that actually accumulates context — a messages array that grows with every user request, every model response, and every tool result. Lecture 6.4 added instrumentation so the agent can see that growth: the <code>TokenTracker</code> reads <code>usage.input_tokens</code> and <code>usage.output_tokens</code> from every API response. This lecture connects the two. It takes the simplest of Module 4&#39;s strategies — the sliding window — and writes the real implementation that runs when the token budget is about to be exceeded.</p>
+<p>The sliding window is the easiest strategy to describe and the easiest to get subtly wrong. Describing it takes one line: keep the last <em>N</em> messages, drop the rest. Implementing it correctly requires respecting two structural constraints of the Messages API that a naive slice ignores. Those constraints, and the small amount of code needed to satisfy them, are the substance of this lecture.</p>
+<h2>When and Where Context Management Runs</h2>
+<p>Sliding window is not triggered by a message count. It is triggered by <strong>tokens</strong>. The agent watches the token usage reported by the model on each response, and when the conversation approaches the model&#39;s context limit — typically a percentage threshold like 75% or 85% — it takes a proactive step to prune the conversation before the next call. The number itself is a lookup: you need to know the context window of the model you are using and pick a fraction of it as the trigger.</p>
+<p>This distinction matters because <strong>messages and tokens are not the same unit</strong>. A user message might be the single word &quot;continue&quot;; a tool result might be megabytes of file contents. Trimming a fixed number of messages is therefore an approximation of trimming tokens. Cutting a 50-message conversation down to its last 25 messages does not cut the token count in half — but it does reduce it by some amount, and that is enough to bring the conversation back under budget. Sliding window manages a token problem with a message-level tool, and accepting that imprecision is part of using it.</p>
+<p>The agent has two loops, established back in Lecture 6.1. The <strong>outer loop</strong> runs once per user turn: it takes the user&#39;s request and ultimately returns the model&#39;s final response. Inside it, the <strong>inner loop</strong> runs once per API call — it sends the conversation, and if the model responds with a <code>tool_use</code> request, it executes the tool, appends the result as a user message, and calls the model again. The inner loop repeats until the model stops asking for tools and produces its final answer. Context grows on every iteration of that inner loop.</p>
+<p>The right place to manage context is at the <strong>top of the inner loop</strong>, before each API call:</p>
+<pre><code>outer loop  —  one pass per user turn
+    append user message
+
+    inner loop  —  one pass per API call
+        [HOOK: manage context here]
+        response = client.messages.create(...)
+        if stop_reason == &quot;tool_use&quot;:
+            execute tools, append results   # → inner loop repeats
+        else:
+            break                           # → turn done
+</code></pre>
+<p>Two properties make this the correct hook point. First, it runs <strong>before every API call</strong>, so it catches context growth that happens <em>within</em> a single turn. A coding agent can issue a long sequence of tool calls in response to one user request; if context were managed only once per user turn, that intra-turn growth would go unchecked. Second, at the top of the inner loop the messages array is always in a <strong>complete state</strong> — the last message is either a real user input or a closed <code>tool_use</code>/<code>tool_result</code> pair, never a dangling tool request. That completeness is what makes truncation safe, for reasons that become clear below.</p>
+<p>In the real agent the integration is a single line at the top of the inner loop:</p>
+<pre><code class="language-python">messages = manage_context(messages, usage_tracker)
+</code></pre>
+<p><code>manage_context</code> is the dispatcher that decides whether the threshold has been crossed and, if so, which strategy to apply. This lecture builds the sliding-window strategy that lives behind it.</p>
+<h2>Why the Naive Version Breaks</h2>
+<p>The one-line version from Module 4 is syntactically valid and runs without error:</p>
+<pre><code class="language-python">def sliding_window(messages, n):
+    return messages[-n:]
+</code></pre>
+<p>It will also break the agent, usually within the first few times it runs. The reason is that the messages array has structure, and a blind slice ignores it. Every interaction with the Messages API must satisfy two constraints.</p>
+<p><img src="pair-integrity.png" alt="Tool use must be paired with its tool result"></p>
+<p><strong>Constraint 1 — Pair integrity.</strong> When the model issues a <code>tool_use</code> block, the next message must contain the matching <code>tool_result</code>. The two are a unit. If a slice lands between them, the surviving conversation contains a <code>tool_result</code> whose originating <code>tool_use</code> is gone, and the API rejects the next request:</p>
+<pre><code>400 Bad Request: messages: tool_use ids found without
+tool_result blocks immediately after
+</code></pre>
+<p>This is not a rare edge case. In a multi-step agent session, roughly half of all messages carry <code>tool_result</code> blocks, so a randomly placed cut has a high chance of splitting a pair.</p>
+<p><strong>Constraint 2 — Alternating roles.</strong> The API also requires <code>user</code> and <code>assistant</code> messages to alternate. Two user messages in a row, or two assistant messages in a row, are rejected. A contiguous tail slice satisfies this automatically, because the original conversation already alternates — but the constraint becomes relevant once anchor preservation is added, because prepending a message can create an adjacent same-role pair.</p>
+<p>Both problems have the same fix shape: instead of cutting blindly, walk the conversation and cut only at a position that keeps the array valid, then run a small repair pass for the roles.</p>
+<h2>The Pair-Aware Cut</h2>
+<p>The key idea is the notion of a <strong>safe boundary</strong>. A cut is safe if the message that becomes the new first message is a <em>user message that is not a tool result</em> — in other words, a real user input. Such a message is always a valid way to begin a conversation, and cutting before it cannot orphan a <code>tool_result</code>.</p>
+<pre><code>[5] assistant: text + tool_use        ← cannot cut after (orphans the result)
+[6] user: tool_result                 ← cannot cut before (orphaned result)
+[7] assistant: text
+[8] user: &quot;Now update models/user.py&quot; ← SAFE to cut before this
+</code></pre>
+<p>The check is mechanical: the agent already has every message&#39;s role in the array, and for a user message it can inspect the content blocks to see whether any is a <code>tool_result</code>. In the demo this is <code>is_safe_boundary</code>:</p>
+<pre><code class="language-python">def is_safe_boundary(messages, index):
+    &quot;&quot;&quot;A safe boundary is a user message whose content is not a tool_result.&quot;&quot;&quot;
+    if index &gt;= len(messages):
+        return True
+    msg = messages[index]
+    if msg[&quot;role&quot;] != &quot;user&quot;:
+        return False
+    if isinstance(msg[&quot;content&quot;], str):
+        return True                      # a real (string) user input
+    for block in msg[&quot;content&quot;]:
+        if isinstance(block, dict) and block.get(&quot;type&quot;) == &quot;tool_result&quot;:
+            return False                 # tool_result → not a boundary
+    return True
+</code></pre>
+<p>The algorithm computes the candidate cut at <code>len(messages) - keep_last_n</code>, then <strong>walks forward</strong> — toward the end of the conversation — until it finds the first safe boundary. Walking forward rather than backward is deliberate: the entire purpose is to <em>reduce</em> context, so when the requested cut point is unsafe the function moves toward keeping fewer messages, never more. The consequence is that the window may end up smaller than the <em>N</em> you asked for. That is the function working correctly. There is no value in keeping the exact requested count if the API rejects the result; correctness wins over hitting the number.</p>
+<h2>Anchoring the Goal</h2>
+<p>A second problem is specific to sliding window, and it is the strategy&#39;s defining weakness. Consider a long session that begins with the user stating the goal — &quot;Refactor the database layer to use connection pooling&quot; — followed by twenty or thirty messages of work. When the window slides and keeps only the recent tail, the original instruction is dropped. The model has no memory of its own; the only thing it knows about the conversation is whatever is in the messages array sent on the current call. If the goal has scrolled out, it is gone.</p>
+<p>The failure can be severe. Suppose the new first message after trimming is &quot;Yes, continue&quot; — a user&#39;s earlier approval of some sub-step. The model now receives a conversation that opens with &quot;Yes, continue&quot; and no statement of what is being worked on. The original intent — <em>refactor, don&#39;t redesign</em> — has vanished, and the agent may strike off in a new direction.</p>
+<p>Sliding window cannot fully solve this; anything outside the window is lost, and that is inherent to the strategy. But it can make an <strong>educated guess</strong>. The first user message is, in most sessions, the task description — the anchor of the whole conversation. So when the window would otherwise drop it, the function <strong>prepends the first user message</strong> to the trimmed window. This costs one message and preserves the goal for the rest of the session. The guess is only as good as the anchor: if the conversation opened with &quot;Hey, how are you&quot; rather than a real task statement, anchoring preserves nothing useful. Lecture 7.2 addresses this limitation directly with explicit tagging.</p>
+<p>Prepending the anchor introduces the alternating-roles problem from earlier. The pair-aware walk always lands on a user message — that is the safe-boundary rule. Prepending the anchor, also a user message, produces two user messages in a row, which the API rejects:</p>
+<pre><code>[anchor] user: &quot;Refactor the database layer...&quot;
+[???]                                            ← two user messages adjacent
+[cut+0]  user: &quot;Now update models/user.py...&quot;
+</code></pre>
+<p>The fix exploits the same fact that caused the goal-loss problem: the model has no memory, so the conversation can be edited freely as long as the result is internally consistent. The function inserts a brief <strong>synthetic acknowledgment</strong> in the assistant role between the two user messages — a fabricated &quot;Understood.&quot; that the model never actually said. It costs almost nothing in tokens and restores the alternation:</p>
+<pre><code>[anchor] user:      &quot;Refactor the database layer...&quot;
+[ack]    assistant: &quot;Understood.&quot;        ← inserted, never actually said
+[cut+0]  user:      &quot;Now update models/user.py...&quot;
+[cut+1]  assistant: ...
+</code></pre>
+<p>In the demo this is <code>ensure_alternating_roles</code>, a single pass that walks the kept list and inserts an opposite-role acknowledgment wherever two same-role messages are adjacent:</p>
+<pre><code class="language-python">def ensure_alternating_roles(messages):
+    if not messages:
+        return messages
+    result = [messages[0]]
+    for msg in messages[1:]:
+        if msg[&quot;role&quot;] == result[-1][&quot;role&quot;]:
+            ack_role = &quot;assistant&quot; if msg[&quot;role&quot;] == &quot;user&quot; else &quot;user&quot;
+            ack_text = &quot;Understood.&quot; if ack_role == &quot;assistant&quot; else &quot;Continue.&quot;
+            result.append({&quot;role&quot;: ack_role, &quot;content&quot;: ack_text})
+        result.append(msg)
+    return result
+</code></pre>
+<p>Pulling <code>is_safe_boundary</code> and <code>ensure_alternating_roles</code> out as separate helpers is not incidental. The next lecture&#39;s selective-preservation strategy reuses both: it has the same pair-integrity obligation and can produce the same role-adjacency issues.</p>
+<h2>The Implementation Together</h2>
+<p>The full <code>sliding_window</code> function combines the two passes. It returns early if the conversation is already short enough, finds a safe cut by walking forward, prepends the anchor when needed, and finishes with the alternating-roles repair:</p>
+<pre><code class="language-python">def sliding_window(messages, keep_last_n, preserve_anchor=True):
+    if len(messages) &lt;= keep_last_n:
+        return list(messages)
+
+    cut = len(messages) - keep_last_n
+    while cut &lt; len(messages) and not is_safe_boundary(messages, cut):
+        cut += 1
+
+    kept = messages[cut:]
+
+    if preserve_anchor and messages and messages[0][&quot;role&quot;] == &quot;user&quot;:
+        if cut &gt; 0:
+            kept = [messages[0]] + kept
+
+    return ensure_alternating_roles(kept)
+</code></pre>
+<p>The standalone demo in <code>sliding_window.py</code> runs this against a hand-built sample conversation — a refactoring session with interleaved <code>tool_use</code>/<code>tool_result</code> pairs — and prints three results. The conversation is constructed so that a request to keep the last six messages lands the naive cut squarely on a <code>tool_result</code>, demonstrating each behavior:</p>
+<ol>
+<li><strong>Naive cut</strong> — <code>messages[-6:]</code> begins on a <code>tool_result</code> whose <code>tool_use</code> is gone. This is the 400-error case.</li>
+<li><strong>Pair-aware, no anchor</strong> — the function walks forward from the unsafe index to the next safe boundary, returning four messages instead of the requested six. The result is valid but hard to follow: with the opening goal gone, it is unclear whether the model could continue the task coherently.</li>
+<li><strong>Pair-aware, anchor preserved</strong> — the same four-message tail, now prefixed with the original &quot;Refactor the database layer…&quot; instruction and a synthetic &quot;Understood.&quot; The conversation is much smaller than the original yet still legible, and the goal survives.</li>
+</ol>
+<p>Comparing the second and third outputs is the point of the demo: anchoring is what turns a technically valid but contextually amnesiac window into one the model can actually work from.</p>
+<p>A few practical clarifications follow from the design. The system prompt is never passed through this function — the Messages API takes it as a separate <code>system=</code> parameter, outside the <code>messages</code> array, so truncation never touches it. The first user message cannot itself contain a <code>tool_result</code>, because such blocks only appear in responses to a model&#39;s <code>tool_use</code>; the first message in any conversation is always a real user input, which is why anchoring on it is safe. And anchoring on a single message is usually sufficient — if a session has several major pivots, the right tool is explicit tagging, which is the subject of the next lecture.</p>
+<h2>Takeaways</h2>
+<p>Sliding window establishes the pattern that the rest of Module 7 builds on. There is <strong>one hook point</strong>: the top of the inner loop, before each API call, where the messages array is in a complete state. There are <strong>two API constraints</strong> every context-management strategy must respect: pair integrity (a <code>tool_use</code> keeps its <code>tool_result</code>) and alternating roles (no two same-role messages adjacent). The safe cut is found by <strong>walking forward</strong> to a user message that is not a tool result, which trades exact window size for guaranteed validity. The goal is protected by <strong>prepending the first user message</strong> as an anchor and stitching it in with a synthetic acknowledgment.</p>
+<p>Sliding window is effective at shrinking context, but it is <strong>lossy</strong>: everything between the anchor and the recent tail is discarded. A critical decision or constraint stated in the middle of a long session is simply gone. The next lecture, on selective preservation, keeps messages that matter regardless of their age — the first step toward losing less while still managing the budget.</p>
+</div>
+</body>
+</html>

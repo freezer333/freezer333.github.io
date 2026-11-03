@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Compaction — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 7.3</a></div></nav>
+<div class="page_content"><h1>Implementing Compaction</h1>
+<p>Sliding window and selective preservation are both <strong>subsetting</strong> strategies: they keep some messages from the array unchanged and drop the rest. Lecture 7.2 ended on their shared ceiling — even with perfect classification (no false positives, no false negatives), a long-running conversation eventually fills the window with messages that were all, at some point, worth keeping. Worse, importance is not static: a decision that mattered fifty messages ago may be irrelevant now. Subsetting has no answer for this.</p>
+<p>The pivot is to stop asking &quot;is this message worth keeping?&quot; and start asking &quot;<strong>can I summarize what this conversation has been about so far?</strong>&quot; That is compaction — synthesis rather than selection. And the tool for synthesis is the one already at the center of the system: the LLM itself. Much of context management, and later memory management, follows this circular pattern — we solve the problems of working with LLMs by calling an LLM.</p>
+<p><img src="compaction.png" alt="Compaction replaces a long conversation with a synthesized summary"></p>
+<h2>What Compaction Is</h2>
+<p>Compaction asks the model not to <em>answer</em> a question within the conversation but to <em>condense the conversation itself</em> — to read the whole history and produce a single high-signal summary of what matters for the conversation&#39;s future. That summary then becomes a synthetic message that stands in for the messages it replaced.</p>
+<p>It is expensive in two senses. In dollars, it is an extra API call — though usually no more costly than the next message would have been, since it sends the conversation in and gets a response out. In time, it is a reasoning task that adds latency. Because of that cost, compaction should fire only when necessary.</p>
+<h2>When to Trigger Compaction</h2>
+<p>The trigger is a percentage of the model&#39;s context window, measured with the same token-usage tracking from Lecture 6.4 — read <code>response.usage.input_tokens</code> and compare against a threshold. Sonnet&#39;s window is roughly 200K tokens (frontier models now reach a million); the common trigger range is <strong>70–85%</strong> of the window. The detector is essentially one <code>if</code>:</p>
+<pre><code class="language-python">def should_compact(input_tokens, model_limit, threshold=0.8):
+    return input_tokens &gt;= model_limit * threshold
+</code></pre>
+<p>The natural question is <em>why not wait longer — why compact at 80% rather than 100%?</em> Three reasons:</p>
+<ol>
+<li><strong>You need budget for the compaction call itself.</strong> Compaction feeds the entire conversation back to the model. If the conversation already fills the window, there is no room to make the request.</li>
+<li><strong>You need budget for the next user turn.</strong> A response generated near the cap can fail when the output pushes total tokens over the limit.</li>
+<li><strong>Quality degrades well before the limit.</strong> This is the most important reason. As context approaches the upper range of the window, output quality drops — the &quot;lost in the middle&quot; effect from earlier in the course. A model running at 50% of its window produces better results than the same model at 90%, every time.</li>
+</ol>
+<p>This connects to a real debate about whether ever-larger context windows are the right direction. Providers expand windows partly for <strong>user experience</strong> — a novice user who doesn&#39;t know quality degrades simply prefers never having to compact or start over — and, more cynically, for <strong>economics</strong>: providers bill per token, so a window five times larger lets a conversation run five times longer before the user must compact or open a new session. Neither reason is aligned with the quality of <em>your</em> agent. Keeping the working context well under the limit is what produces good results.</p>
+<p>One structural rule joins threshold detection: <strong>never compact mid-tool-call.</strong> If the previous response had <code>stop_reason == &quot;tool_use&quot;</code>, the next message must be the matching <code>tool_result</code>. The hook checks for this and defers compaction until the tool exchange closes — the same pair-integrity concern from 7.1.</p>
+<h2>The Compaction Prompt Is the Engineering Artifact</h2>
+<p>The compaction <em>function</em> is short. The compaction <em>prompt</em> is where nearly all the engineering effort goes. A weak prompt (&quot;summarize this conversation&quot;) yields a chatty narrative with the wrong details. A strong prompt yields a structured artifact the agent can read on the next turn and continue from as if the prior conversation were still present. The prompt has three parts: what to preserve, what to discard, and how to format the result.</p>
+<p><strong>What to preserve</strong> — each item maps to a failure mode it prevents:</p>
+<ul>
+<li><em>Decisions made and actions taken</em> — without these, the agent re-proposes work already done.</li>
+<li><em>Current state of the task</em> — without it, the agent restarts from the beginning.</li>
+<li><em>Key facts about the project</em> (languages, frameworks, file paths, schema) — without them, the agent re-reads files it already understood.</li>
+<li><em>Unresolved issues and follow-up items</em> — without them, the agent forgets what the user asked for.</li>
+<li><em>User preferences and constraints</em> — without them, the agent re-suggests options the user already rejected.</li>
+</ul>
+<p><strong>What to discard</strong> — this is what actually makes the context shrink:</p>
+<ul>
+<li><em>Raw file contents</em> — note which files were read, not their bytes; the agent can re-read a file if it needs it.</li>
+<li><em>Full command outputs</em> — note the result, not the hundreds of lines.</li>
+<li><em>Chain-of-thought reasoning</em> — keep the conclusions, drop the steps that led there.</li>
+<li><em>Intermediate tool calls</em> — note the outcome, not the sequence.</li>
+<li><em>Redundant or superseded information</em> — the final version of a plan, not the first two.</li>
+</ul>
+<p>Without an explicit discard list, the model produces a verbose summary that defeats the purpose.</p>
+<p><strong>Format specification</strong> — telling the model exactly what shape to emit makes the output consistent and parseable. Notice, too, that the prompt tells the model <em>what kind of agent this is</em> (&quot;an AI coding assistant&quot;) and that <em>the summary will replace most of the conversation</em> — both let the model make better judgment calls. The prompt from <code>compaction.py</code>:</p>
+<pre><code class="language-text">Summarize the conversation between a user and an AI coding assistant ...
+This summary will REPLACE most of the conversation ...
+
+PRESERVE (include in summary):
+- Decisions made and actions taken ...
+- Current state of the task ...
+- Key facts about the project ...
+- Unresolved issues or follow-up items ...
+- User preferences and constraints ...
+
+DISCARD (omit from summary):
+- Raw file contents — note which files, not their bytes
+- Full command outputs — note the result, not the bytes
+- Chain-of-thought reasoning — keep conclusions, drop reasoning
+- Intermediate tool calls — note the outcome, not the sequence
+- Redundant or superseded information ...
+
+FORMAT: Plain text. Use the four sections below verbatim.
+
+## Conversation Summary
+Task: &lt;one-line description of the original goal&gt;
+Key Findings: &lt;bullets&gt;
+Actions Taken: &lt;bullets&gt;
+Current State: &lt;done | in-progress with what remains&gt;
+</code></pre>
+<h2>Wiring Compaction Into the Loop</h2>
+<p>Compaction shares the <strong>same hook point</strong> as truncation — between inner-loop iterations, before the next API call. The dispatcher checks compaction first because it is the more aggressive, information-preserving move; truncation is the cheaper fallback:</p>
+<pre><code class="language-text">inner loop:
+    [HOOK]
+        if mid-tool-call:        skip
+        elif should_compact(...): compact
+        elif should_truncate(...): truncate
+    response = client.messages.create(...)
+</code></pre>
+<h3>The Hybrid Pattern</h3>
+<p>Replacing the <em>entire</em> conversation with a summary is dangerous — summaries lose detail, and the most recent messages are usually the active state of the task. The <strong>hybrid pattern</strong> keeps the last K messages verbatim and summarizes only the older portion. This is, in effect, compaction layered on top of sliding window: the same safe-split logic from 7.1 finds where to divide the conversation, but where sliding window <em>discards</em> the older slice, compaction <em>summarizes</em> it.</p>
+<p><img src="hybrid-pattern.png" alt="Hybrid pattern: summarize the old slice, keep the recent slice verbatim"></p>
+<p>The split point is moved forward to a safe boundary so the older slice never ends in an orphaned <code>tool_use</code>:</p>
+<pre><code class="language-python">def compact_messages(messages, keep_last_k=6):
+    if len(messages) &lt;= keep_last_k:
+        return list(messages), None, None
+
+    split = safe_split_index(messages, len(messages) - keep_last_k)
+    older, recent = messages[:split], messages[split:]
+    if not older:
+        return list(messages), None, None
+
+    response = client.messages.create(
+        model=SUMMARIZER_MODEL, max_tokens=1024,
+        messages=[{&quot;role&quot;: &quot;user&quot;,
+                   &quot;content&quot;: COMPACTION_PROMPT + render_for_summary(older)}],
+    )
+    summary = response.content[0].text
+
+    rebuilt = [
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: f&quot;[Prior conversation summary]\n{summary}&quot;},
+        {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;Understood. I have the prior context ...&quot;},
+    ] + recent
+    return ensure_alternating_roles(rebuilt), summary, response.usage
+</code></pre>
+<p>The summary becomes a synthetic user message at the front, followed by a synthetic assistant acknowledgment (so roles alternate), then the recent messages verbatim. The whole thing passes through <code>ensure_alternating_roles</code> — the same helper from 7.1 — to repair the join. Pair integrity still applies to the recent block: never split a <code>tool_use</code> from its <code>tool_result</code>.</p>
+<h3>Use a Cheap Model for the Summary</h3>
+<p>The model doing the work and the model doing the summary need not be the same. The agent loop might run on Opus or Sonnet; the compaction call can run on <strong>Haiku</strong>. Summarization and classification are exactly the class of task where Haiku is nearly as strong as the larger models — they do not demand deep reasoning — and Haiku is both cheaper (roughly 4× lower cost) and faster. The speed matters more than it first appears: cheaper, faster compaction means you can afford to compact <em>more often</em>, which keeps the working context smaller, which keeps quality higher. The savings compound — one Haiku call buys smaller (Sonnet-priced) inputs on every subsequent turn.</p>
+<h2>The Self-Reinforcing Summary</h2>
+<p>There is an elegant property in placing the summary at the <em>front</em> of the conversation. After the first compaction, the context is a small summary plus a few recent messages. As work continues, new messages accumulate, so by the next compaction the conversation is heavily weighted toward new content with the prior summary at the front. The model then re-summarizes &quot;summary + new messages,&quot; naturally producing a fresh summary biased toward the newer material while folding in the still-relevant takeaways from the old one. Compaction after compaction, the summary keeps rewriting itself to favor what&#39;s current — which is exactly what a long-running agent wants.</p>
+<h2>Seeing It Run</h2>
+<p>Running <code>compaction.py</code> on a 20-message debugging session (a login 500-error investigation with many tool calls), keeping the last four messages verbatim, Haiku produces:</p>
+<pre><code class="language-text">## Conversation Summary
+Task: Fix 500 error on login page
+Key Findings:
+- Root cause: column name mismatch — code references `password_hash`
+  but the database schema uses `password`
+- Three references found: routes/auth.py (1), models/user.py (2)
+Actions Taken:
+- Changed `password_hash` to `password` in routes/auth.py and models/user.py
+- Ran auth test suite: all 5 tests passed
+Current State: Done — login functionality restored and verified by tests
+</code></pre>
+<p>On this small sample the conversation shrinks by about a third; in real sessions the reduction is far larger, because most of a real conversation is tool output and file contents — exactly what the discard list removes. The proof that the pattern works is the follow-up turn: asked &quot;what was the original error and how many places did we fix?&quot; from the <em>compacted</em> context, the agent answers correctly — the 500 error, the <code>password_hash</code>/<code>password</code> mismatch, and the three fixed locations — demonstrating that the hybrid result preserved enough state to continue.</p>
+<h2>Edge Cases and Their Fixes</h2>
+<p><strong>The summary is too long.</strong> Occasionally the model returns a summary that doesn&#39;t shrink the context enough — a chatty model, or an unusually dense conversation. The fix is <em>iterative compression</em>: if the result still exceeds the threshold, compact again. One pass is almost always enough; a second is rare and cheap.</p>
+<p><strong>Critical detail is lost.</strong> A summary may drop something the agent needs, most often a constraint stated late that the model treated as &quot;context&quot; rather than &quot;decision.&quot; Two mitigations: the <strong>hybrid pattern</strong> already preserves recent constraints verbatim, and the <strong><code>important: True</code> tags</strong> from selective preservation can bypass compaction entirely — flagged messages are appended verbatim alongside the summary regardless of age.</p>
+<p><strong>Compaction loops.</strong> If each compaction leaves enough context to re-trip the threshold quickly, the agent compacts every few turns, producing summaries of summaries. The naive guard is a minimum interval (don&#39;t compact until M new messages have arrived), but this is usually a symptom of a weak prompt. The better fix is to give the model a concrete reduction target — &quot;aim to reduce by at least 40%,&quot; &quot;the summary should be ~10% of the conversation.&quot; Summarizing 10,000 tokens into 9,000 is useless; it just buys a few messages before the next compaction.</p>
+<p><strong>Cost.</strong> Compaction costs a small fixed amount (one Haiku call), and every subsequent turn then carries fewer tokens, so it costs less. On a long session the savings reach 10–50× the cost of compaction. This is the rare engineering case where one move wins on <strong>all three</strong> axes at once — money, speed, and quality — because keeping the context well under the limit improves the model&#39;s output. That is why compaction is the dominant production pattern.</p>
+<h2>Module 7 in One View</h2>
+<p>All three strategies wire into the agent at the same hook point and differ only in cost and what they lose:</p>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Cost</th>
+<th>Information loss</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Sliding window</td>
+<td>Free</td>
+<td>Drops everything old</td>
+</tr>
+<tr>
+<td>Selective preservation</td>
+<td>Free</td>
+<td>Drops untagged old messages</td>
+</tr>
+<tr>
+<td>Compaction</td>
+<td>One Haiku call</td>
+<td>Lossy, but preserves meaning</td>
+</tr>
+</tbody></table>
+<p>Real agents are not built from one of these — they blend all three. Agent design is an art: a production system might run selective preservation continuously, fall back to a sliding window for cheap trims, and reach for compaction when the context is deep and dense. Lab 5 is where these come together: detect the threshold, decide which strategy to apply, run it, and continue — and the decision logic is part of what you design.</p>
+<h2>Takeaways</h2>
+<p>Trigger compaction at <strong>70–85%</strong> of the model window — never wait for 100%, because you need headroom for the compaction call and the next turn, and because quality degrades before the limit. The <strong>compaction prompt is the engineering artifact</strong>: a preserve list, a discard list, and a strict format, each rule tied to a failure mode. Use the <strong>hybrid pattern</strong> — summary plus the last K verbatim — because pure replacement loses too much. Run the summary on a <strong>cheap, fast model</strong> (Haiku) so you can afford to compact often. Know the <strong>edge-case fixes</strong>: iterative compression, important-tag bypass, and reduction targets to avoid loops. And remember why compaction dominates production agents: a small fixed cost buys lower token bills, faster turns, and better output all at once.</p>
+</div>
+</body>
+</html>

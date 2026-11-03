@@ -182,7 +182,7 @@ With tags: the boundary is explicit.
 ]
 
 .split-right[
-.center[<img src="../../images/xml-structure.png" style="height:300px;">]
+.center[<img src="xml-structure.png" style="height:300px;">]
 ]
 
 <div class="clear"></div>
@@ -215,7 +215,7 @@ The model is an autoregressive next-token predictor — it can only condition on
 
 Instructing the model to reason step by step causes it to first output a plan — and that plan becomes part of the context that the remaining tokens are generated from.
 
-.center[<img src="../../images/cot-mechanism.png" style="height:240px; margin-top:0.5em;">]
+.center[<img src="cot-mechanism.png" style="height:240px; margin-top:0.5em;">]
 
 .callout[CoT doesn't make the model smarter — it gives the model its own reasoning as context, so each step can build correctly on the last.]
 

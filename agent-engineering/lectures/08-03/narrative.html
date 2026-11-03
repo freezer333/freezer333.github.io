@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retrieval Beyond Vectors — Narrative — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a><span class="sep">/</span><a href="./">Lecture 8.3</a></div></nav>
+<div class="page_content"><h1>Retrieval Beyond Vectors</h1>
+<p>Lecture 8.1 defined RAG as a category: retrieve information, add it to the context, generate. Lecture 8.2 covered vector search, the most common implementation, in depth. This lecture covers the rest of the category. It surveys the other retrieval mechanisms, shows how to match each one to the kind of information it serves, and shows how real agents combine several of them.</p>
+<p>Lecture 8.1 also described two places to put the retrieval step. In the <strong>retrieve-first</strong> design, the developer&#39;s code takes the user&#39;s question, retrieves information, and adds it to the context before the model is called. In the <strong>retrieval-as-a-tool</strong> design, the model decides when to retrieve and writes its own query. Every mechanism in this lecture can be wired either way. In agents, most of them run as tools.</p>
+<h2>Web Search</h2>
+<h3>Querying the Live Web</h3>
+<p>Some information exists only on the live web. An agent asked for today&#39;s baseball standings, or for next weekend&#39;s weather to plan a trip, cannot find the answer in its training data or in a private knowledge base. It has to query the web.</p>
+<p>Web search APIs follow one pattern. The agent sends a query string, and the API returns ranked results, each with a title, a URL, and a snippet of text. The results go into the context. From there, the agent can work from the snippets directly or fetch the full pages at the URLs that look most useful.</p>
+<h3>Built-In Search and Search APIs</h3>
+<p>There are two ways to give an agent web search.</p>
+<p><strong>Built into the model API.</strong> Claude web search, OpenAI web search, and Gemini grounding with Google Search all run inside the provider&#39;s API call. The model decides what to search for, the provider runs the search, and the results come back in the same response. The developer writes no tool code. The provider bills each search in addition to the tokens.</p>
+<p><strong>A search API called from your own tool.</strong> The developer writes a <code>web_search</code> tool, and the tool&#39;s code calls a search service and returns the results as a tool result. Common services include:</p>
+<ul>
+<li><strong>Exa</strong>: search built for AI applications; it can return the text of each page.</li>
+<li><strong>Perplexity Search API</strong>: ranked pages with a relevant excerpt from each, and no generated answer.</li>
+<li><strong>Brave Search API</strong>: results from an independent web index.</li>
+</ul>
+<p>Both designs leave the choice of query to the model. They differ in who runs the search: the provider, or the developer&#39;s code. The final project, assigned with this module, builds the second kind: a web search tool for the coding agent.</p>
+<p>Older tutorials often use Google&#39;s Custom Search JSON API or Microsoft&#39;s Bing Search APIs. Google has closed its API to new customers and plans to shut it down, and Microsoft has retired Bing&#39;s. Prices and free tiers for the current services change often, so check them before choosing one.</p>
+<h3>Strengths and Limits</h3>
+<p>Web search has three strengths:</p>
+<ul>
+<li><strong>Live information.</strong> Anything the search engine has indexed is available, including events from the past hour.</li>
+<li><strong>Broad coverage.</strong> There is no corpus to collect, chunk, or embed in advance.</li>
+<li><strong>Low cost to start.</strong> Most services offer a free or low-cost entry plan.</li>
+</ul>
+<p>It also has four limits:</p>
+<ul>
+<li><strong>External dependency.</strong> The agent now depends on a third-party service and its availability.</li>
+<li><strong>Per-query cost at scale.</strong> Charges grow with every search past the free tier.</li>
+<li><strong>No control over indexing.</strong> The agent gets whatever the search engine has crawled.</li>
+<li><strong>Latency.</strong> Each query is a network round trip.</li>
+</ul>
+<p>Web search is the right choice when information changes faster than you could re-index it, or when questions range wider than any private corpus you maintain.</p>
+<p>Web search is easy to add, but vector RAG keeps its place for four reasons. A private corpus stays on your own infrastructure. A local vector search can be faster than a network round trip. A vector store has no per-query fees at scale. And you decide exactly what the corpus contains. Web search serves public, current information. Vector RAG serves private, stable collections of documents.</p>
+<h2>Database Queries</h2>
+<h3>Structured Data, Exact Answers</h3>
+<p>Most organizations keep their important data in relational databases: customer records, inventory, orders, transaction logs. Most of the people who need answers from that data cannot write SQL. A model can translate a question such as &quot;How many password resets did we process last month?&quot; into a SQL query, run it, and answer from the rows that come back. Database queries are one of the most useful forms of retrieval in business applications.</p>
+<p>Vector search is a poor fit for this data. It would treat each record as text and look for records similar to the question. A question such as &quot;How many orders did customer #4297 place last quarter?&quot; needs an exact count, not similar records. A database query answers it directly:</p>
+<ul>
+<li><strong>Exact precision.</strong> There is no similarity threshold and no fuzziness.</li>
+<li><strong>Aggregation.</strong> Counts, sums, and joins across tables happen inside the database.</li>
+<li><strong>Speed and cost.</strong> A query takes milliseconds and needs no embedding model.</li>
+<li><strong>Freshness.</strong> The result reflects the database at the moment of the query, with no index to rebuild.</li>
+</ul>
+<p>Database retrieval is usually a tool call, because the model has to write the query. This makes it a different kind of retrieval from vector search. The model generates SQL, or calls tools that run SQL behind the scenes, and the rows it gets back enter the context as structured text.</p>
+<h3>Giving the Agent the Schema</h3>
+<p>A model cannot write a good query against tables it has never seen. The agent needs the schema. A small schema can go in the system prompt. A larger one is better served by a tool, such as <code>describe_schema</code>, that lists the tables and their columns on request. Given the password-reset question, the model can call that tool, find a <code>resets</code> table with a foreign key to the <code>users</code> table, and write a query that joins the two.</p>
+<h3>Safety at the Tool Boundary</h3>
+<p>The database tool is the right place to enforce limits, for the same reason as the directory check in Lecture 6.2: the model&#39;s output is not trusted, so the tool constrains what it can do. Three limits matter most:</p>
+<ul>
+<li><strong>Read-only credentials.</strong> Connect the tool as a database user that cannot insert, update, or delete. A model that generates SQL can generate a destructive statement, by mistake or because a prompt manipulated it.</li>
+<li><strong>An allowed-tables list.</strong> The tool checks each query against the tables the agent may read and refuses the rest.</li>
+<li><strong>Result size caps.</strong> A query can return millions of rows. The tool adds a <code>LIMIT</code> clause or caps the rows it returns, so one query cannot flood the context.</li>
+</ul>
+<p>Never give the agent production database credentials. Point the tool at a read replica or a constrained view, and keep the credentials inside the tool, where the model never sees them.</p>
+<h2>File Reads and API Calls</h2>
+<p>The <code>read_file</code> tool from Module 6 is a retrieval tool. It fetches a file&#39;s contents from disk and returns them into the context. The same is true of any tool that brings information from outside the model:</p>
+<ul>
+<li><code>read_file(path)</code> retrieves a file from disk.</li>
+<li><code>fetch_api(url)</code> retrieves a JSON response from an HTTP endpoint.</li>
+<li><code>get_weather(city)</code> retrieves current weather from a service.</li>
+<li><code>read_email(message_id)</code> retrieves the body of an email.</li>
+</ul>
+<p>Students have been building RAG since Module 6 without calling it that. A file read can feel different from a vector search, but the pattern is the same: fetch external information, add it to the context, generate. The difference lies in what the agent knows in advance. A file read retrieves a known resource at a known location. A vector search retrieves a match that nobody could name in advance. The mechanisms differ, and their role in the system is the same.</p>
+<h2>Parametric Retrieval</h2>
+<p>The model itself is a retrieval system, in a loose sense. Training compressed an enormous body of text into the model&#39;s weights. A question asked with no supporting context is answered from that <strong>parametric memory</strong>.</p>
+<p>Parametric retrieval is fast. It needs no tool call and costs nothing beyond the generation itself. It also has four flaws:</p>
+<ul>
+<li><strong>It is stale.</strong> It knows nothing after the training cutoff.</li>
+<li><strong>It is opaque.</strong> It cannot say where an answer came from.</li>
+<li><strong>It is imprecise.</strong> Compression keeps general patterns and loses exact details.</li>
+<li><strong>It hallucinates.</strong> When the weights hold no good answer, the model can still produce a confident one.</li>
+</ul>
+<p>Parametric retrieval is fine for general knowledge, such as how a Python list comprehension works. For anything specific, recent, or auditable, use one of the explicit mechanisms.</p>
+<h2>Composition</h2>
+<h3>Real Agents Use More Than One</h3>
+<p>Production agents combine retrieval mechanisms. Claude Code is a good example:</p>
+<ul>
+<li><strong>File reads</strong> for the user&#39;s codebase, through tools that read files and search them by name and content (glob and grep).</li>
+<li><strong>Web search</strong> for documentation and current API specifications.</li>
+<li><strong>Shell commands</strong> that themselves retrieve information, such as <code>git log</code> for a project&#39;s history or <code>psql</code> for a database.</li>
+<li><strong>Parametric knowledge</strong> for general programming knowledge.</li>
+</ul>
+<p><img src="retrieval-composition.png" alt="An agent drawing on six sources: a vector store, web search, a database, files, and shell commands through tools, and its training data with no tool call"></p>
+<p>Each mechanism handles what it does best. Part of an agent&#39;s intelligence lies in choosing the right one for each question.</p>
+<p>Different mechanisms also tend toward different wirings. Web search and database queries usually run as tools, because the model must write the query: a search string, or SQL. Vector search often runs retrieve-first, in the developer&#39;s code. Because it matches meaning rather than exact words, the user&#39;s question works reasonably well as the query, without a model to rewrite it.</p>
+<p>Composition also explains how large context windows fill up. A plain conversation would rarely approach a million tokens. An agent that adds file contents, search results, query rows, and command output to every turn can.</p>
+<h3>How the Agent Chooses</h3>
+<p>An agent can hold several retrieval tools at once, such as <code>search_docs</code> for a vector store of internal documents and <code>web_search</code> for the public web. The model chooses between them the way it chooses any tool: it reads the system prompt and the tool descriptions, and picks the tool whose description fits the current need. A question about internal procedures goes to <code>search_docs</code>. A question about today&#39;s news goes to <code>web_search</code>.</p>
+<p>This makes tool descriptions part of retrieval quality. If the <code>web_search</code> description says it returns current information from the public web, the model reaches for it on time-sensitive questions. If the description is vague, the model may answer from stale parametric memory instead.</p>
+<h3>When to Choose What</h3>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Semantic search over unstructured documents</td>
+<td>Vector RAG</td>
+</tr>
+<tr>
+<td>Current information from the public web</td>
+<td>Web search</td>
+</tr>
+<tr>
+<td>Structured data with exact answers</td>
+<td>Database query</td>
+</tr>
+<tr>
+<td>A known, specific resource</td>
+<td>File read or API call</td>
+</tr>
+<tr>
+<td>General world knowledge</td>
+<td>The model itself</td>
+</tr>
+</tbody></table>
+<p>Most agents need at least two of these. Few need all five. The design question is which combination an agent needs, not which single mechanism to use.</p>
+<h2>The Unifying Principle</h2>
+<p><strong>Retrieval is any way to get external information into the context.</strong> Strip away the implementation details, and every mechanism does the same thing: it brings information from outside the model into the prompt for one specific generation.</p>
+<ul>
+<li>Vector search retrieves from an embedded corpus.</li>
+<li>Web search retrieves from a search engine.</li>
+<li>Database queries retrieve from a database.</li>
+<li>File reads retrieve from disk.</li>
+<li>API calls retrieve from external services.</li>
+</ul>
+<p>All of them are RAG. Only the R varies. This is why &quot;RAG means vector databases&quot; is the wrong framing, and &quot;RAG is context engineering applied to knowledge&quot; is the right one.</p>
+<p>Retrieval supplies what the person or program calling the model did not provide. Either the developer&#39;s code or the model itself pulls it in. A model with no solid information to work from tends to hallucinate, so retrieval is central to reliable answers. And most systems that benefit from LLMs depend on private data the model never saw in training. Retrieval is the only way that data reaches the model.</p>
+<h3>Judging Retrieval Quality</h3>
+<p>Any retrieval mechanism can return the wrong information. Evaluate retrieval the way you would evaluate any search system: run real queries, look at what the agent retrieves, and check whether the final answers are correct. A wrong answer often traces back to a retrieval that missed. RAG evaluation is a discipline of its own, with dedicated tools such as RAGAS and LangSmith, and is worth studying before shipping a product that depends heavily on retrieval.</p>
+<h2>Takeaways</h2>
+<p><strong>Vector search is one retrieval mechanism.</strong> Web search, database queries, file reads, API calls, and the model&#39;s own parametric knowledge are others. <strong>Match the mechanism to the information:</strong> current public information calls for web search, structured data for database queries, unstructured documents for vector search, and known resources for file reads and API calls. Database and web tools need limits at the tool boundary: read-only access, allowed tables, and caps on result size. <strong>Real agents compose mechanisms,</strong> and the model chooses among retrieval tools by reading their descriptions. <strong>Any tool that brings external information into the context is a retrieval mechanism.</strong></p>
+<p>The final project puts this into practice by adding a web search tool to the coding agent. Module 9 turns to memory, which also brings information into the context. Memory differs in that the agent owns it, and it accumulates across sessions instead of being queried fresh each time.</p>
+</div>
+</body>
+</html>

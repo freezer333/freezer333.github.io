@@ -10,20 +10,25 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Retrieval Beyond Vectors</h1>
-<p><strong>Lecture 8.3</strong></p>
-<ul>
-  <li>RAG = Retrieval-Augmented Generation; vector search is one retrieval mechanism among many</li>
-  <li>Web search as retrieval (Brave, Tavily, Google Custom Search) — live info, broad topics</li>
-  <li>Database queries as retrieval — structured data, exact lookups</li>
-  <li>File reads and API calls as retrieval — known resources, specific locations</li>
-  <li>The model's own training data as parametric retrieval</li>
-  <li>When to choose which: comparison across vector DB, web search, database, file/API</li>
-  <li>Composition: real agents use multiple retrieval modes (Claude Code reads files AND searches the web AND uses training data)</li>
-  <li>The unifying principle: any tool that gets external information into the context is a retrieval mechanism</li>
-</ul>
+<p><strong>Module 8, Lecture 8.3 | Retrieval-Augmented Generation (RAG)</strong></p>
+<p>Lecture 8.2 covered vector search in depth; this lecture covers the rest of the RAG category and how to choose among its mechanisms. Web search brings in live information from the public web, either built into the model API, where the provider runs the search, or through a search API such as Exa, Perplexity, or Brave called from a tool the developer writes. Database queries answer structured questions exactly: the model translates a natural-language question into SQL, and the tool enforces read-only credentials, an allowed-tables list, and caps on result size. The <code>read_file</code> tool from Module 6 and any tool that calls an external API are retrieval too, and the model&#39;s own training data serves as parametric retrieval: fast and free, but stale, opaque, and prone to hallucination. Real agents compose several mechanisms, as Claude Code does with file reads, web search, shell commands, and its training, and the model chooses among retrieval tools by reading their descriptions. The lecture closes on the unifying principle of Module 8: any tool that brings external information into the context is a retrieval mechanism, and only the R in RAG varies.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-08-03.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool">Web search tool</a> — Claude docs. The built-in search: Anthropic runs the search, and the results come back in the same API response.</li>
+<li><a href="https://exa.ai/docs/get-started/quickstart">Exa Developer quickstart</a> — A search API built for AI applications, with separate Search and Contents endpoints; Contents returns the text of each page.</li>
+<li><a href="https://docs.perplexity.ai/docs/search/overview">Perplexity Search API Overview</a> — Returns ranked web results as JSON, with no generated answer, for an agent to filter or pass to its own model.</li>
+<li><a href="https://brave.com/search/api/">Brave Search API</a> — Web search results from Brave&#39;s own independent index, with no dependence on Google or Bing.</li>
+<li><a href="https://genai.owasp.org/llmrisk/llm062025-excessive-agency/">LLM06:2025 Excessive Agency</a> — OWASP Gen AI Security Project. Covers tools granted more permission than they need, including a read-only tool connected with UPDATE, INSERT, and DELETE rights, and an agent that needs read access to only one table.</li>
+<li><a href="https://arxiv.org/abs/2305.03111">Can LLM Already Serve as A Database Interface? A BIg Bench for Large-Scale Database Grounded Text-to-SQLs</a> — Li et al., NeurIPS 2023. The BIRD text-to-SQL benchmark over 95 large databases; ChatGPT reached 40% execution accuracy against 93% for humans.</li>
+<li><a href="https://arxiv.org/abs/1909.01066">Language Models as Knowledge Bases?</a> — Petroni et al., EMNLP 2019. An early study of the factual knowledge stored in a model&#39;s weights: parametric retrieval.</li>
+<li><a href="https://arxiv.org/abs/2112.09332">WebGPT: Browser-assisted question-answering with human feedback</a> — Nakano et al., OpenAI, 2021. A model searches and browses the web to answer questions and cites the sources it used.</li>
+<li><a href="https://arxiv.org/abs/2309.15217">Ragas: Automated Evaluation of Retrieval Augmented Generation</a> — Es et al., 2023. A framework for evaluating RAG pipelines on both the quality of retrieval and the quality of the generated answer.</li>
 </ul>
 </div>
 </body>

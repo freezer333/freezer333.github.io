@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Episodic Memory — Agent Engineering</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../../styles/slides.css" />
+    </head>
+
+    <body>
+        <textarea id="source">
+
+class: center, middle, inverse
+count: false
+# Episodic Memory
+
+???
+~15 minutes, with a code walkthrough (no live coding). The lecture centers on what an episode stores. Finding the right episodes comes second: recency first, then relevance with embeddings. The tutoring agent from the previous lecture continues. The complete example is episodic_memory.py.
+
+---
+
+# What Is Episodic Memory?
+
+The tutoring agent's notes file keeps conclusions: *"Struggles with off-by-one errors."* It drops the events behind them.
+
+> **Episodic memory** stores specific events: what happened, when, and in what context.
+
+- Session 4: wrote `range(1, n)` and missed the last item; a hint about the end value fixed it
+- Session 5: a `while` loop ran one time too many; tracing the variable found the bug
+- Session 6: wrote factorial with no base case; a `RecursionError` showed why
+
+Each entry is one event, like a diary entry.
+
+???
+60 seconds. The notes file says the student struggles. The episodes say when, with what code, and what fixed it. That last part is what lets the agent reuse a hint that worked.
+
+---
+
+# What Goes Into an Episode?
+
+```json
+{
+  "time": "YYYY-MM-DDTHH:MM+00:00",
+  "session": 4,
+  "topic": "loops",
+  "event": "Wrote range(1, n) and missed the last item.",
+  "outcome": "A hint that range stops before its end value fixed it."
+}
+```
+
+- **time, session:** put events in order; answer "what happened last time?"
+- **topic:** filter without reading the text
+- **event, outcome:** what happened and what worked, so the agent can reuse a fix
+
+???
+90 seconds. This is the center of the lecture: deciding what one episode holds. The fields depend on the agent. A coding agent might store the file, the command, and the error. The outcome field is the one students tend to leave out, and it is the most useful when the same problem comes back.
+
+---
+
+# Episodic or Semantic?
+
+| | Episodic | Semantic |
+|---|---|---|
+| Stores | Events | Facts |
+| Timestamp | Yes | No |
+| Example | "Session 4: missed the last item with `range(1, n)`; a hint fixed it" | "The student makes off-by-one errors in loops" |
+| Comes from | Recorded as sessions happen | Distilled from many episodes |
+
+.info[Semantic memory means stored facts. Semantic search means search by meaning with embeddings. Either kind of memory can be searched either way.]
+
+???
+75 seconds. Slow down here; students mix these up. Two episodes (sessions 4 and 5) support one semantic fact. Consolidation, the process that turns episodes into facts, is the next lecture. The info box heads off a common confusion: the shared word "semantic" does not link these ideas.
+
+---
+
+# How Is an Episode Stored?
+
+Append one JSON line per episode to a log file on disk.
+
+```python
+LOG = "episodes.jsonl"
+
+def record(session, topic, event, outcome):
+    episode = {
+*       "time": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+        "session": session,
+        "topic": topic,
+        "event": event,
+        "outcome": outcome,
+    }
+*   with open(LOG, "a") as f:
+*       f.write(json.dumps(episode) + "\n")
+```
+
+- The time is captured automatically
+- The log is append-only and on disk, so it survives the end of the session
+
+???
+60 seconds. Walk the code; don't type it. No database and no embeddings: a text file is enough to store episodes. Full file: episodic_memory.py.
+
+---
+
+# Which Episodes Should the Agent Use?
+
+After a semester, the log holds hundreds of episodes. The context can hold a few.
+
+The agent asks two kinds of questions:
+
+- **"What happened last session?"** Answered by **recency**: the newest episodes
+- **"Has the student hit this problem before?"** Answered by **relevance**: episodes about the same problem, even in different words
+
+???
+45 seconds. This is the retrieval problem from Module 8, now over the agent's own history. Recency is simple and covers the start of every session. Relevance is harder and needs embeddings.
+
+---
+
+# Finding Episodes by Recency
+
+The log is in time order, so the newest episodes are at the end.
+
+```python
+def load():
+    with open(LOG) as f:
+        return [json.loads(line) for line in f]
+
+def recent(n=3):
+    return load()[-n:]
+```
+
+At the start of session 7, `recent(2)` returns:
+
+```
+[session 6, functions] Called a function before defining it. Moved the ...
+[session 6, recursion] Wrote factorial with no base case. Added the base ...
+```
+
+Filters on `session` or `topic` work the same way.
+
+???
+45 seconds. Recency needs no embeddings and no index. It is what the agent should load at the start of every session. Its limit: it cannot find an old episode about a problem the student describes in new words.
+
+---
+
+# What Makes an Episode Relevant?
+
+Questions rarely use the words stored in the episode:
+
+- Question: *"Why does my for loop stop one number early?"*
+- Episode: *"Wrote range(1, n) and missed the last item."*
+
+Embeddings match meaning instead of words. This is RAG from Module 8, run over the agent's own past:
+
+- Embed each episode once; embed the question; return the closest episodes
+- Keep the vectors in a vector database from Lecture 8.2: **ChromaDB** stores text, vectors, and metadata; **FAISS** is a fast search library for vectors alone
+
+.info[The log stays the source of truth. The vector index is a copy that can be rebuilt from it.]
+
+???
+75 seconds. Keep it brief; Module 8 covered embeddings and vector databases. The new point is the source: the agent's history instead of a document set. Rebuilding the index from the log means the embedding model can change later without losing memory.
+
+---
+
+# Is One Signal Enough?
+
+The **Generative Agents** paper (Park et al., 2023) scores each memory on three signals:
+
+- **Recency:** decays with the time since the memory was last used
+- **Importance:** a 1–10 rating the LLM gives each memory when it is stored
+- **Relevance:** embedding similarity to the current situation
+
+.callout[score = recency + importance + relevance]
+
+Importance is one more field stored with the episode. The same paper adds **reflection**: the agent periodically writes higher-level conclusions from recent events.
+
+???
+75 seconds. Conceptual only. Each score is normalized before adding. Relevance alone can rank an old, trivial match above a recent, important one. Reflection is an early form of consolidation, the subject of the next lecture.
+
+---
+
+# Who Writes and Reads Episodes?
+
+The same choice as RAG in Module 8: the harness does it, or the model does it through a tool.
+
+| | Harness | Model |
+|---|---|---|
+| Write | Code records each exercise result | A `record_episode` tool, cued by the system prompt |
+| Read | Code loads recent episodes at startup | A `recall(question)` tool the model calls when needed |
+| Strength | Never forgets | Chooses what matters |
+| Risk | Records noise | May forget to write or read |
+
+A common split: the harness loads recent episodes at startup, and the model searches for older ones when a question calls for it.
+
+???
+75 seconds. Recency fits the harness: it is the same every session. Relevance fits a tool: only the model knows when a question calls for history. Model writes are selective only if the system prompt says what to record, as in the notes-file prompt from the previous lecture.
+
+---
+
+# Key Takeaways
+
+1. An **episode** records one event: when, in what context, what happened, and how it turned out
+2. **Semantic memory** stores facts distilled from many episodes
+3. An append-only log on disk is enough to store episodes
+4. **Recency** finds what just happened; **relevance** finds related events in new words
+5. Relevance uses embeddings and a vector database: RAG over the agent's past
+
+### Next: episodes pile up and go stale. Consolidation keeps memory clean.
+
+???
+30 seconds. Hand off: the agent can record and find episodes, but they accumulate, contradict each other, and go stale.
+
+    </textarea>
+        <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+        <script>
+            var slideshow = remark.create({
+                ratio: "16:9",
+                highlightStyle: "github",
+                highlightLines: true,
+                countIncrementalSlides: false,
+                navigation: { scroll: false },
+            });
+        </script>
+    </body>
+</html>

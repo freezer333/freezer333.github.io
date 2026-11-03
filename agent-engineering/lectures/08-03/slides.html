@@ -14,7 +14,7 @@ count: false
 # Retrieval Beyond Vectors
 
 ???
-~15 minutes. The conceptual closer for Module 8. RAG is a category, vectors are one implementation, this lecture covers the rest. Sets up Lab 6.
+~15 minutes. The conceptual closer for Module 8. RAG is a category, vectors are one implementation, this lecture covers the rest. Sets up the upcoming project.
 
 ---
 
@@ -35,17 +35,18 @@ Vector search is one retrieval mechanism. There are several others, and most pro
 
 Web search APIs return current results from the public web. The agent issues a query, the API returns ranked results, the agent injects them into context.
 
-Common providers:
+Two ways to get it:
 
-- **Brave Search API** — privacy-focused, free tier (~2,000 queries/month)
-- **Tavily** — designed for AI agents, returns clean snippets
-- **Google Custom Search** — broad coverage, paid past a small free tier
-- **Serper, SerpAPI** — wrappers around Google's results
+- **Built into the model API** — Claude web search, OpenAI web search, Gemini grounding with Google Search. The provider runs the search inside the API call.
+- **A search API called from your own tool:**
+  - **Exa** — search built for AI; can return page text
+  - **Perplexity Search API** — ranked pages with relevant excerpts
+  - **Brave Search API** — independent web index
 
 The pattern: send a query string, receive structured results (title, URL, snippet).
 
 ???
-60 seconds. Brave is called out first because Lab 6 uses it.
+90 seconds. Connect to Lecture 8.1. A built-in search tool is run by the provider: the model calls it, and the result comes back in the same response, with no tool code to write. A search API is called from a tool you write, so your code runs the search and returns a tool_result. The upcoming project builds the second kind. Older tutorials point at Google Custom Search (shuts down January 1, 2027) and the Bing Search APIs (retired 2025). Free tiers change often; check current pricing.
 
 ---
 
@@ -92,7 +93,7 @@ The agent generates a query (often from natural language), the database returns 
 Three things to enforce at the tool boundary:
 
 - **Read-only credentials** — give the agent a read-only user, not a write-capable one
-- **Allowed-tables list** — same pattern as approved-folders from Lab 4; restrict which tables the tool will query
+- **Allowed-tables list** — same pattern as the approved-folders list in your coding agent; restrict which tables the tool will query
 - **Result size caps** — add `LIMIT` clauses or row caps in the wrapper; a query can return millions of rows
 
 .warning[Don't give the agent your production database credentials. Give it a read-replica or a constrained view.]
@@ -100,7 +101,7 @@ Three things to enforce at the tool boundary:
 The agent's database tool is usually narrowly scoped. Constrain at the boundary, like with file operations.
 
 ???
-60 seconds. Safety pattern matches the approved-folders concept from Lab 4. Same principle: enforce at the tool boundary.
+60 seconds. Safety pattern matches the approved-folders concept in the coding agent. Same principle: enforce at the tool boundary.
 
 ---
 
@@ -152,7 +153,7 @@ Each mechanism handles what it's best at. The agent's intelligence is partly in 
 ]
 
 .split-right[
-<img src="../../images/retrieval-composition.png" style="max-width:95%;"/>
+<img src="retrieval-composition.png" style="max-width:95%;"/>
 ]
 
 <div class="clear"></div>
@@ -206,12 +207,12 @@ All of them are RAG. The R is the only thing that varies.
 2. **Match the mechanism to the data** — structured data wants databases, current info wants web search, semantic search wants vectors
 3. **Real agents compose** — production systems blend mechanisms based on what each does best
 4. **The unifying principle** — any tool that brings external information into the context is a retrieval mechanism
-5. **Lab 6 brings this home** — build a web search tool with the Brave Search API and integrate it into your coding agent
+5. **The upcoming project brings this home** — build a web search tool and integrate it into your coding agent
 
-### Next: Module 9 — memory systems. Persistent, agent-owned, accumulated over time.
+### Next: Memory systems. Persistent, agent-owned, accumulated over time.
 
 ???
-Transition to Lab 6 and Module 9. Memory is another way to get information into context — persistent and accumulated rather than queried fresh.
+Transition to the upcoming project and memory. Memory is another way to get information into context — persistent and accumulated rather than queried fresh.
 
     </textarea
         >

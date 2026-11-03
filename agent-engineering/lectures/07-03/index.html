@@ -10,20 +10,21 @@
 <body>
     <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
 <div class="page_content"><h1>Implementing Compaction</h1>
-<p><strong>Lecture 7.3</strong></p>
-<ul>
-  <li>Detecting the threshold: when to trigger compaction (e.g., 80% of context budget)</li>
-  <li>The compaction prompt as the central engineering artifact</li>
-  <li>Wiring compaction into the agent loop at the same hook point as truncation</li>
-  <li>The hybrid pattern: summary + last K verbatim messages for safety</li>
-  <li>Use a cheap model (Haiku) for summarization; reserve the main model for the work</li>
-  <li>Edge cases: oversized summaries (iterative compression), critical detail loss (hybrid), compaction loops (minimum interval)</li>
-  <li>Cost analysis: one extra Haiku call vs. tokens saved on every subsequent main-model call</li>
-</ul>
+<p><strong>Module 7, Lecture 7.3 | Implementing Context Management</strong></p>
+<p>Sliding window and selective preservation are subsetting strategies: they keep some messages and drop the rest, and both fail once the set of messages worth keeping outgrows the window. Compaction replaces selection with synthesis — the LLM reads the older part of the conversation and writes a single structured summary that stands in for it. The lecture covers when to trigger it (70–85% of the model&#39;s window, measured from <code>response.usage.input_tokens</code>, never mid-tool-call, because the compaction call needs headroom and output quality degrades well before the limit), why the compaction prompt is the real engineering artifact (a preserve list, a discard list, and a strict format, each rule tied to a failure mode), and how to wire it into the loop at the same hook point as truncation. The hybrid pattern keeps the last K messages verbatim and summarizes only the older slice, reusing <code>safe_split_index</code> and <code>ensure_alternating_roles</code> from 7.1; the summary call runs on Haiku, which is cheap and fast enough to compact often. Placing the summary at the front makes it self-reinforcing — each new compaction re-summarizes the old summary plus newer work, so it keeps favoring what is current. The lecture closes with the edge cases (oversized summaries, lost details, compaction loops), the cost case for compaction winning on money, speed, and quality at once, and a comparison of all three Module 7 strategies.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-07-03.mp4" type="video/mp4">
+</video>
+
 <h2>Additional Resources</h2>
 <ul>
-  <li><a href="slides.html">Lecture slides</a></li>
-  <li><a href="compaction.py">compaction.py</a> (Python demo)</li>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction">Compaction</a> — Claude API docs. The API&#39;s built-in compaction maps onto the lecture&#39;s design choices: a token-threshold trigger, keeping recent turns verbatim, writing your own summarization prompt, and compacting again when a summarized conversation grows long.</li>
+<li><a href="https://code.claude.com/docs/en/context-window">Context window</a> — Claude Code docs. How a production coding agent auto-compacts near the limit, what <code>/compact</code> with focus instructions changes, and what survives a summary.</li>
+<li><a href="https://arxiv.org/abs/2307.03172">Lost in the Middle: How Language Models Use Long Contexts</a> — Liu et al., TACL 2023. Evidence that models use long contexts unevenly and degrade as input grows — the main reason to compact well before the window is full.</li>
+<li><a href="https://www.trychroma.com/research/context-rot">Context Rot: How Increasing Input Tokens Impacts LLM Performance</a> — Chroma Research, 2025. An evaluation of 18 models showing performance becomes less reliable as input length grows, even on simple tasks.</li>
+<li><a href="https://arxiv.org/abs/2310.08560">MemGPT: Towards LLMs as Operating Systems</a> — Packer et al., 2023. Warns the model at 70% of the window and keeps a recursive summary at the front of the context, rebuilt from the prior summary plus evicted messages — the self-reinforcing summary from this lecture.</li>
 </ul>
 </div>
 </body>

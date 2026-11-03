@@ -15,8 +15,9 @@ Usage: uv run compaction.py
 """
 
 import os
-from dotenv import load_dotenv
+
 import anthropic
+from dotenv import load_dotenv
 
 load_dotenv()
 client = anthropic.Anthropic()
@@ -68,6 +69,7 @@ CONVERSATION TO SUMMARIZE:
 # Threshold detection
 # ---------------------------------------------------------------------------
 
+
 def should_compact(input_tokens, model_limit, threshold=0.8):
     """Return True when input usage crosses the configured threshold.
 
@@ -81,6 +83,7 @@ def should_compact(input_tokens, model_limit, threshold=0.8):
 # ---------------------------------------------------------------------------
 # Alternating-roles pass — same helper as Lecture 7.1
 # ---------------------------------------------------------------------------
+
 
 def ensure_alternating_roles(messages):
     """Insert synthetic acks between consecutive same-role messages."""
@@ -100,6 +103,7 @@ def ensure_alternating_roles(messages):
 # Pair-integrity helper for the hybrid split
 # ---------------------------------------------------------------------------
 
+
 def safe_split_index(messages, candidate):
     """Move a candidate split index forward to the next safe boundary.
 
@@ -112,8 +116,9 @@ def safe_split_index(messages, candidate):
             content = msg["content"]
             if isinstance(content, str):
                 return candidate
-            if not any(isinstance(b, dict) and b.get("type") == "tool_result"
-                       for b in content):
+            if not any(
+                isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+            ):
                 return candidate
         candidate += 1
     return candidate
@@ -122,6 +127,7 @@ def safe_split_index(messages, candidate):
 # ---------------------------------------------------------------------------
 # Conversation rendering for the prompt
 # ---------------------------------------------------------------------------
+
 
 def render_for_summary(messages):
     """Render messages as plain text the summarizer can read."""
@@ -139,14 +145,18 @@ def render_for_summary(messages):
             if btype == "text":
                 lines.append(f"[{role}] {block.get('text', '')}")
             elif btype == "tool_use":
-                args = ", ".join(f"{k}={v!r}"
-                                 for k, v in block.get("input", {}).items())
+                args = ", ".join(
+                    f"{k}={v!r}" for k, v in block.get("input", {}).items()
+                )
                 lines.append(f"[{role}] tool_use {block.get('name')}({args})")
             elif btype == "tool_result":
                 result = block.get("content", "")
                 if isinstance(result, list):
-                    result = " ".join(b.get("text", "") for b in result
-                                      if isinstance(b, dict) and b.get("type") == "text")
+                    result = " ".join(
+                        b.get("text", "")
+                        for b in result
+                        if isinstance(b, dict) and b.get("type") == "text"
+                    )
                 preview = result if len(result) <= 300 else result[:300] + "..."
                 lines.append(f"[{role}] tool_result {preview}")
     return "\n".join(lines)
@@ -155,6 +165,7 @@ def render_for_summary(messages):
 # ---------------------------------------------------------------------------
 # The hybrid-pattern compaction
 # ---------------------------------------------------------------------------
+
 
 def compact_messages(messages, keep_last_k=6):
     """Compact a messages array using the hybrid pattern.
@@ -186,16 +197,21 @@ def compact_messages(messages, keep_last_k=6):
     response = client.messages.create(
         model=SUMMARIZER_MODEL,
         max_tokens=1024,
-        messages=[{
-            "role": "user",
-            "content": COMPACTION_PROMPT + render_for_summary(older),
-        }],
+        messages=[
+            {
+                "role": "user",
+                "content": COMPACTION_PROMPT + render_for_summary(older),
+            }
+        ],
     )
     summary = response.content[0].text
 
     rebuilt = [
         {"role": "user", "content": f"[Prior conversation summary]\n{summary}"},
-        {"role": "assistant", "content": "Understood. I have the prior context and will continue from here."},
+        {
+            "role": "assistant",
+            "content": "Understood. I have the prior context and will continue from here.",
+        },
     ] + recent
 
     return ensure_alternating_roles(rebuilt), summary, response.usage
@@ -208,83 +224,216 @@ def compact_messages(messages, keep_last_k=6):
 # A long-ish sample conversation. Adapted from compaction_demo.py (Lecture
 # 4.2) but expressed in the same content-block format the agent loop uses.
 SAMPLE_CONVERSATION = [
-    {"role": "user", "content": "The login page is broken — users get a 500 error. Investigate."},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "I'll start by reading the login route handler."},
-        {"type": "tool_use", "id": "tu_001", "name": "read_file",
-         "input": {"filename": "routes/auth.py"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_001",
-         "content": "import bcrypt\n@app.route('/login')\ndef login():\n    cursor.execute('SELECT id, email, password_hash, role FROM users WHERE email = %s', (email,))\n    ..."},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "tool_use", "id": "tu_002", "name": "run_command",
-         "input": {"cmd": "tail -50 logs/app.log"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_002",
-         "content": "ERROR: column 'password_hash' does not exist. HINT: Perhaps you meant the column 'users.password'."},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "The column is named password, not password_hash. Confirming with the schema."},
-        {"type": "tool_use", "id": "tu_003", "name": "run_command",
-         "input": {"cmd": "psql -c '\\d users'"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_003",
-         "content": "Table users: id integer, email varchar(255), password varchar(255), role varchar(50), created_at timestamp"},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "tool_use", "id": "tu_004", "name": "run_command",
-         "input": {"cmd": "grep -rn 'password_hash' routes/ models/"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_004",
-         "content": "routes/auth.py:14: ... password_hash ...\nmodels/user.py:8: self.password_hash = ...\nmodels/user.py:22: INSERT INTO users (email, password_hash, role) ..."},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "Three references to fix. Editing routes/auth.py first."},
-        {"type": "tool_use", "id": "tu_005", "name": "edit_file",
-         "input": {"filename": "routes/auth.py", "old_str": "password_hash", "new_str": "password"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_005",
-         "content": "Edited routes/auth.py"},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "tool_use", "id": "tu_006", "name": "edit_file",
-         "input": {"filename": "models/user.py", "old_str": "password_hash", "new_str": "password"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_006",
-         "content": "Edited models/user.py (2 occurrences)"},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "tool_use", "id": "tu_007", "name": "run_command",
-         "input": {"cmd": "python -m pytest tests/test_auth.py -v"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_007",
-         "content": "5 passed in 0.42s — login_valid_user, login_invalid_password, login_nonexistent_user, login_missing_fields, session_set_on_login"},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "All five auth tests pass. The fix is complete."},
-    ]},
+    {
+        "role": "user",
+        "content": "The login page is broken — users get a 500 error. Investigate.",
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {"type": "text", "text": "I'll start by reading the login route handler."},
+            {
+                "type": "tool_use",
+                "id": "tu_001",
+                "name": "read_file",
+                "input": {"filename": "routes/auth.py"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_001",
+                "content": "import bcrypt\n@app.route('/login')\ndef login():\n    cursor.execute('SELECT id, email, password_hash, role FROM users WHERE email = %s', (email,))\n    ...",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "tu_002",
+                "name": "run_command",
+                "input": {"cmd": "tail -50 logs/app.log"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_002",
+                "content": "ERROR: column 'password_hash' does not exist. HINT: Perhaps you meant the column 'users.password'.",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "The column is named password, not password_hash. Confirming with the schema.",
+            },
+            {
+                "type": "tool_use",
+                "id": "tu_003",
+                "name": "run_command",
+                "input": {"cmd": "psql -c '\\d users'"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_003",
+                "content": "Table users: id integer, email varchar(255), password varchar(255), role varchar(50), created_at timestamp",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "tu_004",
+                "name": "run_command",
+                "input": {"cmd": "grep -rn 'password_hash' routes/ models/"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_004",
+                "content": "routes/auth.py:14: ... password_hash ...\nmodels/user.py:8: self.password_hash = ...\nmodels/user.py:22: INSERT INTO users (email, password_hash, role) ...",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "Three references to fix. Editing routes/auth.py first.",
+            },
+            {
+                "type": "tool_use",
+                "id": "tu_005",
+                "name": "edit_file",
+                "input": {
+                    "filename": "routes/auth.py",
+                    "old_str": "password_hash",
+                    "new_str": "password",
+                },
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_005",
+                "content": "Edited routes/auth.py",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "tu_006",
+                "name": "edit_file",
+                "input": {
+                    "filename": "models/user.py",
+                    "old_str": "password_hash",
+                    "new_str": "password",
+                },
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_006",
+                "content": "Edited models/user.py (2 occurrences)",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "tu_007",
+                "name": "run_command",
+                "input": {"cmd": "python -m pytest tests/test_auth.py -v"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_007",
+                "content": "5 passed in 0.42s — login_valid_user, login_invalid_password, login_nonexistent_user, login_missing_fields, session_set_on_login",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {"type": "text", "text": "All five auth tests pass. The fix is complete."},
+        ],
+    },
     # Recent K — kept verbatim
-    {"role": "user", "content": "Are there any other places in the codebase that might have the same column-name issue?"},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "Let me check the migrations directory and any admin scripts."},
-        {"type": "tool_use", "id": "tu_008", "name": "run_command",
-         "input": {"cmd": "grep -rn 'password_hash' migrations/ scripts/"}},
-    ]},
-    {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": "tu_008",
-         "content": "scripts/seed_users.py:15: 'password_hash': bcrypt.hashpw(...)"},
-    ]},
-    {"role": "assistant", "content": [
-        {"type": "text", "text": "One more in scripts/seed_users.py. I'll fix it."},
-    ]},
+    {
+        "role": "user",
+        "content": "Are there any other places in the codebase that might have the same column-name issue?",
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "Let me check the migrations directory and any admin scripts.",
+            },
+            {
+                "type": "tool_use",
+                "id": "tu_008",
+                "name": "run_command",
+                "input": {"cmd": "grep -rn 'password_hash' migrations/ scripts/"},
+            },
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu_008",
+                "content": "scripts/seed_users.py:15: 'password_hash': bcrypt.hashpw(...)",
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {"type": "text", "text": "One more in scripts/seed_users.py. I'll fix it."},
+        ],
+    },
 ]
 
 
@@ -322,8 +471,10 @@ def main():
     # sample.
     demo_limit = 4000
     fired = should_compact(original_tokens, demo_limit, threshold=0.8)
-    print(f"\nshould_compact({original_tokens}, model_limit={demo_limit}, "
-          f"threshold=0.8) = {fired}")
+    print(
+        f"\nshould_compact({original_tokens}, model_limit={demo_limit}, "
+        f"threshold=0.8) = {fired}"
+    )
 
     print("\nCompacting (keeping last 4 messages verbatim)...")
     compacted, summary, usage = compact_messages(SAMPLE_CONVERSATION, keep_last_k=4)
@@ -363,8 +514,10 @@ def main():
     print(f"\nFollow-up: {follow_up['content']}")
     print(f"\nAgent response from compacted context:")
     print(response.content[0].text)
-    print(f"\n[Tokens: {response.usage.input_tokens} in / "
-          f"{response.usage.output_tokens} out]")
+    print(
+        f"\n[Tokens: {response.usage.input_tokens} in / "
+        f"{response.usage.output_tokens} out]"
+    )
 
 
 if __name__ == "__main__":

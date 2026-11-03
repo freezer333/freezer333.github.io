@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Episodic Memory — Agent Engineering</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="topnav"><div class="page_content"><a href="../../"><img src="https://scottfrees.com/gib.jpg" alt="Home" class="topnav-logo"> Agent Engineering</a></div></nav>
+<div class="page_content"><h1>Episodic Memory</h1>
+<p><strong>Module 9, Lecture 9.2 | Memory Systems</strong></p>
+<p>A notes file keeps conclusions, such as &quot;the student struggles with off-by-one errors,&quot; and drops the events behind them. Episodic memory keeps those events: each episode is one small, structured record of what happened, when, in what context, and how it turned out. Continuing the tutoring agent from Lecture 9.1, this lecture centers on what an episode stores (time, session, topic, event, and outcome) and why each field matters for retrieval. It separates episodic memory (events) from semantic memory (facts distilled from many events), and both from semantic search. Episodes are stored in an append-only log on disk, written through a tool that the system prompt cues. The second half of the lecture covers which episodes to bring into the context. Recency answers &quot;What happened last session?&quot; and needs nothing more than the end of the log. Relevance answers &quot;Has the student hit this problem before?&quot; and uses embeddings and a vector database such as ChromaDB or FAISS, which makes it RAG over the agent&#39;s own past. The Generative Agents paper blends recency, importance, and relevance into one score. A common split has the harness load recent episodes at startup while the model searches for relevant ones through a tool.</p>
+<p><a href="narrative.html">Read the full lecture narrative</a></p>
+<video class="lecture-video" controls preload="metadata">
+  <source src="https://sfrees-lectures.s3.us-east-2.amazonaws.com/agent-engineering/video-09-02.mp4" type="video/mp4">
+</video>
+
+<h2>Additional Resources</h2>
+<ul>
+<li><a href="slides.html">Lecture slides</a></li>
+<li><a href="https://arxiv.org/abs/2304.03442">Generative Agents: Interactive Simulacra of Human Behavior</a> — Park et al., UIST 2023. Introduces the memory stream, a log of an agent&#39;s experiences, and retrieves from it by combining recency, importance, and relevance. Also introduces reflection.</li>
+<li><a href="https://arxiv.org/abs/2502.06975">Position: Episodic Memory is the Missing Piece for Long-Term LLM Agents</a> — Pink et al., 2025. Argues that LLM agents need memory of specific events and their context, and proposes a framework for episodic memory in agents.</li>
+<li><a href="https://arxiv.org/abs/2303.11366">Reflexion: Language Agents with Verbal Reinforcement Learning</a> — Shinn et al., 2023. Agents write reflections on their failures into an episodic memory buffer and use them to do better on later attempts.</li>
+<li><a href="https://arxiv.org/abs/2504.19413">Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory</a> — Chhikara et al., 2025. An open-source memory layer that extracts, consolidates, and retrieves memories from ongoing conversations.</li>
+<li><a href="https://arxiv.org/abs/2410.10813">LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory</a> — Wu et al., ICLR 2025. A benchmark for long-term memory in chat assistants that breaks memory design into indexing, retrieval, and reading.</li>
+<li><a href="https://docs.trychroma.com/docs/overview/getting-started">ChromaDB: Getting Started</a> — Chroma docs. Creating a collection, adding documents, and querying it: the calls used in <code>episodic_memory.py</code>.</li>
+<li><a href="https://github.com/facebookresearch/faiss">FAISS</a> — Meta. A library for fast similarity search and clustering of dense vectors; a search library rather than a full database.</li>
+</ul>
+</div>
+</body>
+</html>

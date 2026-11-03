@@ -148,51 +148,6 @@ A free-form summary varies in style and length. A structured summary is consiste
 
 ---
 
-# The Hook Point Logic
-
-```
-inner loop:
-    [HOOK]
-        if mid-tool-call:        skip
-*       elif should_compact(...): compact
-        elif should_truncate(...): truncate
-    response = client.messages.create(...)
-    ...
-```
-
-Compaction is checked **first** because it is more aggressive. If the threshold is hit, summarizing is the right move; falling back to truncation would lose information unnecessarily.
-
-???
-The priority ordering matters. Truncation is the fallback, not the default.
-
----
-
-# The Hybrid Pattern
-
-Pure replacement throws away the most recent messages — exactly the active state of the task.
-
-The hybrid pattern keeps the last K messages verbatim and replaces only the older portion:
-
-.split-left[
-.center[<img src="../../images/hybrid-pattern.png" style="max-width:95%;"/>]
-]
-
-.split-right[
-- **K is typically 4-10**
-- Recent messages keep the agent grounded
-- Summary preserves long-term context
-- Pair integrity applies to the recent block — never split a `tool_use` from its `tool_result`
-]
-
-<div class="clear"></div>
-
-???
-The hybrid pattern is the production default. Pure replacement is too aggressive; pure verbatim doesn't shrink.
-
-Image prompt for `hybrid-pattern.png`: "Two vertical message-array diagrams side by side with an arrow between them. Left side: a tall stack of about 16 small rounded message rectangles labeled 0 through 15, alternating user/assistant colors, with a label above 'Before — 16 messages'. Right side: a much shorter stack — at the top a wide rounded rectangle labeled 'Summary (user)', below it a thinner rounded rectangle labeled 'Ack (assistant)', then 4 small rectangles labeled 'recent K=4'. Label above the right side: 'After — summary + last K verbatim'. A horizontal arrow between them with the label 'compact()'. Clean flat design, white background, sans-serif labels, teal/amber color palette."
-
----
-
 # Use a Cheap Model for the Summary
 
 The model that does the work and the model that summarizes don't have to be the same.

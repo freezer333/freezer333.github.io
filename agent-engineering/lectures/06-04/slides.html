@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Multi-Step Behavior, Instrumentation, and Streaming — Agent Engineering</title>
+    <title>Multi-Step Behavior and Instrumentation — Agent Engineering</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="../../styles/slides.css">
 </head>
@@ -10,10 +10,10 @@
 
 class: center, middle, inverse
 count: false
-# Multi-Step Behavior, Instrumentation, and Streaming
+# Multi-Step Behavior and Instrumentation
 
 ???
-~20 minutes. Three topics: emergent multi-step chaining, token tracking, and streaming. The instrumentation section bridges to Section 4 (context management).
+~15 minutes. Three topics: emergent multi-step chaining, failure modes (with a chain-of-thought mitigation), and token tracking. The instrumentation section bridges to Module 7 (context management).
 
 ---
 
@@ -110,12 +110,32 @@ The messages array grows with every tool call. Eventually:
 
 This is the context growth problem from Module 4, happening in real time.
 
-The fix isn't in the loop — it's in the context management strategies from Section 4: sliding window, compaction, progressive disclosure.
+The fix lives in the context management strategies from Module 4, implemented in Module 7: sliding window, selective preservation, compaction.
 
 But first, you need to **see** the problem. That's what instrumentation is for.
 
 ???
 60 seconds. Bridge to the next section.
+
+---
+
+# Mitigation: Make the Plan Explicit
+
+The failure modes share a root cause: the plan is implicit, and implicit plans drift.
+
+Apply chain-of-thought (Lecture 5.1) **inside the loop** — ask the model to plan before it acts:
+
+*"Before calling any tools, briefly outline the steps you'll take. Then execute them."*
+
+The plan becomes text in the context. Every later step is conditioned on it — the model reads its own roadmap as it works.
+
+- **Premature stops** — a written plan makes incomplete work obvious
+- **Lost plans** — the plan is anchored as text, not buried in the tool calls
+
+.callout[Use explicit planning for multi-step work. Skip it for single tool calls — planning tokens cost context.]
+
+???
+60 seconds. This is chain-of-thought from 5.1, now applied to keep a multi-step agent on track. Same mechanism — reasoning tokens in context — different use.
 
 ---
 
@@ -213,61 +233,14 @@ Context management isn't optimization — it's **economic necessity**.
 
 ---
 
-# Streaming
-
-Without streaming, the user sees nothing during multi-step tool calling. A five-tool-call task = 10–25 seconds of silence.
-
-```python
-with client.messages.stream(
-    model="claude-sonnet-4-6",
-    max_tokens=4096,
-    system=SYSTEM_PROMPT,
-    tools=TOOLS,
-    messages=messages
-) as stream:
-    response = stream.get_final_message()
-```
-
-`get_final_message()` returns the same response object as `messages.create()`. The loop logic is unchanged.
-
-???
-60 seconds. Streaming is a transport-level change, not an architectural one.
-
----
-
-# Streaming Events
-
-```python
-for event in stream:
-    if hasattr(event, 'type'):
-        if event.type == 'content_block_start':
-            if event.content_block.type == 'text':
-                print("\nAssistant: ", end="", flush=True)
-        elif event.type == 'content_block_delta':
-            if hasattr(event.delta, 'text'):
-                print(event.delta.text, end="", flush=True)
-```
-
-Two uses:
-1. **Stream text replies** character by character
-2. **Show tool call activity** so the user knows the agent is working
-
-Streaming changes the UX, not the logic. `stop_reason`, `response.content`, tool results — all identical.
-
-.info[Same token cost. Same behavior. The only difference is that the user sees output incrementally instead of all at once.]
-
-???
-60 seconds. Students can add streaming to their existing agent without restructuring anything.
-
----
-
 # Key Takeaways
 
 1. **Emergent chaining** — the model composes multi-step plans from tool descriptions and results
-2. **Three failure modes** — infinite loop (add limits), premature stop (better prompts), context exhaustion (Section 4)
-3. **Instrument first** — `TokenTracker` shows where tokens accumulate before you try to fix it
-4. **Context grows monotonically** — biggest jumps from `read_file`; Lab 4 measures the alternative
-5. **Streaming** — UX improvement, not architectural change; same cost, same behavior
+2. **The plan is implicit** — it lives in the pattern of tool calls, not a plan object; flexible but fragile
+3. **Three failure modes** — infinite loop (add limits), premature stop (better prompts), context exhaustion (Module 7)
+4. **Make the plan explicit** — ask the model to outline steps first (chain-of-thought from 5.1, inside the loop)
+5. **Instrument first** — `TokenTracker` shows where tokens accumulate before you try to fix it
+6. **Context grows monotonically** — biggest jumps from `read_file`; Module 7 implements the fixes
 
     </textarea>
     <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

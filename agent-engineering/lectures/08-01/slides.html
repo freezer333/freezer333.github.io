@@ -59,7 +59,7 @@ This fails for three reasons:
 ]
 
 .split-right[
-<img src="../../images/context-window-full.png" style="max-width:95%;"/>
+<img src="context-window-full.png" style="max-width:95%;"/>
 ]
 
 <div class="clear"></div>
@@ -88,7 +88,7 @@ Three steps:
 
 # The Pipeline at a Glance
 
-<img src="../../images/rag-pipeline.png" style="max-width:70%; display:block; margin:1em auto;"/>
+<img src="rag-pipeline.png" style="max-width:70%; display:block; margin:1em auto;"/>
 
 Two phases:
 
@@ -96,9 +96,35 @@ Two phases:
 - **Query** — done on every user query: retrieve, augment, generate
 
 ???
-60 seconds. Setup vs. query is the right mental model. Setup is where the engineering choices live. The next two lectures cover specific implementations.
+60 seconds. Setup vs. query is the right mental model. Setup is where the engineering choices live. The next two lectures cover specific implementations. This diagram shows the retrieve-first wiring: retrieval runs before the model is called. The next slide shows the other wiring.
 
 Image prompt for `rag-pipeline.png`: "Horizontal pipeline diagram showing the RAG flow. Left side: 'User Query' in a rounded rectangle. Arrow right to 'Retrieve' (rounded rectangle, with a small icon of a magnifying glass over a stack of documents). Arrow right to 'Augment Context' (rounded rectangle showing a small representation of a context window with the original query plus added retrieved chunks highlighted in a different color). Arrow right to 'Model' (rounded rectangle with an LLM icon). Arrow right to 'Response' (rounded rectangle). Below the pipeline: a smaller box on the left labeled 'Knowledge source (docs, web, database)' with a dashed arrow up to the 'Retrieve' step. Clean flat design, white background, sans-serif labels, teal/blue color palette."
+
+---
+
+# Two Ways to Wire Retrieval
+
+<img src="rag-two-patterns.png" style="max-width:100%; display:block; margin:0.5em auto;"/>
+
+???
+90 seconds. Same RAG pattern, two places to put the retrieval step. Left: your code searches before every model call. Right: the model gets a search tool and decides when to use it. Students know the right side already: it is the tool loop from Module 6.
+
+---
+
+# Retrieve First or Retrieve as a Tool?
+
+| | Retrieve first | Retrieval as a tool |
+|---|---|---|
+| **Who decides** | Your code, on every query | The model, when it needs information |
+| **Search query** | The user's question as written | Written by the model; can retry |
+| **LLM calls** | One | One more per search |
+| **Behavior** | Same steps every time | Varies by question |
+| **Fits** | Q&A over a fixed set of documents | Agents, where many turns need no lookup |
+
+.callout[Retrieve first is the classic RAG design. Many agents use a retrieval tool instead, and some do both. Each has strengths.]
+
+???
+2 minutes. Why retrieve-first is not always the answer: it searches even when the question needs no lookup, it searches only once, and it uses the user's wording, which may be a poor search query. The tool version fixes all three at the cost of extra model calls and less predictable behavior. Systems can also do both: retrieve first to seed the context, and keep a tool so the model can search again. A support bot over a help center is a good retrieve-first case. A coding agent is a good tool case. Claude Code's team tried indexed RAG early and moved to agentic search with glob and grep tools (Latent Space interview, May 2025). The tradeoff they named: more latency and tokens. Lecture 8.2 shows vector search wired as a tool.
 
 ---
 
@@ -174,6 +200,7 @@ All of these are retrieval. All of them inject external information into the mod
 3. **Just-in-time, not pre-loaded** — pull what's relevant per query rather than packing everything in the system prompt
 4. **Different from fine-tuning** — RAG changes context, fine-tuning changes weights; usually you want RAG
 5. **A category, not a technology** — vector search is one implementation; web search, databases, and file reads are others
+6. **Two wirings** — retrieve before the model call, or give the model a retrieval tool
 
 ### Next: the most common implementation — embeddings and similarity search.
 
